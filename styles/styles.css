@@ -1,0 +1,18 @@
+header{
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 2rem;
+    border-bottom: 1px solid gray;
+}
+
+nav{
+    display: flex;
+    list-style: none;
+    gap: 30px;
+}
+
+#welcome {
+    text-align: center;
+}
