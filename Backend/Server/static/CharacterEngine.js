@@ -39,8 +39,7 @@ document.addEventListener('DOMContentLoaded',(e) => {
  */
 
 function sanatizeKey(key) {
-    let blankObj = new Object();
-    if (key in blankObj) return '~'+key;
+    if (key in Array.prototype) return '~'+key;
     return key;
 }
 
@@ -116,7 +115,7 @@ class CharacterEngine {
         let jsonData = JSON.parse(fileData,function (key,value) {
             let sanatizedKey = sanatizeKey(key);
             if (sanatizedKey != key) {
-                this[sanatizedKey] = value; // sanatize blank object prototype keys
+                this[sanatizedKey] = value; // sanatize object prototype keys
                 return undefined;
             }
             return value;
@@ -210,8 +209,7 @@ class Path {
      * Group 7: "#" accessor sigils. Expressed: #accessor1,accessor2,... at the end of a query or on it's own
      * Group 8: ';' semicoln to separate full path queries
      */
-    static tokensRegex = /(\.\.|\.|,)|(?:(?<=^|\.|;|,)\s*(?:(\(.+?(?:,.+?)+\))|([\w: ~]+?|\*))\s*?(?=\.|\[|;|$|#|,))|\[\s*(?:(-?\d+(?:\s*,\s*-?\d+)*)|(-?\d*\s*:\s*-?\d*)|(\*))\s*\]\s*(?=$|\.|\[|#|,|;)|#(\w+(?:,\w+)*)\s*(?=$|;)|(;)/y;
-    static tokensRegex_noaccessor = /(\.\.|\.|,)|(?:(?<=^|\.|;|,)\s*(?:(\(.+?(?:,.+?)+\))|([\w: ~]+?|\*))\s*?(?=\.|\[|;|$|#|,))|\[\s*(?:(-?\d+(?:\s*,\s*-?\d+)*)|(-?\d*\s*:\s*-?\d*)|(\*))\s*\]\s*(?=$|\.|\[|#|,|;)|()(;)/y;
+    static tokensRegex = /(?<=^|[;,\.])\s*(\.+)|(?:(?<=^|[\.;,\(])\s*(?:([\w~][\w: ~]*?|\*))\s*?(?=$|[\.\[;#,\)]))|(?<=[\w: ~\)\]])\[\s*(?:(-?\d+(?:\s*,\s*-?\d+)*)|(-?\d*\s*:\s*-?\d*)|(\*))\s*\]\s*(?=$|[\.\[#,;\)])|#(\w+(?:,\w+)*)\s*(?=$|[;\)])|(;|,)|\.|(\()|(\))/y;
     /* Test Syntax string:
         Key Value.(Key[47],Key,key)[5][5:][*].Key[5,789,-6]#accessor1,accessor2;Key:morekey.Key.Key[:-1].*#accessor1,accessor3,accessor4
         items[1,-4,5][*][1][-1][1:][:1][-2:3]
@@ -242,37 +240,15 @@ class Path {
      * @param {rootPath} Path
      * */
 
-    tokenize (str,rootPath=null,tokensRegex = Path.tokensRegex,level = 0) {
+    tokenize (str,rootPath=null,tokensRegex = Path.tokensRegex) {
         if (str == undefined) return;
-        if(level == 0){
-            if (str.startsWith('.')) {
-                str = '.' + str;
-            }
-        }
 
-        const tokens = (rootPath == null || level > 0) ? [] : new Array(...rootPath.tokens);
+        const parenStack = [];
+        
+        const appendRoot = rootPath != null && (str.length === 0 || ".#".includes(str[0]))
+        let tokens = (rootPath != null && (str.length === 0 || ".#".includes(str[0]))) ? new Array(...rootPath.tokens) : [];
+
         for(let i = 0;i < str.length;) {
-
-            // Catch parentheses before the regex does:
-            if(str[i] === '(') {
-                // start manual scanning for balanced parentheses.
-                console.log("Parentheses detected.")
-                const parenStack = []
-                parenStack.push(i+1); // +1 here to store position after start of parens
-                parenStack.push(i);// second push on purpose so that the last item in stack is the very first index
-                for(++i;parenStack.length > 1 && i < str.length;i++) {
-                    if(str[i] === '(') parenStack.push(i);
-                    if(str[i] === ')') parenStack.pop();
-                }
-                if(parenStack.length > 1) throw SyntaxError(`Unbalanced Parentheses. Missing closing ')'`)
-                let enclosedStr = str.substring(parenStack.pop(),i-1); // -1 here to slice to position before last paren
-                console.log("Enclosed String:",enclosedStr);
-                console.log("Tokens:");
-                // maybe we can use recursion here to just direcly resolve recursive tokens?
-                tokens.push({'type':'T_GROUP','value':this.tokenize(enclosedStr,null, Path.tokensRegex_noaccessor,level+1)});
-                console.log("Finished. Returning to main string...");
-            }
-
             // If the whole thing is a group, move on before the Regex gets mad.
             if (i >= str.length)
                 continue;
@@ -282,38 +258,53 @@ class Path {
             if (!m) throw SyntaxError(`Unexpected character '${str[i]}' at ${i} in '${str}'`);
             // console.log(m); // Cool Debug thing
 
-            if (m[1] === '..') tokens.pop();
-            else if (m[1] === '.') "do nothing";//tokens.push({type:'Go Deeper!',value:'.'});
-            else if (m[1] === ',') tokens.push({type:'CONCAT',value:','});
+            if (m[1] !== undefined) {
+                for (let i=0;i<m[1].length;i++) tokens.pop();
+            }
 
-            else if(m[2] !== undefined) throw Error("This isn't supposed to happen!"); // old regex matching pattern
+            else if(m[2] !== undefined) tokens.push({type:'O_KEY',value:sanatizeKey(m[2])});
 
-            else if(m[3] !== undefined) tokens.push({type:'O_KEY',value:sanatizeKey(m[3])});
+            else if(m[3] !== undefined) tokens.push({type:'A_LIST',value:m[3].split(',').map(x => parseInt(x))});
 
-            else if(m[4] !== undefined) tokens.push({type:'A_LIST',value:m[4].split(',').map(x => parseInt(x))});
-
-            else if(m[5] !== undefined) {
-                let [pmin,pmax] = m[5].split(':');
+            else if(m[4] !== undefined) {
+                let [pmin,pmax] = m[4].split(':');
                 if (pmin === '') pmin = 0;
                 else pmin = parseInt(pmin);
                 if (pmax === '') pmax = undefined;
                 else pmax = parseInt(pmax);
 
                 if(Number.isNaN(pmin) || Number.isNaN(pmax)) 
-                    throw SyntaxError(`Token at ${i}. Array slice indexes must be numbers.`);
+                    throw SyntaxError(`Token ${m[4]} at ${i}: Array slice indexes must be numbers.`);
 
                 tokens.push({type:'A_SLICE',value:{min:pmin,max:pmax}})
             }
 
-            else if(m[6] !== undefined) tokens.push({type:'A_WILDCARD',value:'*'});
+            else if(m[5] !== undefined) tokens.push({type:'A_WILDCARD',value:'*'});
 
-            else if(m[7] !== undefined && m[7] !== '') tokens.push({type:'N_ACCESSORS',value:m[7].split(',').map(x => sanatizeKey(x))});
+            else if(m[6] !== undefined && m[6] !== '') tokens.push({type:'N_ACCESSORS',value:m[6].split(',').map(x => sanatizeKey(x))});
+                
+            else if (m[7] !== undefined) {
+                tokens.push({type:'CONCAT',value:';,'});
+                if (rootPath != null && ".#".includes(str[i+1]) && parenStack.length < 1) {
+                    tokens.push(...rootPath.tokens);
+                }
+            }
 
-            else if(m[8] !== undefined) tokens.push({type:'END_QUERY',value:';'});
+            else if (m[8] !== undefined) { // (
+                parenStack.push(tokens);// push token context into stack
+                tokens = []; // create new token context
+            }
 
+            else if (m[9] !== undefined) { // )
+                if (parenStack.length <= 0) throw SyntaxError(`Token ${m[9]} at ${i}: Unbalanced Parentheses. Missing opening '('`);
+                const group_token = {'type':'T_GROUP','value':tokens}; // store current token context into group token
+                tokens = parenStack.pop(); // pop previous context off the stack to continue where we left off
+                tokens.push(group_token);
+            }
+            
             i = Path.tokensRegex.lastIndex;
-
         }
+        if(parenStack.length > 0) throw SyntaxError(`EOF: Unbalanced Parentheses. Missing closing ')'`);
         return tokens;
     }
 
@@ -343,15 +334,14 @@ class Path {
                     const concat_container = [];
                     let start_idx = 0
                     tokens[cursor].value.forEach((token,idx) => {
-                        if(token.type === 'CONCAT' && token.value === ',') {
+                        if(token.type === 'CONCAT') {
                             concat_container.push(recursor(treeRoot,tokens[cursor].value,start_idx));
                             start_idx = idx+1;
                         }
                     });
                     concat_container.push(recursor(treeRoot,tokens[cursor].value,start_idx));
                     if (concat_container.length === 1) return concat_container[0];
-                    return concat_container;
-
+                    return concat_container.map((item) => recursor(item,tokens,cursor+1));
                     break;
                 case 'CONCAT':
                     return treeRoot;
@@ -380,12 +370,11 @@ class Path {
                     if(Array.isArray(treeRoot)) {
                         let bounds = tokens[cursor].value;
                         if(bounds.max == undefined) {
-                            return treeRoot.slice(wrapIdx(bounds.min,treeRoot.length)).map(item => {
+                            return treeRoot.slice(bounds.min).map(item => {
                                 return recursor(item,tokens,cursor+1);
                             });
                         } else {
-                            return treeRoot.slice(wrapIdx(bounds.min,treeRoot.length),
-                                    wrapIdx(bounds.max,treeRoot.length)).map(item => {
+                            return treeRoot.slice(bounds.min,bounds.max).map(item => {
                                 return recursor(item,tokens,cursor+1);
                             })
                         }
@@ -414,9 +403,6 @@ class Path {
                     }
                     return undefined;
                     break;
-                case 'END_QUERY':
-                    return treeRoot;
-                    break;
                 default:
                     return recursor(treeRoot,tokens,cursor+1);
                     break;  
@@ -426,9 +412,7 @@ class Path {
         const query_container = [];
         let query_start_idx = 0
         this.tokens.forEach((token,idx) => {
-            if((token.type === 'CONCAT' && token.value === ',') ||
-                (token.type === 'END_QUERY' && token.value === ';')
-            ) {
+            if(token.type === 'CONCAT') {
                 query_container.push(recursor(data,this.tokens,query_start_idx));
                 query_start_idx = idx+1;
             }
@@ -954,7 +938,8 @@ let testFileData = `{
                 }
             ]
         },
-        "constructor":"malicious code"
+        "constructor":"malicious code",
+        "reduce":"more malicious code"
     }
 }`
 
