@@ -19,3 +19,7 @@ window.onclick = function(event) {
     characterOptionsModal.style.display = "none";
   }
 }
+
+
+
+(robot[id + 1].Execute(.Pass() || (!robot[id * (2 + i)].Alive && stormy) || (robot[id - 1].Alive && lavaFlowing))

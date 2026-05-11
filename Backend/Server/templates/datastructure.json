@@ -1,0 +1,84 @@
+{
+    "data":{
+        "Hitdice":{
+            "roll":"1d8",
+            ".action":{
+                "trigger":"Hitdice:heal"
+            }
+        },
+        "HP<dataNode>":{
+            "value":50,
+            "max":110,
+            "listeners":[
+                {
+                    "triggers":["LongRest"],
+                    "operation":"replace",
+                    "value":"path('<max>')"
+                },
+                {
+                    "trigger":["Hitdice:heal"],
+                    "operation":"add",
+                    "value":"path('Hitdice.roll')"
+                }
+            ]
+        },
+        "Speed<dataNode>":30,
+        "Stats":{
+            "Strength":{
+                "score.dataNode":{
+                    "value":10,
+                    "max":20
+                },
+                "mod":"floor(path('.score')/2 - 5)",
+                "save":"path('.mod')"
+            },
+            "Dexterity":{
+                "score":10,
+                "mod":0,
+                "save":0
+            }
+        },
+        "Effects":{
+            "active":{
+                "Exhaustion": {
+                    "Levels": 1,
+                    "Effect": "",
+                    ".modifiers":{
+                        "Speed":{
+                            "conditions":[""],
+                            "operation":"add",
+                            "value":"path('Stats.Dexterity.mod')"
+                        }
+                    }
+
+                },
+                "Concentration":{
+                    "Levels": 1,
+                    "Effect": ""
+                }
+            }
+        }
+    },
+    "modifiers":{
+        "Stats.Strength.save":[{
+            "conditions":[""],
+            "operation":"add",
+            "value":"path('Stats.Dexterity.mod')"
+        }],
+        "Stats.Strength.score":[
+            {
+                "operation":"replace",
+                "value":29,
+                "max":29
+            }
+        ]
+    },
+    "UI":{
+        "location...":{
+            "type":"textbox",
+            "data":"Stats.strength.save.value",
+            "editable":false
+        }
+    }
+
+}
