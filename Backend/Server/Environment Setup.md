@@ -1,6 +1,6 @@
 # Environment Setup Guide for the Server
 ## Setup Environment for Localhost
-1. **Setup** a python virtual environment (venv) by running the following command inside the "Server" directory: 
+1. **Setup** a python virtual environment (venv) by running the following command **inside the "Server" directory**: 
     - `python -m venv .venv`
 2. **Activate** the venv by running one of the commands:
     - **Windows cmd:** `.venv\Scripts\activate`
