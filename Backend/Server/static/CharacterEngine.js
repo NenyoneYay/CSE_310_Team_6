@@ -43,9 +43,10 @@ function sanatizeKey(key) {
     return key;
 }
 
-function wrapIdx (idx,len) {
-    let mod = idx % len;
-    return mod + (mod < 0) * len;
+function getWrappedIdx (idx,arr) {
+    if (idx < 0) idx += arr.length;
+    if (idx < 0 || idx > arr.length) return undefined;
+    return arr[idx];
 }
 
 class CharacterEngine {
@@ -185,6 +186,10 @@ class CharacterEngine {
         return jsonData;
     }
     
+    renderHTML() {
+        // do the html rendering here and return as string to be pushed to site.
+    }
+
 }
 
 class Path {
@@ -245,7 +250,6 @@ class Path {
 
         const parenStack = [];
         
-        const appendRoot = rootPath != null && (str.length === 0 || ".#".includes(str[0]))
         let tokens = (rootPath != null && (str.length === 0 || ".#".includes(str[0]))) ? new Array(...rootPath.tokens) : [];
 
         for(let i = 0;i < str.length;) {
@@ -354,12 +358,11 @@ class Path {
                         if(val.length > 1) {
                             return val.map(idx => {
                                 if(Math.abs(idx) < treeRoot.length)
-                                    return recursor(treeRoot[wrapIdx(idx,treeRoot.length)],tokens,cursor+1);
+                                    return recursor(getWrappedIdx(idx,treeRoot),tokens,cursor+1);
                                 return undefined;
                             });
-                        } else if (val.length > 0 && 
-                                    Math.abs(val[0]) < treeRoot.length) {
-                            return recursor(treeRoot[wrapIdx(val[0],treeRoot.length)],tokens,cursor+1);
+                        } else if (val.length > 0 && Math.abs(val[0]) < treeRoot.length) {
+                            return recursor(getWrappedIdx(val[0],treeRoot),tokens,cursor+1);
                         }
                     }
                     return undefined;
