@@ -49,7 +49,7 @@ function getWrappedIdx (idx,arr) {
     return arr[idx];
 }
 
-class CharacterEngine {
+class Character {
     constructor(fileData) {
         this.root = undefined;
         this.parseFile(fileData)
@@ -188,6 +188,47 @@ class CharacterEngine {
     
     renderHTML() {
         // do the html rendering here and return as string to be pushed to site.
+        const recursor = (treeRoot) => {
+            if (treeRoot == null) return null;
+            if (treeRoot instanceof DataNode) {
+                let newInput = document.createElement("input");
+                newInput.type = "number";
+                newInput.value = treeRoot.accessors.value;
+                return newInput;
+            } else if (treeRoot instanceof BaseNode) {
+                let newInput = document.createElement("input");
+                newInput.type = "text";
+                newInput.value = treeRoot.accessors.value;
+                return newInput;
+            }
+            if (Array.isArray(treeRoot)) {
+                let ul = document.createElement("ul");
+                treeRoot.forEach((item) => {
+                    let li = document.createElement("li");
+                    li.appendChild(recursor(item)  ?? document.createElement("div"))
+                    ul.appendChild(li);
+                })
+                return ul;
+            } else if (treeRoot instanceof Object) {
+                let div = document.createElement("div");
+                Object.keys(treeRoot).forEach((key) => {
+                    let detail = document.createElement("detail");
+                    let summary = document.createElement("summary");
+                    summary.innerHTML = (key.length > 0 && key[0] ==="~") ? key.slice(1) : key;;
+                    detail.appendChild(summary);
+                    detail.appendChild(recursor(treeRoot[key]) ?? document.createElement("div"));
+                    div.appendChild(detail)
+                });
+                return div;
+            }
+            return null;
+        }
+        
+        document.getElementById("html-content").innerHTML = "";
+        document.getElementById("html-content").appendChild(recursor(this.root));
+
+        // container = document.createElement("div")
+        // container.appendChild(...)
     }
 
 }
@@ -946,5 +987,5 @@ let testFileData = `{
     }
 }`
 
-let testChar = new CharacterEngine(testFileData);
+let testChar = new Character(testFileData);
 let testNode = new Path('Ability Scores.Strength.score').resolve(testChar.root);
