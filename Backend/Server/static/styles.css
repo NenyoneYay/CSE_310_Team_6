@@ -1,9 +1,18 @@
-body {
-    background: black;
-    color: white;
+header{
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 2rem;
+    border-bottom: 1px solid gray;
 }
 
-h1 {
-    font-size: 24pt;
+nav{
+    display: flex;
+    list-style: none;
+    gap: 30px;
+}
+
+#welcome {
     text-align: center;
 }
