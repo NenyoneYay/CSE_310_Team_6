@@ -1,3 +1,36 @@
+
+
+:root {
+    --primary-color: rgb(78, 24, 24);
+    --secondary-color: red;
+    --accent1-color: orange;
+    --accent2-color: cyan;
+    --text-color: white;
+
+    --heading-font: 
+    --paragraph-font: 
+
+
+}
+
+h1, h2, h3, h4, h5, p {
+    color: var(--text-color);
+}
+
+body {
+    background-color: var(--primary-color);
+}
+
+main {
+    max-width: 90%;
+    background-color: brown;
+    margin: 0 auto;
+}
+
 .hidden {
-    display: block;
+    display: none;
+}
+
+#character_sheet_header img {
+    max-width: 30%;
 }
