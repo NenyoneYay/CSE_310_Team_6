@@ -2,12 +2,16 @@
 <html>
     <head>
         {% block head %}
-        <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" >
+            <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" >
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>GnollPointer</title>
+            <link rel="icon" type="image/x-con" href="###">
         {% endblock %}
     </head>
     <body>
         <header>
-            <img src="###" alt="GnollPointer Logo" id="logo">
+            <img src="{{ url_for('static', filename='images/gnollpointer_icon.png') }}" alt="GnollPointer Logo" id="logo">
             <h2 id="logo-text">GnollPointer</h2>
             <nav id="menu"> <!-- This nav bar is where we will put buttons to navigate through the website-->
                 {%block nav%}
@@ -16,9 +20,11 @@
                 {%endblock%}
             </nav>
         </header>
-        {% block content %}
+        <main>
+            {% block content %}
 
-        {% endblock %}
+            {% endblock %}
+        </main>
         <footer>
             {% block footer %}
 
