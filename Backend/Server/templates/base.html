@@ -7,10 +7,13 @@
     </head>
     <body>
         <header>
-            <nav>
-            {% block nav %}
-                
-            {% endblock %}
+            <img src="###" alt="GnollPointer Logo" id="logo">
+            <h2 id="logo-text">GnollPointer</h2>
+            <nav id="menu"> <!-- This nav bar is where we will put buttons to navigate through the website-->
+                {%block nav%}
+                    <a href="index.html">Home</a>
+                    <a href="character.html">Characters</a>
+                {%endblock%}
             </nav>
         </header>
         {% block content %}
