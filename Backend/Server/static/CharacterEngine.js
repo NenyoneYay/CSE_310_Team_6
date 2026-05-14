@@ -10,10 +10,15 @@ async function readSingleFile(e){
     };
     reader.readAsText(file);
 }
-
+var loadedChar = null;
 function displayContents(contents) {
-  let element = document.getElementById('file-content');
-  element.textContent = contents;
+    if(loadedChar == null)
+        loadedChar = new Character(contents);
+    else
+        loadedChar.parseFile(contents);
+    loadedChar.renderHTML();
+//   let element = document.getElementById('file-content');
+//   element.textContent = contents;
 }
 
 document.addEventListener('DOMContentLoaded',(e) => {
@@ -113,6 +118,7 @@ class Character {
     }
 
     parseFile(fileData){
+        this.destroy();
         let jsonData = JSON.parse(fileData,function (key,value) {
             let sanatizedKey = sanatizeKey(key);
             if (sanatizedKey != key) {
@@ -180,7 +186,7 @@ class Character {
         this.root = contextData;
         newNodes.forEach((newNode) => {
             // register dependencies??
-            newNode.registerDependencies();
+            newNode.evaluateDependencies();
             newNode.evaluate();
         })
         return jsonData;
@@ -188,12 +194,13 @@ class Character {
     
     renderHTML() {
         // do the html rendering here and return as string to be pushed to site.
-        const recursor = (treeRoot) => {
+        const recursor = (treeRoot, level = 0) => {
             if (treeRoot == null) return null;
             if (treeRoot instanceof DataNode) {
                 let newInput = document.createElement("input");
                 newInput.type = "number";
                 newInput.value = treeRoot.accessors.value;
+                treeRoot.attachInput(newInput);
                 return newInput;
             } else if (treeRoot instanceof BaseNode) {
                 let newInput = document.createElement("input");
@@ -205,30 +212,90 @@ class Character {
                 let ul = document.createElement("ul");
                 treeRoot.forEach((item) => {
                     let li = document.createElement("li");
-                    li.appendChild(recursor(item)  ?? document.createElement("div"))
+                    li.appendChild(recursor(item, level+1)  ?? document.createElement("div"))
                     ul.appendChild(li);
                 })
                 return ul;
             } else if (treeRoot instanceof Object) {
                 let div = document.createElement("div");
                 Object.keys(treeRoot).forEach((key) => {
-                    let detail = document.createElement("detail");
-                    let summary = document.createElement("summary");
-                    summary.innerHTML = (key.length > 0 && key[0] ==="~") ? key.slice(1) : key;;
-                    detail.appendChild(summary);
-                    detail.appendChild(recursor(treeRoot[key]) ?? document.createElement("div"));
-                    div.appendChild(detail)
+                    let name = (key.length > 0 && key[0] ==="~") ? key.slice(1) : key;
+                    if(treeRoot[key] instanceof BaseNode) {
+                        let container = document.createElement("div");
+                        let label = document.createElement("label");
+                        label.innerHTML = name+": ";
+                        container.appendChild(label)
+                        container.appendChild(recursor(treeRoot[key], level+1) ?? document.createElement("div"));
+                        div.appendChild(container);
+                    } else {
+                        let detail = document.createElement("details");
+                        let summary = document.createElement("summary");
+                        summary.innerHTML = name;
+                        detail.appendChild(summary);
+                        detail.appendChild(recursor(treeRoot[key], level+1) ?? document.createElement("div"));
+                        div.appendChild(detail)
+                    }
                 });
                 return div;
             }
             return null;
         }
         
+        this.detachHTML();
         document.getElementById("html-content").innerHTML = "";
         document.getElementById("html-content").appendChild(recursor(this.root));
 
         // container = document.createElement("div")
         // container.appendChild(...)
+    }
+
+    detachHTML() {
+        const recursor = (treeRoot, level = 0) => {
+            if (treeRoot == null) return;
+            if (treeRoot instanceof DataNode) {
+                treeRoot.detachInput();
+                return;
+            } else if (treeRoot instanceof BaseNode) {
+                return;
+            }else if (Array.isArray(treeRoot)) {
+                treeRoot.forEach((item) => {
+                    recursor(item, level + 1);
+                })
+                return;
+            } else if (treeRoot instanceof Object) {
+                Object.keys(treeRoot).forEach((key) => {
+                    recursor(treeRoot[key], level+1);
+                });
+                return;
+            }
+            return;
+        }
+        recursor(this.root);
+    }
+
+    destroy() {
+        const recursor = (treeRoot, level = 0) => {
+            if (treeRoot == null) return;
+            if (treeRoot instanceof BaseNode) {
+                treeRoot.destroy();
+                return;
+            }
+            if (Array.isArray(treeRoot)) {
+                treeRoot.forEach((item) => {
+                    recursor(item);
+                })
+                return;
+            } else if (treeRoot instanceof Object) {
+                Object.keys(treeRoot).forEach((key) => {
+                        recursor(treeRoot[key], level+1);
+                });
+                return;
+            }
+            return;
+        }
+        recursor(this.root);
+        delete this.root;
+        this.root = undefined;
     }
 
 }
@@ -276,9 +343,10 @@ class Path {
         this.raw = path;
 
         // tokenize the path syntax from path
+        this.absolutePath = '';
         this.tokens = this.tokenize(path, rootPath);
-        Path.tokensRegex.lastIndex = 0;
 
+        Path.tokensRegex.lastIndex = 0;
     }
 
     /** 
@@ -289,9 +357,13 @@ class Path {
     tokenize (str,rootPath=null,tokensRegex = Path.tokensRegex) {
         if (str == undefined) return;
 
-        const parenStack = [];
-        
-        let tokens = (rootPath != null && (str.length === 0 || ".#".includes(str[0]))) ? new Array(...rootPath.tokens) : [];
+        /** @type {Object[]} */
+        const contextStack = [];
+
+        let tokens = [];
+        if (rootPath != null && (str.length === 0 || ".#".includes(str[0]))) {
+            tokens = new Array(...rootPath.tokens);
+        }
 
         for(let i = 0;i < str.length;) {
             // If the whole thing is a group, move on before the Regex gets mad.
@@ -304,12 +376,18 @@ class Path {
             // console.log(m); // Cool Debug thing
 
             if (m[1] !== undefined) {
-                for (let i=0;i<m[1].length;i++) tokens.pop();
+                for (let i=0;i<m[1].length;i++) {
+                    tokens.pop();
+                }
             }
 
-            else if(m[2] !== undefined) tokens.push({type:'O_KEY',value:sanatizeKey(m[2])});
+            else if(m[2] !== undefined) {
+                tokens.push({type:'O_KEY',value:sanatizeKey(m[2])});
+            }
 
-            else if(m[3] !== undefined) tokens.push({type:'A_LIST',value:m[3].split(',').map(x => parseInt(x))});
+            else if(m[3] !== undefined) {
+                tokens.push({type:'A_LIST',value:m[3].split(',').map(x => parseInt(x))});
+            }
 
             else if(m[4] !== undefined) {
                 let [pmin,pmax] = m[4].split(':');
@@ -321,40 +399,80 @@ class Path {
                 if(Number.isNaN(pmin) || Number.isNaN(pmax)) 
                     throw SyntaxError(`Token ${m[4]} at ${i}: Array slice indexes must be numbers.`);
 
-                tokens.push({type:'A_SLICE',value:{min:pmin,max:pmax}})
+                tokens.push({type:'A_SLICE',value:{min:pmin,max:pmax}});
             }
 
-            else if(m[5] !== undefined) tokens.push({type:'A_WILDCARD',value:'*'});
+            else if(m[5] !== undefined) {
+                tokens.push({type:'A_WILDCARD',value:'*'});
+            }
 
-            else if(m[6] !== undefined && m[6] !== '') tokens.push({type:'N_ACCESSORS',value:m[6].split(',').map(x => sanatizeKey(x))});
+            else if(m[6] !== undefined && m[6] !== '') {
+                tokens.push({type:'N_ACCESSORS',value:m[6].split(',').map(x => sanatizeKey(x))});
+            }
                 
             else if (m[7] !== undefined) {
                 tokens.push({type:'CONCAT',value:';,'});
-                if (rootPath != null && ".#".includes(str[i+1]) && parenStack.length < 1) {
+                if (rootPath != null && ".#".includes(str[i+1]) && contextStack.length < 1) {
                     tokens.push(...rootPath.tokens);
                 }
             }
 
             else if (m[8] !== undefined) { // (
-                parenStack.push(tokens);// push token context into stack
+                contextStack.push(tokens);// push token context into stack
                 tokens = []; // create new token context
             }
 
             else if (m[9] !== undefined) { // )
-                if (parenStack.length <= 0) throw SyntaxError(`Token ${m[9]} at ${i}: Unbalanced Parentheses. Missing opening '('`);
+                if (contextStack.length <= 0) throw SyntaxError(`Token ${m[9]} at ${i}: Unbalanced Parentheses. Missing opening '('`);
                 const group_token = {'type':'T_GROUP','value':tokens}; // store current token context into group token
-                tokens = parenStack.pop(); // pop previous context off the stack to continue where we left off
+                tokens = contextStack.pop(); // pop previous context off the stack to continue where we left off
                 tokens.push(group_token);
             }
             
             i = Path.tokensRegex.lastIndex;
         }
-        if(parenStack.length > 0) throw SyntaxError(`EOF: Unbalanced Parentheses. Missing closing ')'`);
+        if(contextStack.length > 0) throw SyntaxError(`EOF: Unbalanced Parentheses. Missing closing ')'`);
+        
+        const pathReducer = (pv,cv) => {
+            let tokenStr = ''
+            const startOfPath = pv === '' || (pv.length > 0 && ",(".includes(pv[pv.length-1]))
+            switch (cv.type) {
+                case 'O_KEY':
+                    tokenStr = (startOfPath ? '' : '.') + cv.value;
+                    break;
+                case 'A_LIST':
+                    tokenStr = `[${cv.value.join(',')}]`;
+                    break;
+                case 'A_SLICE':
+                    tokenStr = `[${cv.value.min === 0 ? '' : cv.value.min}:${cv.value.max ?? ''}]`;
+                    break;
+                case 'A_WILDCARD':
+                    tokenStr = '[*]';
+                    break;
+                case 'CONCAT':
+                    tokenStr = ',';
+                    break;
+                case 'T_GROUP':
+                    tokenStr = (startOfPath ? '' : '.') + `(${cv.value.reduce(pathReducer,'')})`;
+                    break;
+                case 'N_ACCESSORS':
+                    tokenStr = `#${cv.value.join(',')}`;
+                    break;
+                default:
+                    tokenStr = '';
+            }
+
+            return pv + tokenStr;
+        }
+        
+        this.absolutePath = tokens.reduce(pathReducer,'');
         return tokens;
     }
 
     /**
-     * @param {*} data 
+     * @param {Object} data
+     * @param {Boolean} resolveAccessors
+     * @returns {(Object|BaseNode|undefined)}
      */
     resolve(data,resolveAccessors=true) {
         const recursor = (treeRoot,tokens = this.tokens, cursor=0) => {
@@ -475,30 +593,20 @@ class ExprValue {
         rule_reroll: /(?:rr|ro)(?:\d+|\[\s*(?:\d+(?:\s*,\s*\d+)*|\d+:\d*|\d*:\d+)\s*\])/
     }
 
+    static parser = new exprEval.Parser({
+        operators: {
+            assignment: false
+        }
+    })
+
     /**
      * 
      * @param {(string|number)} value 
      * @param {Path} rootPath 
      */
     constructor(value, rootPath=null) {
-        this.parser = new exprEval.Parser({
-            operators: {
-                assignment: false
-            }
-        });
-        this.parser.functions.roll = (number, sides, rules='') => {
-            let rolls = []
-            for (let i = 0;i < number;i++) {
-                rolls.push(Math.floor(Math.random() * sides) + 1);
-            }
-            // apply rules
-
-            // sum values
-            return rolls.reduce((pv,cv) => pv+cv);
-        }
-
-        /** @type {Set<Path>} */
-        this.precedentPaths = new Set()
+        /** @type {Map<String,Path>} */
+        this.precedentPaths = new Map()
 
         this.isExpr = typeof(value) == "string"
         this.value = value;
@@ -537,7 +645,7 @@ class ExprValue {
         }
 
         // Parse text into expression object
-        let expr = this.parser.parse(value);
+        let expr = ExprValue.parser.parse(value);
         this.precedentPaths.clear()
 
         // preprocess the expression.
@@ -546,37 +654,47 @@ class ExprValue {
         let pathfound = false;
         for (let token of expr.tokens) {
             if (token.type == 'INUMBER' && pathfound) {
-                let pathObj = new Path(token.value,rootPath)
-                token.value = pathObj                                           // replace data() input with path object
-                this.precedentPaths.add(pathObj);                              // add path to dependencies
+                let pathObj = new Path(token.value,rootPath);
+                let existingPath = this.precedentPaths.get(pathObj.absolutePath)
+                if (existingPath == undefined) {
+                    this.precedentPaths.set(pathObj.absolutePath,pathObj);      // add path to dependencies
+                    existingPath = pathObj;
+                }
+                token.value = existingPath;                                     // replace data() input with path object
                 pathfound = false;
             }
             if (token.type == 'IVAR' && token.value == 'data') pathfound = true;
         }
 
-
         return expr
     }
 
     evaluate(contextData) {
+        
         /** @param {Path} path */
-        this.parser.functions.data = (path, fallback=NaN) => {
+        ExprValue.parser.functions.data = (path, fallback=NaN) => {
+            const replaceVals = (val) => {
+                if (typeof(val) === "boolean") {
+                    return val ? 1 : 0;
+                } else if (typeof(val) === "string") {
+                    return val;
+                } else if (typeof(val) === "number") {
+                    return Number.isNaN(val) ? fallback : val;
+                } else if(val instanceof BaseNode) {
+                    return replaceVals(val.accessors.value);
+                } else if (Array.isArray(val)) {
+                    return val.map(replaceVals)
+                } else {
+                    return val == null ? fallback : val;
+                }
+            }
             let result = path.resolve(contextData);
-            if (result instanceof BaseNode) {
-                result = result.accessors.value;
-            } else if (result instanceof ExprValue) {
+            if (result instanceof ExprValue) {
                 throw EvalError("This isn't supposed to happen!!")
             } else if (Array.isArray(result)) {
-                const replaceVals = (val) => {
-                    if (Array.isArray(val)) {
-                        return val.map(replaceVals)
-                    } else {
-                        return val == null ? fallback : val;
-                    }
-                }
                 result = result.map(replaceVals);
-            } else if (result == null) {
-                result = fallback;
+            } else {
+                result = replaceVals(result);
             }
             return result;
         }
@@ -587,21 +705,85 @@ class ExprValue {
     }
 
     modify(newValue, rootPath) {
+        const dependencyMods = [];
+        this.oldPaths = new Map(this.precedentPaths);
         this.value = newValue;
         this.isExpr = typeof(newValue) == "string";
         this.expr = this.processExpr(newValue,rootPath);
-        return true;
+        this.precedentPaths.forEach((path, key) => {
+            if (this.oldPaths.has(key)) {
+                this.oldPaths.delete(key)
+            } else {
+                dependencyMods.push({type:"add precedent",path:path,amount:1})
+            }
+        });
+        this.oldPaths.forEach((path,key) => {
+            dependencyMods.push({type:"remove precedent",path:path,amount:1})
+        })
+
+        return dependencyMods;
     }
 
     set(newValue) {
-        if(this.isExpr) return false;
-        this.value = newValue;
-        return true;
+        if(!this.isExpr && typeof(newValue) === 'number') {
+            this.value = newValue;
+            return true;
+        }
+        return false;
     }
 
     getSaveData() {
         return this.isExpr ? this.value: this.valueCache;
     }
+}
+
+ExprValue.parser.functions.roll = function (number, sides, rules='') {
+    let rolls = []
+    for (let i = 0;i < number;i++) {
+        rolls.push(Math.floor(Math.random() * sides) + 1);
+    }
+    // apply rules
+
+    // sum values
+    return rolls.reduce((pv,cv) => pv+cv);
+}
+ExprValue.parser.functions.sum = function (arr) {
+    return arr.reduce((pv,cv) => pv + cv,0);
+}
+ExprValue.parser.functions.asum = function (arr1, arr2) {
+    const rval = new Array(max(arr1.length,arr2.length));
+    for(let i = 0;i < rval.length;i++) {
+        if(i < arr1.length && i<arr2.length) rval[i] = arr1[i] + arr2[i];
+        else if (i < arr1.length)            rval[i] = arr1[i];
+        else if (i < arr2.length)            rval[i] = arr2[i];
+        else rval[i] = 0;
+    }
+    return rval;
+}
+ExprValue.parser.functions.any = function (arr) {
+    return arr.reduce((pv,cv) => {
+        if(cv) return true;
+        return pv;
+    },false);
+}
+ExprValue.parser.functions.every = function (arr) {
+    return arr.reduce((pv,cv) => {
+        if(!cv) return false;
+        return pv;
+    },true);
+}
+ExprValue.parser.functions.prod = function (arr) {
+    return arr.reduce((pv,cv) => pv * cv,0);
+}
+ExprValue.parser.functions.aprod = function (arr1, arr2) {
+    const rval = new Array(Math.max(arr1.length,arr2.length));
+    for(let i = 0;i < rval.length;i++) {
+        if(i < arr1.length && i<arr2.length) rval[i] = arr1[i] * arr2[i];
+        else if (i < arr1.length)            rval[i] = arr1[i];
+        else if (i < arr2.length)            rval[i] = arr2[i];
+        else rval[i] = 0;
+    }
+    return rval;
 }
 
 class BaseNode {
@@ -624,27 +806,31 @@ class BaseNode {
 
         this.passThrough = undefined;
 
-        // dependency lists are lists of path strings to other nodes
-        /** @type {Set<BaseNode>} */
-        this.dependents = new Set();
-        /** @type {Set<BaseNode>} */
-        this.precedents = new Set();
+        // dependents and precedents are mapped directly to nodes after
+        // the character data tree is constructed. Maps are used to 
+        /** @type {Map<BaseNode,Number>} */
+        this.dependents = new Map();
+        /** @type {Map<BaseNode,Number>} */
+        this.precedents = new Map();
 
-        /** @type {Set<Path>} */
-        // this.dependentPaths = new Set();
-        /** @type {Set<Path>} */
-        this.precedentPaths = new Set();
+        // dependencyModifications defines what changes need to be made in the next
+        // dependency evaluation pass. Stores a list of Objects of the form:
+        // {type:"add/remove",path:<Path>,amount:<Number>}
+        /** @type {{type:String,path:Path,amount:Number}[]} */
+        this.dependencyModifications = [];
 
         this.error = null;
         this.warning = null;
         this.isErrorSrc = false;
+
+        this.testval = {type:"hi",value:6};
 
         // resolve dependency list by preparsing expressions
     }
 
     set(value) {
         this.accessors.value = value;
-        for(let dependent of this.dependents) {
+        for(let dependent of this.dependents.keys()) {
             dependent.evaluate();
         }
     }
@@ -654,62 +840,98 @@ class BaseNode {
     }
 
     evaluateDependencies() {
-        let hangingPrecedents = new Set(this.precedents);
-        for (let path of this.precedentPaths) {
-            let node = path.resolve(this.context,false);
-            if (node instanceof BaseNode) {
-                if (hangingPrecedents.has(node)) {
-                    hangingPrecedents.delete(node)
-                } else {
-                    this.registerPrecedent(node)
+        this.dependencyModifications.forEach((mod) => {
+            const resolvedPaths = mod.path.resolve(this.context) ?? null;
+            const pathCrawler = (pathResult) => {
+                if(pathResult == null) return;
+                else if (pathResult instanceof BaseNode) {
+                    switch (mod.type) {
+                        case "add precedent":
+                            this.registerPrecedent(pathResult,mod.amount);
+                            break;
+                        case "add dependent":
+                            this.registerDependent(pathResult,mod.amount);
+                            break;
+                        case "remove precedent":
+                            this.unregisterPrecedent(pathResult,mod.amount);
+                            break;
+                        case "remove dependent":
+                            this.unregisterDependent(pathResult,mod.amount);
+                            break;
+                    }
+                    return;
+                } else if (Array.isArray(pathResult)) {
+                    pathResult.forEach(item => pathCrawler(item));
+                    return;
+                } else if (pathResult instanceof Object) {
+                    Object.values(pathResult).forEach((value) => pathCrawler(value));
+                    return;
                 }
+                return;
             }
-        }
-        hangingPrecedents.forEach((node) => this.unregisterPrecedent(node));
+            pathCrawler(resolvedPaths);
+        });
+
+        // Once connections are made, clear out modifications list
+        this.dependencyModifications = [];
     }
 
-    registerDependencies() {
-        this.evaluateDependencies();
-    }
-
-    registerPrecedent(node) {
+    registerPrecedent(node, amount = 1) {
         if (node instanceof BaseNode) {
-            this.precedents.add(node);
-            node.dependents.add(this);
+            this.precedents.set(node,(this.precedents.get(node) ?? 0) + amount);
+            node.dependents.set(this,(node.dependents.get(this) ?? 0) + amount);
         }
     }
 
-    registerDependent(node) {
+    registerDependent(node, amount = 1) {
         if (node instanceof BaseNode) {
-            this.dependents.add(node);
-            node.precedents.add(this);
+            this.dependents.set(node,(this.dependents.get(node) ?? 0) + amount);
+            node.precedents.set(this,(node.precedents.get(this) ?? 0) + amount);
         }
     }
 
     unregisterDependencies() {
-        for(let node of this.precedents) {
-            node.dependents.delete(this);
+        for(let [node,amount] of this.precedents) {
+            node.unregisterDependent(this,amount);
         }
-        this.precedents.clear();
+
+        for(let [node,amount] of this.dependents) {
+            node.unregisterPrecedent(this,amount);
+        }
     }
 
-    unregisterPrecedent(node){
+    unregisterPrecedent(node, amount = 1){
         if (node instanceof BaseNode) {
-            node.dependents.delete(this);
-            this.precedents.delete(node);
+            let nextVal = (node.dependents.get(this) ?? 0) - amount;
+            if (nextVal > 0) node.dependents.set(this,nextVal);
+            else node.dependents.delete(this);
+
+            nextVal = (this.precedents.get(node) ?? 0) - amount;
+            if (nextVal > 0) this.precedents.set(node,nextVal);
+            else this.precedents.delete(node);
         }
     }
 
-    // unregisterDependent(node) {
-    //     if (node instanceof BaseNode) {
-    //         this.dependents.delete(node);
-    //         node.dependencies.delete(this);
-    //     }
-    // }
+    unregisterDependent(node, amount) {
+        if (node instanceof BaseNode) {
+            let nextVal = (node.precedents.get(this) ?? 0) - amount;
+            if (nextVal > 0) node.precedents.set(this,nextVal);
+            else node.precedents.delete(this);
+
+            nextVal = (this.dependents.get(node) ?? 0) - amount;
+            if (nextVal > 0) this.dependents.set(node,nextVal);
+            else this.dependents.delete(node);
+        }
+    }
 
     getSaveData() {
         if (this.virtual) return null;
         return this.raw;
+    }
+
+    destroy() {
+        this.unregisterDependencies();
+        delete this;
     }
 }
 
@@ -729,20 +951,23 @@ class DataNode extends BaseNode {
         this.min = new ExprValue(min,this.path);
 
         this.value.precedentPaths.forEach(depPath => {
-            this.precedentPaths.add(depPath)
+            this.dependencyModifications.push({type:"add precedent",path:depPath,amount:1});
         });
         this.max.precedentPaths.forEach(depPath => {
-            this.precedentPaths.add(depPath)
+            this.dependencyModifications.push({type:"add precedent",path:depPath,amount:1});
         });
         this.min.precedentPaths.forEach(depPath => {
-            this.precedentPaths.add(depPath)
+            this.dependencyModifications.push({type:"add precedent",path:depPath,amount:1});
         });
 
         this.listeners = listeners;
         this.dirty = true;
 
+        this.renderedElement = null;
+        this.listenerHandler = (event) => {
+            this.set({value:Number(this.renderedElement?.value ?? this.accessors.value)});
+        }
 
-        
         this.accessors = {
             base: 0,
             value: 0,
@@ -751,30 +976,49 @@ class DataNode extends BaseNode {
         }
     }
 
+    /**
+     * 
+     * @param {HTMLInputElement} element 
+     */
+    attachInput (element) {
+        this.renderedElement = element;
+        element.addEventListener("change",this.listenerHandler);
+    }
+
+    /**
+     * 
+     * @param {HTMLInputElement} element 
+     */
+    detachInput () {
+        this.renderedElement?.removeEventListener("change",this.listenerHandler)
+        this.renderedElement = null;
+    }
+
     set({value=undefined,min=undefined,max=undefined}) {
         let success = false;
-        if(value) if(this.value.set(value)) success = true;
-        if(min) if(this.min.set(min)) success = true;
-        if(max) if(this.max.set(max)) success = true;
+        if(value != undefined) if(this.value.set(value)) success = true;
+        if(min != undefined) if(this.min.set(min)) success = true;
+        if(max != undefined) if(this.max.set(max)) success = true;
         if(success) {
             this.setDirty();
             this.evaluate();
+        } else {
+            this.renderedElement.value = this.accessors.value;
         }
     }
 
     modify({value=undefined,min=undefined,max=undefined}) {
         let success = false;
-        if(value) {
-            // need to clean dependencies
-            this.value.modify(value,this.path);
-
+        if(value != undefined) {
+            this.dependencyModifications.push(...this.value.modify(value,this.path));
         }
-        if(min) { 
-            this.min.modify(min,this.path) 
+        if(min != undefined) { 
+            this.dependencyModifications.push(...this.min.modify(min,this.path)); 
         }
-        if(max) { 
-            this.max.modify(max,this.path) 
+        if(max != undefined) { 
+            this.dependencyModifications.push(...this.max.modify(max,this.path)); 
         }
+        this.evaluateDependencies();
         this.setDirty();
         this.evaluate();
     }
@@ -785,7 +1029,7 @@ class DataNode extends BaseNode {
         if(!this.dirty){
             this.dirty = true;
             try {
-                for (let node of this.dependents) {
+                for (let node of this.dependents.keys()) {
                     if (node instanceof DataNode) {
                         node.setDirty()
                     }
@@ -856,7 +1100,10 @@ class DataNode extends BaseNode {
                     )
                 }
 
-                for (let node of this.dependents) {
+                if (this.renderedElement != null)
+                    this.renderedElement.value = this.accessors.value;
+
+                for (let node of this.dependents.keys()) {
                     if (node instanceof DataNode) {
                         node.evaluate()
                     }
@@ -894,6 +1141,11 @@ class DataNode extends BaseNode {
 
         return super.getSaveData()
     }
+
+    destroy () {
+        this.detachInput()
+        super.destroy();
+    }
 }
 
 class ModifierNode extends BaseNode {
@@ -924,48 +1176,48 @@ let testFileData = `{
         "HP#data":{"value":30,"max":110},
         "Ability Scores":{
             "Strength":{
-                "score#data":{"value":10,"max":20},
+                "score#data":{"value":10,"max":20,"min":0},
                 "mod": "=floor(data('.score')/2)-5",
                 "save": "=data('.mod')"
             },
             "Dexterity":{
-                "score#data":{"value":8,"max":20},
+                "score#data":{"value":8,"max":20,"min":0},
                 "mod": "=floor(data('.score')/2)-5",
                 "save": "=data('.mod')"
             },
             "Constitution":{
-                "score#data":{"value":13,"max":20},
+                "score#data":{"value":13,"max":20,"min":0},
                 "mod": "=floor(data('.score')/2)-5",
                 "save": "=data('.mod')"
             },
             "Wisdom":{
-                "score#data":{"value":15,"max":20},
+                "score#data":{"value":15,"max":20,"min":0},
                 "mod": "=floor(data('.score')/2)-5",
                 "save": "=data('.mod')"
             },
             "Intelligence":{
-                "score#data":{"value":12,"max":20},
+                "score#data":{"value":12,"max":20,"min":0},
                 "mod": "=floor(data('.score')/2)-5",
                 "save": "=data('.mod')"
             },
             "Charisma":{
-                "score#data":{"value":20,"max":20},
+                "score#data":{"value":20,"max":20,"min":0},
                 "mod": "=floor(data('.score')/2)-5",
                 "save": "=data('.mod')"
             }
                 
         },
         "Some Data":{
-            "mutliNode#data":[
+            "multiNode#data":[
                 {"value":10},
                 {"value":20},
                 {"value":30},
-                {"value":"=data('Equipment.items.1.name')=='Shield'"}
+                {"value":"=data('Equipment.items[1].name')=='Shield'"}
             ],
-            "sideNode":"=data('multiNode.1')"
+            "sideNode":"=data('.multiNode[1]')"
         },
         "Equipment":{
-            "capacity":"=data('Stats.Strength.score') * 15",
+            "capacity":"=data('Ability Scores.Strength.score') * 15",
             "items":[
                 {
                     "name":"Shortsword",
