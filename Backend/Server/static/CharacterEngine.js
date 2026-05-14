@@ -675,7 +675,7 @@ class ExprValue {
         ExprValue.parser.functions.data = (path, fallback=NaN) => {
             const replaceVals = (val) => {
                 if (typeof(val) === "boolean") {
-                    return val ? 1 : 0;
+                    return val;
                 } else if (typeof(val) === "string") {
                     return val;
                 } else if (typeof(val) === "number") {
@@ -685,7 +685,7 @@ class ExprValue {
                 } else if (Array.isArray(val)) {
                     return val.map(replaceVals)
                 } else {
-                    return val == null ? fallback : val;
+                    return fallback;
                 }
             }
             let result = path.resolve(contextData);
