@@ -223,13 +223,13 @@ class Character {
             if (treeRoot == null) return null;
             if (treeRoot instanceof DataNode) {
                 let newInput = document.createElement("input");
-                newInput.type = "number";
+                newInput.type = treeRoot.inputType ?? "number";
                 newInput.value = treeRoot.accessors.value;
                 treeRoot.attachInput(newInput);
                 return newInput;
             } else if (treeRoot instanceof BaseNode) {
                 let newInput = document.createElement("input");
-                newInput.type = "text";
+                newInput.type = treeRoot.inputType ?? "text";
                 newInput.value = treeRoot.accessors.value;
                 return newInput;
             }
@@ -754,9 +754,11 @@ class ExprValue {
     }
 
     set(newValue) {
-        if(!this.isExpr && typeof(newValue) === 'number') {
-            this.value = newValue;
-            return true;
+        if(!this.isExpr) {
+            if (['number','boolean'].includes(typeof(newValue))) {
+                this.value = newValue;
+                return true;
+            }
         }
         return false;
     }
@@ -832,14 +834,17 @@ class BaseNode {
      * @param {boolean} virtual 
      * @param {*} context 
      * @param {string} path 
-     * @param {*} value 
+     * @param {*} dataObj 
      */
-    constructor(virtual,context,path,value) {
+    constructor(virtual,context,path,dataObj) {
+        let dataVal = dataObj;
+        if (dataObj != null && dataObj instanceof Object)
+            ({ value: dataVal } = dataObj)
         this.context = context;
         this.path = new Path(path)
-        this.raw = value
+        this.raw = dataObj
         this.accessors = {
-            value: value
+            value: dataVal
         };
         this.virtual = virtual;
         this.passThrough = undefined;
@@ -866,7 +871,37 @@ class BaseNode {
 
         this.renderedElement = null;
         this.inputListenerHandler = (event) => {
-            this.set({value:this.renderedElement?.value ?? this.accessors.value});
+            let newVal = this.accessors.value;
+            switch (this.inputType) {
+                case "number":
+                    if (this.renderedElement != null)
+                        newVal = Number(this.renderedElement.value);
+                    break;
+                case "checkbox":
+                    if (this.renderedElement != null)
+                        newVal = Boolean(this.renderedElement.checked);
+                    break; 
+                case "text":
+                default:
+                    if (this.renderedElement != null)
+                        newVal = this.renderedElement.value;
+                }
+            this.set({value:newVal});
+        }
+
+        this.inputType = null;
+        switch (typeof(dataVal)) {
+            case "string":
+                this.inputType = "text";
+                break;
+            case "number":
+                this.inputType = "number";
+                break;
+            case "boolean":
+                this.inputType = "checkbox";
+                break;
+            default:
+                this.inputType = null;
         }
     }
 
@@ -877,6 +912,7 @@ class BaseNode {
     attachInput (element) {
         this.renderedElement = element;
         element.addEventListener("change",this.inputListenerHandler);
+        this.evaluate();
     }
 
     /**
@@ -926,8 +962,17 @@ class BaseNode {
     }
 
     evaluate() {
-        if (this.renderedElement != null)
-            this.renderedElement.value = this.accessors.value;
+        if (this.renderedElement != null) {
+            switch (this.inputType) {
+                case "checkbox":
+                    this.renderedElement.checked = !!this.accessors.value;
+                    break; 
+                case "text":
+                case "number":
+                default:
+                    this.renderedElement.value = this.accessors.value;
+            }
+        }
         
         if (this.dirty) {
             this.dirty = false;
@@ -1083,7 +1128,7 @@ class DataNode extends BaseNode {
 
         this.accessors = {
             base: 0,
-            value: 0,
+            value: value,
             max: undefined, 
             min: undefined
         }
@@ -1092,15 +1137,13 @@ class DataNode extends BaseNode {
 
     set({value=undefined,min=undefined,max=undefined}) {
         let success = false;
-        if(value != undefined) if(this.value.set(Number(value))) success = true;
-        if(min != undefined) if(this.min.set(Number(min))) success = true;
-        if(max != undefined) if(this.max.set(Number(max))) success = true;
+        if(value != undefined) if(this.value.set(value)) success = true;
+        if(min != undefined) if(this.min.set(min)) success = true;
+        if(max != undefined) if(this.max.set(max)) success = true;
         if(success) {
             this.setDirty();
-            this.evaluate();
-        } else {
-            this.renderedElement.value = this.accessors.value;
         }
+        this.evaluate();
     }
 
     modify({value=undefined,min=undefined,max=undefined}) {
