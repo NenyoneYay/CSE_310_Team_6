@@ -1,31 +1,51 @@
-async function readSingleFile(e){
-    let file = e.target.files[0];
+/**
+ * 
+ * @param {InputEvent} e 
+ * @returns 
+ */
+
+/** @type {(Character|null)} */
+var loadedChar = null;
+
+async function readSingleFile(ev) {
+    const errElement = document.getElementById('error-content');
+    errElement.textContent = '';
+    const file = ev.target.files[0];
     if (!file) {
         return;
     }
-    let reader = new FileReader();
+    const reader = new FileReader();
     reader.onload = function(e) {
         let contents = e.target.result;
         displayContents(contents);
     };
     reader.readAsText(file);
+}  
+
+function clearFile(ev) {
+    const errElement = document.getElementById('error-content');
+    const fileElement = document.getElementById('file-input');
+    const contentElement = document.getElementById('html-content')
+    errElement.textContent = '';
+    fileElement.value = '';
+    loadedChar?.destroy();
+    loadedChar = null;
+    contentElement.innerHTML = '';
 }
-var loadedChar = null;
+
 function displayContents(contents) {
-    if(loadedChar == null)
-        loadedChar = new Character(contents);
-    else
-        loadedChar.parseFile(contents);
-    loadedChar.renderHTML();
-//   let element = document.getElementById('file-content');
-//   element.textContent = contents;
+    try {
+        if(loadedChar == null)
+            loadedChar = new Character(contents);
+        else
+            loadedChar.parseFile(contents);
+        loadedChar.renderHTML();
+    } catch (err) {
+        const element = document.getElementById('error-content');
+        element.textContent = `Error: ${err.name}: ${err.message}`;
+        document.getElementById('file-input').value = '';
+    }
 }
-
-document.addEventListener('DOMContentLoaded',(e) => {
-    document.getElementById('file-input')
-        .addEventListener('change', readSingleFile, false);
-});
-
 
 /* Future features
  * actions:
@@ -120,12 +140,17 @@ class Character {
     parseFile(fileData){
         this.destroy();
         let jsonData = JSON.parse(fileData,function (key,value) {
-            let sanatizedKey = sanatizeKey(key);
-            if (sanatizedKey != key) {
-                this[sanatizedKey] = value; // sanatize object prototype keys
-                return undefined;
+            const sanatizedKey = sanatizeKey(key);
+            const [baseKey,sigil] = sanatizedKey.split('#');
+            let rval = value;
+            if (sigil != undefined) {
+                this[baseKey] = null;
             }
-            return value;
+            if (sanatizedKey != key && rval != undefined) {
+                this[sanatizedKey] = rval; // sanatize object prototype keys
+                rval = undefined;
+            }
+            return rval;
         });
         let contextData = jsonData.data;
         /** @type {BaseNode[]} */
@@ -137,12 +162,12 @@ class Character {
             if (dataTree == null || dataTree instanceof BaseNode) {
                 return;
             } else if (Array.isArray(dataTree)) {
-                dataTree.forEach((item,idx) => contextRecursor(item,`${path}.${idx}`))
+                dataTree.forEach((item,idx) => contextRecursor(item,`${path}[${idx}]`))
             } else if (dataTree instanceof Object) {
                 Object.keys(dataTree).forEach((key) => {
                     const [baseKey, sigil] = key.split('#');
                     let data = dataTree[key];
-                    const newPath = joinPath(path,baseKey)
+                    const newPath = joinPath(path,baseKey);
                     switch (sigil) {
                         case "data": // DataNode
                             if (Array.isArray(data)) {
@@ -193,7 +218,7 @@ class Character {
     }
     
     renderHTML() {
-        // do the html rendering here and return as string to be pushed to site.
+        // do the html rendering here
         const recursor = (treeRoot, level = 0) => {
             if (treeRoot == null) return null;
             if (treeRoot instanceof DataNode) {
@@ -608,9 +633,13 @@ class ExprValue {
         /** @type {Map<String,Path>} */
         this.precedentPaths = new Map()
 
-        this.isExpr = typeof(value) == "string"
-        this.value = value;
-        this.expr = this.processExpr(value, rootPath);
+        this.isExpr = typeof(value) === "string"
+        this.value = undefined;
+        this.expr = undefined;
+        if (value == null || ["boolean","number","string"].includes(typeof(value))) {
+            this.value = value;
+            this.expr = this.processExpr(value, rootPath);
+        }
     }
 
     /**
@@ -785,6 +814,17 @@ ExprValue.parser.functions.aprod = function (arr1, arr2) {
     }
     return rval;
 }
+ExprValue.parser.functions.flatten = function (arr) {
+    const reducer = (pv,cv) => {
+        if(Array.isArray(cv)) {
+            pv.push(...cv.reduce(reducer,[]));
+        } else {
+            pv.push(cv);
+        }
+        return pv;
+    }
+    return arr.reduce(reducer,[]);
+}
 
 class BaseNode {
     /**
@@ -801,9 +841,7 @@ class BaseNode {
         this.accessors = {
             value: value
         };
-
         this.virtual = virtual;
-
         this.passThrough = undefined;
 
         // dependents and precedents are mapped directly to nodes after
@@ -819,23 +857,96 @@ class BaseNode {
         /** @type {{type:String,path:Path,amount:Number}[]} */
         this.dependencyModifications = [];
 
+        this.dirty = true;
+        this.visited = false;
+        
         this.error = null;
         this.warning = null;
         this.isErrorSrc = false;
 
-        this.testval = {type:"hi",value:6};
+        this.renderedElement = null;
+        this.inputListenerHandler = (event) => {
+            this.set({value:this.renderedElement?.value ?? this.accessors.value});
+        }
+    }
 
-        // resolve dependency list by preparsing expressions
+    /**
+     * 
+     * @param {HTMLInputElement} element 
+     */
+    attachInput (element) {
+        this.renderedElement = element;
+        element.addEventListener("change",this.inputListenerHandler);
+    }
+
+    /**
+     * 
+     * @param {HTMLInputElement} element 
+     */
+    detachInput () {
+        this.renderedElement?.removeEventListener("change",this.inputListenerHandler)
+        this.renderedElement = null;
     }
 
     set(value) {
         this.accessors.value = value;
-        for(let dependent of this.dependents.keys()) {
-            dependent.evaluate();
+        this.setDirty();
+        this.evaluate();
+    }
+
+    // idea: allow visited to be a loop counter to allow circular 
+    // loops and recalculate up to x amount of times.
+    setDirty() {
+        if (!this.visited) {
+            this.visited = true;
+        } else {
+            this.visited = false;
+            this.error = `Node Source: '${this.path.absolutePath}' is part of a dependency loop.`;
+            this.isErrorSrc = true;
+            this.renderedElement.value = this.accessors.value;
+            throw EvalError(this.error);
+        }
+
+        try {
+            if(!this.dirty){
+                this.dirty = true;
+            }
+            for (let node of this.dependents.keys()) {
+                if (node instanceof BaseNode) {
+                    node.setDirty()
+                }
+            }
+        } catch (e){
+            this.isErrorSrc = false;
+            this.error = e.message;
+            throw(e);
+        } finally {
+            this.visited = false;
         }
     }
 
     evaluate() {
+        if (this.renderedElement != null)
+            this.renderedElement.value = this.accessors.value;
+        
+        if (this.dirty) {
+            this.dirty = false;
+            
+            try {
+                for(let dependent of this.dependents.keys()) {
+                    if (dependent instanceof BaseNode)
+                        dependent.evaluate();
+                }
+            } catch (e) {
+                this.isErrorSrc = false;
+                this.error = e.message;
+                throw e;
+            }
+
+            this.isErrorSrc = false;
+            this.error = null;
+            this.warning = null;
+        }
         return this.accessors.value;
     }
 
@@ -931,19 +1042,26 @@ class BaseNode {
 
     destroy() {
         this.unregisterDependencies();
-        delete this;
+        delete this.context;
+        delete this.raw;
+        delete this.accessors;
     }
 }
 
 class DataNode extends BaseNode {
     /**
+     * @param {boolean} virtual 
+     * @param {*} context 
      * @param {string} path 
-     * @param {(string|number|boolean)} value 
-     * @param {(string|number|null)} max 
-     * @param {(string|number|null)} min 
-     * @param {Array} listeners 
+     * @param {{
+     *     value:(string|number|boolean),
+     *     max?:(string|number),
+     *     min?:(string|number),
+     *     listeners?:Array<Object>
+     *   }?} dataObj
      */
-    constructor(virtual, context, path,{value,min=undefined,max=undefined,listeners=[]}) {
+    constructor(virtual, context, path, dataObj) {
+        let {value,min=null,max=null,listeners=[]} = dataObj ?? {value:null};
         super(virtual, context, path,{value:value, min:min, max:max, listeners:listeners});
 
         this.value = new ExprValue(value,this.path);
@@ -963,11 +1081,6 @@ class DataNode extends BaseNode {
         this.listeners = listeners;
         this.dirty = true;
 
-        this.renderedElement = null;
-        this.listenerHandler = (event) => {
-            this.set({value:Number(this.renderedElement?.value ?? this.accessors.value)});
-        }
-
         this.accessors = {
             base: 0,
             value: 0,
@@ -976,29 +1089,12 @@ class DataNode extends BaseNode {
         }
     }
 
-    /**
-     * 
-     * @param {HTMLInputElement} element 
-     */
-    attachInput (element) {
-        this.renderedElement = element;
-        element.addEventListener("change",this.listenerHandler);
-    }
-
-    /**
-     * 
-     * @param {HTMLInputElement} element 
-     */
-    detachInput () {
-        this.renderedElement?.removeEventListener("change",this.listenerHandler)
-        this.renderedElement = null;
-    }
 
     set({value=undefined,min=undefined,max=undefined}) {
         let success = false;
-        if(value != undefined) if(this.value.set(value)) success = true;
-        if(min != undefined) if(this.min.set(min)) success = true;
-        if(max != undefined) if(this.max.set(max)) success = true;
+        if(value != undefined) if(this.value.set(Number(value))) success = true;
+        if(min != undefined) if(this.min.set(Number(min))) success = true;
+        if(max != undefined) if(this.max.set(Number(max))) success = true;
         if(success) {
             this.setDirty();
             this.evaluate();
@@ -1023,25 +1119,6 @@ class DataNode extends BaseNode {
         this.evaluate();
     }
 
-    // idea: allow dirty to be a loop counter to allow circular 
-    // loops and recalculate up to x amount of times.
-    setDirty() {
-        if(!this.dirty){
-            this.dirty = true;
-            try {
-                for (let node of this.dependents.keys()) {
-                    if (node instanceof DataNode) {
-                        node.setDirty()
-                    }
-                }
-            } catch (e){
-                this.error = e.message;
-            }
-        } else {
-            this.warning = `Loop detected. Evaluation paused after ${this.loopcount} loops`;
-        }
-    }
-
     evaluate() {
         if(this.dirty) {
             try {
@@ -1058,25 +1135,25 @@ class DataNode extends BaseNode {
                 let result = this.max.evaluate(this.context);
                 this.accessors.max = 
                     (Number.isNaN() || result == null)
-                    ? undefined 
+                    ? null 
                     : result;
 
                 // min
                 result = this.min.evaluate(this.context);
                 this.accessors.min = 
                     (Number.isNaN(result) || result == null)
-                    ? undefined 
+                    ? null 
                     : result;
 
                 // base (clamp to min/max if applicable)
                 this.accessors.base = this.value.evaluate(this.context);
-                if (this.accessors.min != undefined) {
+                if (this.accessors.min != null) {
                     this.accessors.base = Math.max(
                         this.accessors.base,
                         this.accessors.min
                     )
                 }
-                if (this.accessors.max != undefined) {
+                if (this.accessors.max != null) {
                     this.accessors.base = Math.min(
                         this.accessors.base,
                         this.accessors.max
@@ -1087,37 +1164,27 @@ class DataNode extends BaseNode {
                 this.accessors.value = this.accessors.base;
 
                 // Clamp value after the dust settles
-                if (this.accessors.min != undefined) {
+                if (this.accessors.min != null) {
                     this.accessors.value = Math.max(
                         this.accessors.value,
                         this.accessors.min
                     )
                 }
-                if (this.accessors.max != undefined) {
+                if (this.accessors.max != null) {
                     this.accessors.value = Math.min(
                         this.accessors.value,
                         this.accessors.max
                     )
                 }
 
-                if (this.renderedElement != null)
-                    this.renderedElement.value = this.accessors.value;
-
-                for (let node of this.dependents.keys()) {
-                    if (node instanceof DataNode) {
-                        node.evaluate()
-                    }
-                }
-
             } catch (e) {
                 this.isErrorSrc = true;
                 this.error = e.message;
+                e.message = `Node Source: ${this.path.absolutePath} ${e.message}`
                 throw e;
-            } finally {
-                this.dirty = false;
             }
         }
-        return this.accessors.value;
+        return super.evaluate();
     }
 
     processRequirements() {
@@ -1155,8 +1222,8 @@ class ModifierNode extends BaseNode {
 }
 
 class PlaceholderNode extends BaseNode{
-    constructor(path,data) {
-        super(path,data);
+    constructor(virtual, context, path, data) {
+        super(virtual,context,path, data)
     }
 }
 

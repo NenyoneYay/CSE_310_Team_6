@@ -1,13 +1,18 @@
 {% extends "base.html" %}
 {% block head %}
 {{ super() }}
+<script type="module">
+    import {parse, evaluate, jsep} from "https://esm.sh/jse-eval";
+    window.jseEval = {parse: parse, evaluate: evaluate, jsep: jsep};
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/expr-eval/2.0.2/bundle.min.js" integrity="sha512-TNliDPFdpL1W1sP7v9WzHUxTAY+PN7wRiHqJzntb4HpaJ0HlreSm0tzbA8MU7EBEoPTYgEtB+ZpbBB2yQQu49g==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="{{ url_for('static',filename='CharacterEngine.js') }}"></script>
 {% endblock %}
 
 {% block content %}
-    <h1>Test Page</h1>
-    <input type="file" id="file-input">
-    <pre id="file-content" style="color:white"></pre>
+    <h1>Character Test Page</h1>
+    <input type="file" id="file-input" onchange="readSingleFile(event)">
+    <button onclick="clearFile(event)">Clear</button>
+    <pre id="error-content" style="color:red"></pre>
     <div id="html-content"></div>
 {% endblock %}
