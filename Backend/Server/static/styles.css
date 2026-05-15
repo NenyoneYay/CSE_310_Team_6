@@ -28,3 +28,22 @@ details div {
 #welcome {
     text-align: center;
 }
+
+#html-content{
+    max-width: max-content;
+    border-right: 1px solid black;
+    height:700px;
+}
+
+summary{
+    border:1px solid black;
+}
+input{
+    width:5ch;
+}
+li{
+    list-style:none;
+}
+div details div details{
+    border:1px solid black;
+}
