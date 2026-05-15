@@ -1,0 +1,15 @@
+{
+    "characterSheet_data": {
+        "sheet_character": {
+            "Hit Points": 500,
+            "Swag Points": 9000
+        },
+        "sheet_info": {
+            "character_name": "Swish Jackson"
+        },
+        "sheet_spells": {
+            "Spellcasting Class": "Wizard"
+        }
+        
+    }
+}
