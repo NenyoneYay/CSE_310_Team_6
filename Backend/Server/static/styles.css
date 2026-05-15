@@ -12,6 +12,18 @@ nav{
     list-style: none;
     gap: 30px;
 }
+header img{
+    border: 2px solid black;
+    border-radius: 10px;
+    box-shadow: 2px 2px 2px 2px rgba(0, 0, 0, .9);
+}
+
+details div {
+    margin-left: 1rem;
+    div div {
+        margin:unset;
+    }
+}
 
 #welcome {
     text-align: center;

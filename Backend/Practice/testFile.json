@@ -9,30 +9,34 @@
             }
         },
         "Some Data":{
-            "mutliNode#data":[
+            "multiNode#data":[
                 {"value":10},
                 {"value":20},
                 {"value":30}
             ],
-            "sideNode":"=data('multiNode.1')"
+            "sideNode":"=data('.multiNode.1')"
         },
         "Equipment":{
-            "capacity":"=data('Stats.Strength.score') * 15",
+            "capacity":"=data('Ability Scores.Strength.score') * 15",
             "items":[
                 {
                     "name":"Shortsword",
                     "desc":"blablabla",
-                    "equipped":false
+                    "equipped":true,
+                    "weight":5
                 },
                 {
                     "name":"Shield",
                     "desc":"blablabla",
-                    "equipped":false
+                    "equipped":false,
+                    "weight":3
                 },
                 {
-                    "desc":"no name"
+                    "desc":"no name",
+                    "weight":40
                 }
-            ]
+            ],
+            "carrying":"=sum(aprod(data('Equipment.items[*].weight'),data('Equipment.items[*].equipped',1)))"
         },
         "constructor":"malicious code",
         "Modifiers":{
