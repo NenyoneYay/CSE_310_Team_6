@@ -5,30 +5,51 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="styles/styles.css">
     <title>GnollPointer</title>
-    <link rel="icon" type="image/x-con" href="###">
+    <link rel="icon" type="image/x-icon" href="images/pointer_clearbackground_icon.ico">
 </head>
 <body>
     <header>
-        <img src="###" alt="GnollPointer Logo" id="logo">
+        <img src="images/gnollpointer_clearbackground_icon.png" alt="GnollPointer Logo" id="logo">
         <h2 id="logo-text">GnollPointer</h2>
-        <nav id="menu"> <!-- This nav bar is where we will put buttons to navigate through the website-->
-            <a href="index.html">Home</a>
+        <nav id="menu">
+            <a href="index.html" class="active">Dashboard</a>
             <a href="character.html">Characters</a>
         </nav>
     </header>
 
+    <main id="dashboard">
+        <!-- Quick Welcome & Stats Bar -->
+        <section id="welcome-banner">
+            <h1>Welcome Back, Adventurer</h1>
+            <p>Manage your heroes, track active campaigns, and reference core rules.</p>
+        </section>
 
-    <main>
-        <div id="welcome">
-            <h1>Welcome Message</h1>
-            <p>text explaining the purpose of the website</p>
-        </div>
+        <!-- Quick Actions Grid -->
+        <section id="quick-actions">
+            <h2>Quick Actions</h2>
+            <div class="action-buttons">
+                <button type="button" id="btn-create-char">New Character</button>
+            </div>
+        </section>
 
+        <!-- User's Characters Section -->
+        <section id="character-summary">
+            <div class="section-header">
+                <h2>Your Characters</h2>
+                <a href="character.html" class="view-all">View All</a>
+            </div>
+            <div class="card-grid">
+                <!-- Character Card 1 -->
+                <article class="character-card">
+                    <div class="char-avatar"></div>
+                    <div class="char-info"></div>
+                </article>
+            </div>
+        </section>
     </main>
 
-
     <footer>
-
+        <p>&copy; 2026 GnollPointer</p>
     </footer>
 </body>
 </html>
