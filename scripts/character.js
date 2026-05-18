@@ -6,6 +6,29 @@ var sheet_character = document.getElementById("sheet_character");
 var sheet_information = document.getElementById("sheet_information");
 var sheet_spells = document.getElementById("sheet_spells");
 
+var spellList = document.getElementsByClassName("spell");
+var cantripContainer = document.getElementById("cantrip-container");
+var spell1Container = document.getElementById("spell-container-level1");
+for (spell of spellList) {
+  spell.addEventListener("dragstart", function(e){
+    let selected = e.target;
+
+    spell1Container.addEventListener("dragover", function(e){
+      e.preventDefault();
+    })
+    spell1Container.addEventListener("drop", function(e){
+      spell1Container.appendChild(selected);
+      selected = null;
+    })
+    cantripContainer.addEventListener("dragover", function(e){
+      e.preventDefault();
+    })
+    cantripContainer.addEventListener("drop", function(e){
+      cantripContainer.appendChild(selected);
+      selected = null;
+    })
+  })
+}
 
 sheetSelectButton_character.addEventListener('click', sheetSelectCharacter);
 function sheetSelectCharacter() {
