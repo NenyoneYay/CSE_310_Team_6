@@ -1,12 +1,12 @@
-/**
- * 
- * @param {InputEvent} e 
- * @returns 
- */
 
 /** @type {(Character|null)} */
 var loadedChar = null;
 
+/**
+ * 
+ * @param {InputEvent} ev 
+ * @returns 
+ */
 async function readSingleFile(ev) {
     const errElement = document.getElementById('error-content');
     errElement.textContent = '';
@@ -1086,6 +1086,7 @@ class BaseNode {
     }
 
     destroy() {
+        this.detachInput();
         this.unregisterDependencies();
         delete this.context;
         delete this.raw;
@@ -1230,19 +1231,6 @@ class DataNode extends BaseNode {
         return super.evaluate();
     }
 
-    processRequirements() {
-        if (typeof(this.value) == "string") {
-            // parse for path references
-        }
-        if (typeof(this.min) == "string") {
-            // parse for path references
-        }
-        if (typeof(this.max) == "string") {
-            // parse for path references
-        }
-    }
-
-
     getSaveData() {
         this.raw.value = this.value.getSaveData()
         this.raw.min = this.min.getSaveData()
@@ -1253,7 +1241,6 @@ class DataNode extends BaseNode {
     }
 
     destroy () {
-        this.detachInput()
         super.destroy();
     }
 }

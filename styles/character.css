@@ -4,9 +4,9 @@
     --primary-color: #4e1818;
     --parchment-color: #fff5eb;
     --ivy: #638165;
-    --secondary-color: red;
-    --accent1-color: orange;
-    --accent2-color: cyan;
+    --gray-background: #696969;
+    --gray-foreground: #e2e2e2;
+
     --text-color: white;
     --background-color: rgb(78, 24, 24);
 
@@ -20,13 +20,17 @@ h1, h2, h3, h4, h5, p {
 }
 
 body {
-    background-color: var(--primary-color);
+    background-color: var(--ivy);
 }
 
 main {
-    max-width: 90%;
-    background-color: brown;
+    max-width: 10 0%;
+    background-color: var(--primary-color);
     margin: 0 auto;
+}
+
+header {
+    background-color: var(--ivy);
 }
 
 #character_container {
@@ -39,4 +43,11 @@ main {
 
 #character_sheet_header img {
     max-width: 30%;
+}
+
+#spell-container {
+    padding: 20px;
+    display: flex;
+    border: 2px dashed;
+    max-width: 300px;
 }
