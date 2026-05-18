@@ -1,31 +1,82 @@
+/* Custom Properties / Color Palette */
 :root {
-    --primary-color: rgb(78, 24, 24);
-    --secondary-color: red;
-    --accent1-color: orange;
-    --accent2-color: cyan;
-    --text-color: white;
-
-    --heading-font: 
-    --paragraph-font: 
-
-
+    --primary-color: #4e1818;
+    --parchment-color: #fff5eb;
+    --ivy: #638165;
 }
 
-header{
+/* Global Reset & Base Styles */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--primary-color);
+    color: var(--parchment-color);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    line-height: 1.6;
+}
+
+/* Header & Navigation */
+header {
+    background-color: var(--ivy);
     display: flex;
-    flex-direction: row;
-    justify-content: space-between;
     align-items: center;
     padding: 1rem 2rem;
-    border-bottom: 1px solid gray;
+    border-bottom: 2px solid var(--ivy);
 }
 
-nav{
+#logo {
+    height: 40px;
+    margin-right: 1rem;
+}
+
+#logo-text {
+    font-size: 1.5rem;
+    margin-right: auto;
+}
+
+#menu a {
+    color: var(--parchment-color);
+    text-decoration: none;
+    margin-left: 1.5rem;
+    font-weight: bold;
+    transition: color 0.2s ease;
+}
+
+#menu a:hover, #menu a.active {
+    color: var(--parchment-color);
+}
+
+/* Main Layout */
+#dashboard {
+    max-width: 1200px;
+    margin: 2rem auto;
+    padding: 0 1rem;
     display: flex;
-    list-style: none;
-    gap: 30px;
+    flex-direction: column;
+    gap: 2.5rem;
 }
 
-#welcome {
+
+/* Footer */
+footer {
     text-align: center;
+    padding: 2rem;
+    margin-top: 4rem;
+    background-color: rgba(0, 0, 0, 0.3);
+    border-top: 1px solid rgba(255, 245, 235, 0.1);
+}
+
+.footer-links {
+    margin-top: 0.5rem;
+}
+
+.footer-links a {
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 0.85rem;
+    margin: 0 0.5rem;
 }
