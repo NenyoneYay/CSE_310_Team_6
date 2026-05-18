@@ -45,9 +45,25 @@ header {
     max-width: 30%;
 }
 
-#spell-container {
+#cantrip-container {
     padding: 20px;
     display: flex;
     border: 2px dashed;
-    max-width: 300px;
+    max-width: 200px;
+    align-items: center;
+    flex-direction: column;
+}
+
+#spell-container-level1 {
+    padding: 20px;
+    display: flex;
+    border: 2px dashed;
+    max-width: 200px;
+    align-items: center;
+    flex-direction: column;
+}
+
+.spell {
+    align-items: self;
+    cursor: grab;
 }
