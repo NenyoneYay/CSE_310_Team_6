@@ -44,3 +44,10 @@ header {
 #character_sheet_header img {
     max-width: 30%;
 }
+
+#spell-container {
+    padding: 20px;
+    display: flex;
+    border: 2px dashed;
+    max-width: 300px;
+}
