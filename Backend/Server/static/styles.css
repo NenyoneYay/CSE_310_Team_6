@@ -30,7 +30,7 @@ details div {
 }
 
 #html-content{
-    max-width: max-content;
+    max-width: 30%;
     border-right: 1px solid black;
     height:700px;
 }
