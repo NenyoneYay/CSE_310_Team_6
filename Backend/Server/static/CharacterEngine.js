@@ -1,12 +1,12 @@
-/**
- * 
- * @param {InputEvent} e 
- * @returns 
- */
 
 /** @type {(Character|null)} */
 var loadedChar = null;
 
+/**
+ * 
+ * @param {InputEvent} ev 
+ * @returns 
+ */
 async function readSingleFile(ev) {
     const errElement = document.getElementById('error-content');
     errElement.textContent = '';
