@@ -1,3 +1,16 @@
+:root {
+    --primary-color: rgb(78, 24, 24);
+    --secondary-color: red;
+    --accent1-color: orange;
+    --accent2-color: cyan;
+    --text-color: white;
+
+    --heading-font: 
+    --paragraph-font: 
+
+
+}
+
 header{
     display: flex;
     flex-direction: row;
