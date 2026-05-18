@@ -1,15 +1,17 @@
 
 
 :root {
-    --primary-color: rgb(78, 24, 24);
+    --primary-color: #4e1818;
+    --parchment-color: #fff5eb;
+    --ivy: #638165;
     --secondary-color: red;
     --accent1-color: orange;
     --accent2-color: cyan;
     --text-color: white;
+    --background-color: rgb(78, 24, 24);
 
     --heading-font: 
     --paragraph-font: 
-
 
 }
 
@@ -25,6 +27,10 @@ main {
     max-width: 90%;
     background-color: brown;
     margin: 0 auto;
+}
+
+#character_container {
+    background-color: var(--secondary-color);
 }
 
 .hidden {
