@@ -1,6 +1,7 @@
 {
     "data":{
         "HP#data":{"value":30,"max":110},
+        "Speed#data":{"value": 30, "max": 100},
         "Ability Scores":{
             "Strength":{
                 "score#data":{"value":10,"max":20,"min":0},
@@ -68,6 +69,42 @@
             "Save Increase#modifier":{
                 "targets":["Ability Scores.*.save"],
                 "conditions":["items.*.equipped"]
+            }
+        },
+        "Classes":{
+            "Warlock":{
+                "Traits":{
+                    "Gift of Strength":{
+                        "desc":"bla",
+                        "Strength Boost#modifier":{
+                            "target":"Ability Scores.Strength.score",
+                            "operation":"add",
+                            "value":5
+                        }
+                    }
+                }
+            }
+        },
+        "Race":{
+            "Elf":{
+                "Traits":{
+                    "Speed#modifier":{
+                        "target": "Speed",
+                        "operation":"replace",
+                        "value":30,
+                        "conditions":["= map(data(\"Equipment.items[*].(type,equipped)\",false), 'x[1] ? x[0] : [PLACEHOLDER NEEDS TO BE EMPTY STRING]')"],
+                        "asdf":       "      [['armor',true],['armor',false],['Shield',true],[undefined,false]] => ['armor',true]"
+                    },
+                    "Elf Dexterity":{
+                        "desc": "blablabla",
+                        "Dexterity Boost#modifier":{
+                            "target": "Ability Scores.Dexterity.score",
+                            "operation": "add",
+                            "value": 2
+                        }
+
+                    }
+                }
             }
         }
     }
