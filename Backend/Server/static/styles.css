@@ -38,7 +38,7 @@ details div {
 summary{
     border:1px solid black;
 }
-input{
+#html content input{
     width:5ch;
 }
 li{
@@ -46,4 +46,8 @@ li{
 }
 div details div details{
     border:1px solid black;
+}
+button{
+    margin-right: 10px;
+
 }
