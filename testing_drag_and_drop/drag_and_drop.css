@@ -1,0 +1,42 @@
+*{
+    box-sizing: border-box;
+    margin: 0;
+}
+
+.content{
+    width:100%;
+    min-height: 100vh;
+    background: #0b0423;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.container{
+    width: 300px;
+    min-height: 400px;
+    margin: 20px;
+    border: 2px dashed white;
+}
+
+.draggable_item{
+    background: #3b3b40;
+    height: 60px;
+    margin: 30px;
+    color: white;
+    display: flex;
+    align-items: center;
+    cursor: move;
+}
+
+.draggable_item img{
+    height: 100%;
+}
+
+.draggable_item p{
+    padding: 5px;
+}
+
+.dragging{
+    opacity: .5;
+}
