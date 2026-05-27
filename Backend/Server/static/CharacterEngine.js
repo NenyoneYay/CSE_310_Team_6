@@ -1205,6 +1205,13 @@ class DataNode extends BaseNode {
                 }
 
                 // apply modifiers
+                for(const node of this.precedents.keys()) {
+                    if (node instanceof ModifierNode){
+                        // do something with the node operation and value
+                        // priority order: replace first, then multiply, then add
+                    }
+                }
+
                 this.accessors.value = this.accessors.base;
 
                 // Clamp value after the dust settles
@@ -1246,8 +1253,30 @@ class DataNode extends BaseNode {
 }
 
 class ModifierNode extends BaseNode {
-    constructor(virtual, context, path, data) {
-        super(virtual,context,path, data)
+    /**
+     * @param {{target:string,operation:("add"|"multiply"|"replace"),value:(number|"string starting with '='"|boolean)}} dataObj
+     */
+    constructor(virtual, context, path, dataObj) {
+        const {target,operation,value} = dataObj;
+        super(virtual,context,path, {target,operation,value});
+
+        this.target = new Path(target, this.path);
+        this.dependencyModifications.push({type:"add dependent",path:this.target,amount:1});
+
+        this.operation = operation;
+
+        this.value = new ExprValue(value, this.path);
+        this.value.precedentPaths.forEach(depPath => {
+            this.dependencyModifications.push({type:"add precedent",path:depPath,amount:1});
+        })
+
+    }
+
+    evaluate() {
+        if (this.dirty) {
+            this.accessors.value = this.value.evaluate(this.context);
+        }
+        super.evaluate();
     }
 }
 
