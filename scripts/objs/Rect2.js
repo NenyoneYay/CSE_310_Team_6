@@ -1,4 +1,4 @@
-class Tile {
+class Rect2 {
     constructor(pos,size) {
         this.pos = pos;
         this.size = size;
