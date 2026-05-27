@@ -10,27 +10,48 @@ var spellList = document.getElementsByClassName("spell");
 var cantripContainer = document.getElementById("cantrip-container");
 var spell1Container = document.getElementById("spell-container-level1");
 
-let selected = null;
+function getClosestSpell(list,mouseY) {
+  let closest = {dist:-1, elem:null};
+  for (const spell of list) {
+    const box = spell.getBoundingClientRect();
+    const pos = (box.top + box.height / 2);
+    const dist = pos - mouseY;
+    if(closest.dist < 0 || (dist > 0 && dist < closest.dist)) {
+      closest = {dist:dist,elem:spell};
+    }
+  }
+  if(closest.dist < 0)
+    return null;
+  else {
+    return closest.elem;
+  }
+}
+
 spell1Container.addEventListener("dragover", function(e){
   e.preventDefault();
+  const selected = document.querySelector("#sheet_spells .dragging");
+  if(selected == null) return;
+  const otherSpells = spell1Container.querySelectorAll(".spell:not(.dragging)");
+  const nextElem = getClosestSpell(otherSpells,e.clientY);
+  spell1Container.insertBefore(selected,nextElem);
 })
 cantripContainer.addEventListener("dragover", function(e){
   e.preventDefault();
-})
-spell1Container.addEventListener("drop", (e) => {
-  if(selected != null) spell1Container.appendChild(selected);
-  selected = null;
-  console.log("Dropped in spell container")
-})
-cantripContainer.addEventListener("drop", (e) => {
-  if(selected != null) cantripContainer.appendChild(selected);
-  selected = null;
-  console.log("Dropped in cantrip container")
+  const selected = document.querySelector("#sheet_spells .dragging");
+  if(selected == null) return;
+  const otherSpells = cantripContainer.querySelectorAll(".spell:not(.dragging)");
+  const nextElem = getClosestSpell(otherSpells,e.clientY);
+  cantripContainer.insertBefore(selected,nextElem);
 })
 
 for (spell of spellList) {
   spell.addEventListener("dragstart", function(e){
-    selected = e.target;
+    e.target.classList.add("dragging");
+    console.log(`Started dragging ${e.target.textContent.trim()}`)
+  })
+  spell.addEventListener("dragend", function(e){
+    e.target.classList.remove("dragging");
+    console.log(`Stopped dragging ${e.target.textContent.trim()}`)
   })
 }
 
