@@ -27,17 +27,23 @@ spell1Container.addEventListener("dragover", function(e){
   e.preventDefault();
   const selected = document.querySelector("#sheet_spells .dragging");
   if(selected == null) return;
+  const afterSelected = selected.nextElementSibling;
   const otherSpells = spell1Container.querySelectorAll(".spell:not(.dragging)");
   const nextElem = getClosestSpell(otherSpells,e.clientY);
-  spell1Container.insertBefore(selected,nextElem);
+  if(nextElem !== afterSelected) {
+    spell1Container.insertBefore(selected,nextElem);
+  }
 })
 cantripContainer.addEventListener("dragover", function(e){
   e.preventDefault();
   const selected = document.querySelector("#sheet_spells .dragging");
   if(selected == null) return;
+  const afterSelected = selected.nextElementSibling;
   const otherSpells = cantripContainer.querySelectorAll(".spell:not(.dragging)");
   const nextElem = getClosestSpell(otherSpells,e.clientY);
-  cantripContainer.insertBefore(selected,nextElem);
+  if(nextElem !== afterSelected) {
+    cantripContainer.insertBefore(selected,nextElem);
+  }
 })
 
 for (spell of spellList) {
