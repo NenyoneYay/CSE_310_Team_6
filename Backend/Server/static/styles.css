@@ -195,7 +195,7 @@ main{
     }
 
     /*personal preference spaceing probably should change later*/
-main *{
+main > *{
         padding:1em;
         }
     /*mobile conversions*/
@@ -213,7 +213,6 @@ main *{
     }
    #welcome-banner{
     text-align: center;
-    margin-bottom: 10px;
    }
    .gallery-grid{
     display: block;
