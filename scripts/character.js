@@ -16,15 +16,11 @@ function getClosestSpell(list,mouseY) {
     const box = spell.getBoundingClientRect();
     const pos = (box.top + box.height / 2);
     const dist = pos - mouseY;
-    if(closest.dist < 0 || (dist > 0 && dist < closest.dist)) {
+    if(dist > 0 && (closest.dist < 0 || dist < closest.dist)) {
       closest = {dist:dist,elem:spell};
     }
   }
-  if(closest.dist < 0)
-    return null;
-  else {
-    return closest.elem;
-  }
+  return closest.elem;
 }
 
 spell1Container.addEventListener("dragover", function(e){
