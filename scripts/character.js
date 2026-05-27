@@ -11,11 +11,8 @@ var cantripContainer = document.getElementById("cantrip-container");
 var spell1Container = document.getElementById("spell-container-level1");
 var spellList = document.getElementsByClassName("spell");
 
-cantripContainer.innerHTML += `
-<div class="spell" draggable="true">
-    <p>GoopdaDoop</p>
-</div>
-`
+
+
 
 
 
@@ -24,7 +21,18 @@ var addCantripButton = document.getElementById("button_spell_addcantrip");
 
 addCantripButton.addEventListener('click', addCantrip);
 function addCantrip() {
-  console.log("I've been clicked!");
+  var spellText = prompt("I've been clicked!");
+  if (spellText != null && spellText != ""){
+    cantripContainer.innerHTML += `
+    <div class="spell" draggable="true">
+      <p>${spellText}</p>
+    </div>
+    `
+    console.log(spellText);
+  }
+  console.log("All done!");
+  addListenersToButtons();
+
 }
 
 
@@ -64,16 +72,20 @@ cantripContainer.addEventListener("dragover", function(e){
   }
 })
 
-for (spell of spellList) {
-  spell.addEventListener("dragstart", function(e){
-    e.target.classList.add("dragging");
-    console.log(`Started dragging ${e.target.textContent.trim()}`)
-  })
-  spell.addEventListener("dragend", function(e){
-    e.target.classList.remove("dragging");
-    console.log(`Stopped dragging ${e.target.textContent.trim()}`)
-  })
+function addListenersToButtons() {
+  for (spell of spellList) {
+    spell.addEventListener("dragstart", function(e){
+      e.target.classList.add("dragging");
+      console.log(`Started dragging ${e.target.textContent.trim()}`)
+    })
+    spell.addEventListener("dragend", function(e){
+      e.target.classList.remove("dragging");
+      console.log(`Stopped dragging ${e.target.textContent.trim()}`)
+    })
+  }
 }
+
+addListenersToButtons()
 
 sheetSelectButton_character.addEventListener('click', sheetSelectCharacter);
 function sheetSelectCharacter() {
