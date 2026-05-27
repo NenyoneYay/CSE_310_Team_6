@@ -205,6 +205,13 @@ main{
         gap:0px;
         
     }
+   #welcome-banner{
+    text-align: center;
+    margin-bottom: 10px;
+   }
+   .gallery-grid{
+    display: block;
+   }
     h2{
         margin: auto;
     
