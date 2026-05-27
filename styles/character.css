@@ -67,3 +67,7 @@ header {
     align-items: self;
     cursor: grab;
 }
+
+.dragging {
+    opacity: 50%;
+}

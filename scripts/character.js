@@ -30,7 +30,7 @@ spell1Container.addEventListener("dragover", function(e){
   const afterSelected = selected.nextElementSibling;
   const otherSpells = spell1Container.querySelectorAll(".spell:not(.dragging)");
   const nextElem = getClosestSpell(otherSpells,e.clientY);
-  if(nextElem !== afterSelected) {
+  if(nextElem !== afterSelected || selected.parentElement != spell1Container) {
     spell1Container.insertBefore(selected,nextElem);
   }
 })
@@ -41,7 +41,7 @@ cantripContainer.addEventListener("dragover", function(e){
   const afterSelected = selected.nextElementSibling;
   const otherSpells = cantripContainer.querySelectorAll(".spell:not(.dragging)");
   const nextElem = getClosestSpell(otherSpells,e.clientY);
-  if(nextElem !== afterSelected) {
+  if(nextElem !== afterSelected || selected.parentElement != cantripContainer) {
     cantripContainer.insertBefore(selected,nextElem);
   }
 })
