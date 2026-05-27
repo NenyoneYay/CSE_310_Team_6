@@ -1,14 +1,32 @@
+//Buttons
 var newCharacterButton = document.getElementById("new_character_button");
 var sheetSelectButton_character = document.getElementById("sheet_select_button_character");
 var sheetSelectButton_information = document.getElementById("sheet_select_button_information");
 var sheetSelectButton_spells = document.getElementById("sheet_select_button_spells");
+//Divs
 var sheet_character = document.getElementById("sheet_character");
 var sheet_information = document.getElementById("sheet_information");
 var sheet_spells = document.getElementById("sheet_spells");
-
-var spellList = document.getElementsByClassName("spell");
 var cantripContainer = document.getElementById("cantrip-container");
 var spell1Container = document.getElementById("spell-container-level1");
+var spellList = document.getElementsByClassName("spell");
+
+cantripContainer.innerHTML += `
+<div class="spell" draggable="true">
+    <p>GoopdaDoop</p>
+</div>
+`
+
+
+
+
+var addCantripButton = document.getElementById("button_spell_addcantrip");
+
+addCantripButton.addEventListener('click', addCantrip);
+function addCantrip() {
+  console.log("I've been clicked!");
+}
+
 
 function getClosestSpell(list,mouseY) {
   let closest = {dist:-1, elem:null};
@@ -59,7 +77,7 @@ for (spell of spellList) {
 
 sheetSelectButton_character.addEventListener('click', sheetSelectCharacter);
 function sheetSelectCharacter() {
-  console.log("I been clicked!");
+  // console.log("I been clicked!");
   sheet_character.classList.remove("hidden");
   sheet_information.classList.add("hidden");
   sheet_spells.classList.add("hidden");
@@ -67,7 +85,7 @@ function sheetSelectCharacter() {
 
 sheetSelectButton_information.addEventListener('click', sheetSelectInformation);
 function sheetSelectInformation() {
-  console.log("Info sheet been clicked");
+  // console.log("Info sheet been clicked");
   sheet_character.classList.add("hidden");
   sheet_information.classList.remove("hidden");
   sheet_spells.classList.add("hidden");
@@ -75,7 +93,7 @@ function sheetSelectInformation() {
 
 sheetSelectButton_spells.addEventListener('click', sheetSelectSpells)
 function sheetSelectSpells() {
-  console.log("Spell button be clickered");
+  // console.log("Spell button be clickered");
   sheet_character.classList.add("hidden");
   sheet_information.classList.add("hidden");
   sheet_spells.classList.remove("hidden");
