@@ -1,6 +1,12 @@
 class Vector2 {
+
+    /** 
+     * @param {Number} x 
+     * @param {Number} y*/
     constructor(x, y) {
+        /** @type {Number} */
         this.x = x;
+        /** @type {Number} */
         this.y = y;
     }
 
@@ -9,48 +15,87 @@ class Vector2 {
     }
 
     Normalize() {
-        let length = this.length();
+        /** @type {Number} */
+        let length = this.Length();
         this.x = this.x / length;
         this.y = this.y / length;
     }
 
-    Sum(addend) {
-        if (typeof(addend) === "number") {
-            return new Vector2(this.x + addend, this.y + addend);
-        } else if (addend instanceof Vector2) {
-            return new Vector2(this.x + addend.x, this.y + addend.y);
+    
+    /** 
+     * @param {(Vector2)} a
+     * @param {(Vector2|Number)} b */
+    static Sum(a,b) {
+        if (typeof(b) === "number") {
+            return new Vector2(a.x + b, a.y + b);
+        } else if (b instanceof Vector2) {
+            return new Vector2(a.x + b.x, a.y + b.y);
         }
     }
 
-    Dif(subtrahend) {
-        if (typeof(subtrahend) === "number") {
-            return new Vector2(this.x - subtrahend, this.y - subtrahend);
-        } else if (subtrahend instanceof Vector2) {
-            return new Vector2(this.x - subtrahend.x, this.y - subtrahend.y);
+    /** 
+     * @param {(Vector2)} a
+     * @param {(Vector2|Number)} b */
+    static Dif(a,b) {
+        if (typeof(b) === "number") {
+            return new Vector2(a.x - b, a.y - b);
+        } else if (b instanceof Vector2) {
+            return new Vector2(a.x - b.x, a.y - b.y);
         }
     }
 
-    Prod(factor) {
-        if (typeof(factor) === "number") {
-            return new Vector2(this.x * factor, this.y * factor);
-        } else if (factor instanceof Vector2) {
-            return new Vector2(this.x * factor.x, this.y * factor.y);
+    /** 
+     * @param {(Vector2)} a
+     * @param {(Vector2|Number)} b */
+    static Prod(a,b) {
+        if (typeof(b) === "number") {
+            return new Vector2(a.x * b, a.y * b);
+        } else if (b instanceof Vector2) {
+            return new Vector2(a.x * b.x, a.y * b.y);
         }
     }
 
-    Div(divisor) {
-        if (typeof(divisor) === "number") {
-            return new Vector2(this.x / divisor, this.y / divisor);
-        } else if (divisor instanceof Vector2) {
-            return new Vector2(this.x / divisor.x, this.y / divisor.y);
+    /** 
+     * @param {(Vector2)} a
+     * @param {(Vector2|Number)} b */
+    static Div(a,b) {
+        if (typeof(b) === "number") {
+            return new Vector2(a.x / b, a.y / b);
+        } else if (b instanceof Vector2) {
+            return new Vector2(a.x / b.x, a.y / b.y);
         }
     }
 
-    Mod(divisor) {
-        if (typeof(divisor) === "number") {
-            return new Vector2(this.x % divisor, this.y % divisor);
-        } else if (divisor instanceof Vector2) {
-            return new Vector2(this.x % divisor.x, this.y % divisor.y);
+    /** 
+     * @param {(Vector2)} a
+     * @param {(Vector2|Number)} b */
+    Mod(a,b) {
+        if (typeof(b) === "number") {
+            return new Vector2(a.x % b, a.y % b);
+        } else if (b instanceof Vector2) {
+            return new Vector2(a.x % b.x, a.y % b.y);
+        }
+    }
+
+    /** 
+     * @param {(Vector2)} a
+     * @param {(Vector2|Number)} b */
+    static Max(a,b) {
+        if (typeof(b) === "number") {
+            return new Vector2(Math.max(a.x, b), Math.max(a.y, b));
+        } else if (b instanceof Vector2) {
+            return new Vector2(Math.max(a.x, b.x), Math.max(a.y, b.y));
+        }
+    }
+
+    /** 
+     * @param {(Vector2)} a
+     * @param {(Vector2|Number)} b */
+    static Min(a,b) {
+        if (typeof(b) === "number") {
+            return new Vector2(Math.min(a.x, b), Math.min(a.y, b));
+        } else if (b instanceof Vector2) {
+            return new Vector2(Math.min(a.x, b.x), Math.min(a.y, b.y));
         }
     }
 
