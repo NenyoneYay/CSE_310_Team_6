@@ -12,7 +12,7 @@ var spell1Container = document.getElementById("spell-container-level1");
 var spellList = document.getElementsByClassName("spell");
 
 
-
+console.log(typeof(spellList));
 
 
 
