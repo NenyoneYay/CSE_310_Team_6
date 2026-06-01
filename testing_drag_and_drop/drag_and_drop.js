@@ -1,5 +1,5 @@
 let draggableItems = document.querySelectorAll(".draggable_item");
-let containers = document.querySelectorAll(".container");
+let containers = document.querySelectorAll(".grid_container");
 
 draggableItems.forEach(draggableItem => {
     draggableItem.addEventListener("dragstart",() => {
@@ -14,31 +14,31 @@ draggableItems.forEach(draggableItem => {
 containers.forEach(container => {
     container.addEventListener("dragover", (e) => {
         e.preventDefault();
+        const mousePos = new Vector2(e.clientX,e.clientY);
         const draggedItem = document.querySelector(".dragging");
-        const afterElement = getDragAfterElement(container,draggedItem,e.clientY)
-        if (afterElement != null){
-            container.insertBefore(draggedItem, afterElement)
-        }   else{
-            container.appendChild(draggedItem);
-        }
+        const gridCoord = getCoord(container,draggedItem,mousePos);
+        
+        container.appendChild(draggedItem);
+        draggedItem.style.gridColumn = `${gridCoord.x + 1} / ${gridCoord.x + 2}`;
+        draggedItem.style.gridRow = `${gridCoord.y + 1} / ${gridCoord.y + 2}`;
+        
     })
 })
 
-function getDragAfterElement(container, draggedItem, y) {
-    const containerDraggableItems = container.querySelectorAll(".draggable_item")
-    const draggableElements = []
-    for (item of containerDraggableItems) if (item != draggedItem) draggableElements.push(item);
-    
-    return draggableElements.reduce((closest, child) => {
-        const boundingBox = child.getBoundingClientRect();
-        const offset = y - boundingBox.top - boundingBox.height / 2;
-        if (offset < 0 && offset > closest.offset){
-            return { offset: offset, element: child}
-        }
-        else {
-            return closest
-        }
-        
-    }, { offset: Number.NEGATIVE_INFINITY }).element
+/**
+ * 
+ * @param {HTMLElement} container 
+ * @param {HTMLElement} draggedItem 
+ * @param {Vector2} mousePos 
+ * @returns 
+ */
+function getCoord(container, draggedItem, mousePos) {
+    const containerBox = container.getBoundingClientRect();
+    const containerPos = new Vector2(containerBox.left, containerBox.top);
+    const containerSize = new Vector2(containerBox.width, containerBox.height);
+
+    const grid = new Grid2(containerPos, containerSize, new Vector2(2,3))
+
+    return grid.GetClosestCoord(mousePos);
 
 }
