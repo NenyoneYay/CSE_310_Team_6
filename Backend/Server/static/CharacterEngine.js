@@ -371,6 +371,13 @@ class Path {
         this.absolutePath = '';
         this.tokens = this.tokenize(path, rootPath);
 
+        //Ability Scores.(Strength,Charisma).score#value
+        // => [<Strength Score val>,<Charisma Score val>]
+        // resolveAccessors = false => [<Strength.score>,<Charisma.score>]
+
+        //Ability Scores.Strength.score#value,max;Equipment.carrying capacity#max
+        /** @type Map<String,string[]> */
+
         Path.tokensRegex.lastIndex = 0;
     }
 
@@ -508,7 +515,7 @@ class Path {
                 case 'O_KEY':
                     if(treeRoot instanceof BaseNode) 
                         return recursor(BaseNode.passThrough,tokens,cursor);
-                    if (tokens[cursor].value === '*') {
+                    else if (tokens[cursor].value === '*') {
                         return Object.values(treeRoot).map((child) => {
                             return recursor(child,tokens,cursor+1);
                         });
@@ -581,7 +588,7 @@ class Path {
                 case 'N_ACCESSORS':
                     if(treeRoot instanceof BaseNode) {
                         if(!resolveAccessors) 
-                            return treeRoot;
+                            return {node:treeRoot,accessors:tokens[cursor].value};
                         if (tokens[cursor].value.length === 1) 
                             return treeRoot.accessors[tokens[cursor].value];
                         return this.tokens[cursor].value.map(accessor => {
@@ -608,6 +615,35 @@ class Path {
 
         if (query_container.length === 1) return query_container[0];
         return query_container;
+    }
+
+    includes(path,resolveAccessors=true) {
+        
+        const query_container = [];
+        let compare_idx = 0
+        this.tokens.forEach((token,idx) => {
+            switch(token.type) {
+                case 'O_KEY':
+                    break;
+                case 'T_GROUP':
+                    break;
+                case 'CONCAT':
+                    break;
+                case 'A_LIST':
+                    break;
+                case 'A_SLICE':
+                    break;
+                case 'A_WILDCARD':
+                    break;
+                case 'N_ACCESSORS':
+                    break;
+                default:
+                    break;
+            }
+        });
+
+        if (query_container.length === 1) return query_container[0];
+        return query_container; 
     }
 }
 
@@ -851,7 +887,7 @@ class BaseNode {
 
         // dependents and precedents are mapped directly to nodes after
         // the character data tree is constructed. Maps are used to 
-        /** @type {Map<BaseNode,Number>} */
+        /** @type {Map<BaseNode,{count:Number,accessors:string[]}>} */
         this.dependents = new Map();
         /** @type {Map<BaseNode,Number>} */
         this.precedents = new Map();
@@ -997,7 +1033,7 @@ class BaseNode {
 
     evaluateDependencies() {
         this.dependencyModifications.forEach((mod) => {
-            const resolvedPaths = mod.path.resolve(this.context) ?? null;
+            const resolvedPaths = mod.path.resolve(this.context,false) ?? null;
             const pathCrawler = (pathResult) => {
                 if(pathResult == null) return;
                 else if (pathResult instanceof BaseNode) {
@@ -1065,6 +1101,8 @@ class BaseNode {
             nextVal = (this.precedents.get(node) ?? 0) - amount;
             if (nextVal > 0) this.precedents.set(node,nextVal);
             else this.precedents.delete(node);
+
+            this.evaluate();
         }
     }
 
@@ -1077,6 +1115,8 @@ class BaseNode {
             nextVal = (this.dependents.get(node) ?? 0) - amount;
             if (nextVal > 0) this.dependents.set(node,nextVal);
             else this.dependents.delete(node);
+
+            node.evaluate();
         }
     }
 
@@ -1205,6 +1245,47 @@ class DataNode extends BaseNode {
                 }
 
                 // apply modifiers
+                
+                for(const node of this.precedents.keys()) {
+                    if (node instanceof ModifierNode){
+                        // do something with the node operation and value
+                        // priority order: replace first, then multiply, then add
+                        switch(node.operation) {
+                            case "replace":
+
+                                break;
+                            case "multiply":
+
+                                break;
+                            case "add":
+                                
+                                break;
+                            default:
+                                //Skip over node
+                                break;
+                        }
+                    }
+
+                    for(const [path,accessorList] of node.target.accessors.entries()) {
+                        if(path.includes(this.path)) {
+                            // do somthing with accesorList
+                            // default to 'value'
+                        }
+                    }
+                    /*
+                    someModifier#modifer {
+                        target: "Ability Scores.*.score#value,max;Equipment.capacity#max"
+                    } 
+                        => target.accessors: {
+                            "Ability Scores.*.score":['value','max'],
+                            "Equipment.capacity":['max']
+                        }
+
+                        nodes[0].path = "Ability Scores.Strength.score"
+                        nodes[1].path = "Ability Scores.Chraisma.score"
+                     */
+                }
+
                 this.accessors.value = this.accessors.base;
 
                 // Clamp value after the dust settles
@@ -1243,11 +1324,53 @@ class DataNode extends BaseNode {
     destroy () {
         super.destroy();
     }
+
+    modifierAdd(tier){
+        
+    }
+    
+    modifierMultiply(tier){
+        
+    }
+    modifierReplace(tier){
+        
+    }
 }
 
 class ModifierNode extends BaseNode {
-    constructor(virtual, context, path, data) {
-        super(virtual,context,path, data)
+    /**
+     * @param {boolean} virtual 
+     * @param {*} context 
+     * @param {string} path 
+     * @param {{
+     *  target:string,
+     *  operation:("add"|"multiply"|"replace"),
+     *  value:(number|"string starting with '='"|boolean),
+     *  tier: number
+     * }} dataObj
+     */
+    constructor(virtual, context, path, dataObj) {
+        const {target,operation,value,tier=0} = dataObj;
+        super(virtual,context,path, {target,operation,value,tier});
+
+        this.target = new Path(target, this.path);
+        this.dependencyModifications.push({type:"add dependent",path:this.target,amount:1});
+
+        this.operation = operation;
+        this.tier = tier;
+
+        this.value = new ExprValue(value, this.path);
+        this.value.precedentPaths.forEach(depPath => {
+            this.dependencyModifications.push({type:"add precedent",path:depPath,amount:1});
+        })
+
+    }
+
+    evaluate() {
+        if (this.dirty) {
+            this.accessors.value = this.value.evaluate(this.context);
+        }
+        super.evaluate();
     }
 }
 
