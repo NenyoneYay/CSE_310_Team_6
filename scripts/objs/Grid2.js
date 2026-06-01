@@ -24,9 +24,6 @@ class Grid2 extends Rect2 {
         let ratioPos = Vector2.Div(Vector2.Dif(pos, this.pos), this.GetSize()); // Turns pos into ratios (0,0) top left, (1,1) bottom right
         let boundRatioPos = Vector2.Max(Vector2.Min(ratioPos,1),0); // Keeps pos within (0,0) and (1,1)
         let coord = Vector2.Prod(boundRatioPos,this.gridSize).Floor()
-        console.log(ratioPos);
-        console.log(boundRatioPos);
-        console.log(coord);
         return coord;
     }
 }   
