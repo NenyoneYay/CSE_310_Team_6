@@ -2,38 +2,28 @@ class Grid2 extends Rect2 {
     /** 
      * @param {Vector2} pos
      * @param {Vector2} size
-     * @param {Vector2} cellSize
+     * @param {Vector2} gridSize 
      */
-    constructor(pos,size,cellSize) {
+    constructor(pos,size,gridSize ) {
         super(pos,size);
-        this.cellSize = cellSize;
+        this.gridSize  = gridSize ;
     }
 
 
 
+    GetGridSize(){return this.gridSize;}
     /** @param {Vector2} size */
-    GetCellSize(){return this.cellSize}
+    SetGridSize(size){this.gridSize = size;}
     /** @param {Vector2} size */
-    SetCellSize(size){this.cellSize = size}
-    /** @param {Vector2} size */
-    SetCellSizeSnap(size){this.cellSize = size.Ceil()}
-
-    GetTotalSize(){return Vector2.Prod(this.size,this.cellSize)}
-
-   
-
-    GetBottomRight(){return Vector2.Sum(this.pos,this.GetTotalSize())}
-    /** @param {Vector2} pos */
-    SetCenter(pos){this.pos = Vector2.Dif(pos, Vector2.Div(this.GetTotalSize(),2))}
-    /** @param {Vector2} pos */
-    SetCenterSnap(pos){this.pos = Vector2.Dif(pos, Vector2.Div(this.GetTotalSize(),2)).Floor()}
-    GetCenter(){return Vector2.Sum(this.pos,Vector2.Div(this.GetTotalSize(),2))}
+    SetGridSizeSnap(size){this.gridSize = size.Ceil();}
 
 
     
     /** @param {Vector2} pos */
     GetClosestCoord(pos){
-        pos = Vector2.Min(pos - this.pos,this.GetTotalSize());
-        return coord = Vector2.Div(pos,this.cellSize).Floor()
+        let ratioPos = Vector2.Div(Vector2.Dif(pos, this.pos), this.GetSize()); // Turns pos into ratios (0,0) top left, (1,1) bottom right
+        let boundRatioPos = Vector2.Max(Vector2.Min(ratioPos,1),0); // Keeps pos within (0,0) and (1,1)
+        let coord = Vector2.Prod(boundRatioPos,this.gridSize).Floor()
+        return coord;
     }
 }   

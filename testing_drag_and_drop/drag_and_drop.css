@@ -12,11 +12,14 @@
     justify-content: center;
 }
 
-.container{
+.grid_container{
     width: 300px;
     min-height: 400px;
     margin: 20px;
     border: 2px dashed white;
+    display: grid;
+    grid-template-columns: 50% 50%;
+    grid-template-rows: 33% 33% 33%;
 }
 
 .draggable_item{
@@ -27,6 +30,7 @@
     display: flex;
     align-items: center;
     cursor: move;
+
 }
 
 .draggable_item img{
