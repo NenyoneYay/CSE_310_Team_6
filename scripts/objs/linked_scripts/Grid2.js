@@ -1,4 +1,7 @@
-class Grid2 extends Rect2 {
+import { Rect2 } from './Rect2.js';
+import { Vector2 } from './Vector2.js'
+ 
+export class Grid2 extends Rect2 {
     /** 
      * @param {Vector2} pos
      * @param {Vector2} size
