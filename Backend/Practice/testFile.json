@@ -80,6 +80,12 @@
                             "target":"Ability Scores.Strength.score",
                             "operation":"add",
                             "value":5
+                        },
+                        "Super boost#modifer":{
+                            "target":"Ability Scores.Strength.score#value,max",
+                            "operation":"replace",
+                            "tier":20000000,
+                            "value":19
                         }
                     }
                 }
