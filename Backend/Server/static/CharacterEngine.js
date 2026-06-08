@@ -332,20 +332,20 @@ class Path {
      * - Each key can have array accessors. These items are grouped and returned
      *   as an array.
      * - Tokens are recursively parsed inside.
-     * Group 3: Key token. Expressed: Key1.Key2
+     * Group 2: Key token. Expressed: Key1.Key2
      * - Each of these keys can have array accessors. These are singleton
      *   object paths.
-     * Group 4: Array index list accessor. Expressed: [1,2,3] or [2]
+     * Group 3: Array index list accessor. Expressed: [1,2,3] or [2]
      * - Can be negative numbers. Negatives are wrapped around to end of array.
      * - Comes after Key or Group tokens.
-     * Group 5: Array index slice accessor. Expressed: [:5](beginning -> 5), [3:] (3 -> end), [:] (Everything)
+     * Group 4: Array index slice accessor. Expressed: [:5](beginning -> 5), [3:] (3 -> end), [:] (Everything)
      * - Can be negative numbers. Also wrapped to end of array.
      * - Comes after Key or Group tokens.
-     * Group 6: "*" Wildcard array accessor. Expressed: [*]
+     * Group 5: "*" Wildcard array accessor. Expressed: [*]
      * - refers to entire array
      * - Comes after Key or Group tokens.
-     * Group 7: "#" accessor sigils. Expressed: #accessor1,accessor2,... at the end of a query or on it's own
-     * Group 8: ';' semicoln to separate full path queries
+     * Group 6: "#" accessor sigils. Expressed: #accessor1,accessor2,... at the end of a query or on it's own
+     * Group 7: ';' semicoln to separate full path queries
      */
     static tokensRegex = /(?<=^|[;,\.])\s*(\.+)|(?:(?<=^|[\.;,\(])\s*(?:([\w~][\w: ~]*?|\*))\s*?(?=$|[\.\[;#,\)]))|(?<=[\w: ~\)\]])\[\s*(?:(-?\d+(?:\s*,\s*-?\d+)*)|(-?\d*\s*:\s*-?\d*)|(\*))\s*\]\s*(?=$|[\.\[#,;\)])|#(\w+(?:,\w+)*)\s*(?=$|[;\)])|(;|,)|\.|(\()|(\))/y;
     /* Test Syntax string:
