@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Playground</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="styles/playground.css">
+    <script src="scripts/character.js" defer></script>
+</head>
+<body>
+    <main>
+    <div>
+    <details>
+        <summary>Ability Scores</summary>
+        <div>
+            <details>
+                <summary>Strength</summary>
+                <div><div><label>mod: </label>
+                    <input type="text"></div><div><label>save: </label>
+                        <input type="text"></div><div><label>score: </label>
+                            <input type="number"></div></div></details>
+                            <details><summary>Dexterity</summary>
+                                <div><div><label>mod: </label>
+                                    <input type="text">
+                                </div>
+                                <div>
+                                        <label>save: </label>
+                                        <input type="text"></div>
+                                        <div><label>score: </label>
+                                            <input type="number">
+                                        </div>
+                                    </div>
+                                    </details><details>
+                                        <summary>Constitution</summary>
+                                        <div><div>
+                                            <label>mod: </label>
+                                            <input type="text">
+                                        </div><div><label>save: </label>
+                                            <input type="text">
+                                        </div>
+                                        <div>
+                                            <label>score: </label>
+                                            <input type="number">
+                                        </div>
+                                    </div>
+                                    </details><details>
+                                        <summary>Intelligence</summary>
+                                        <div><div><label>mod: </label>
+                                            <input type="text"></div>
+                                            <div><label>save: </label>
+                                                <input type="text">
+                                            </div><div>
+                                                <label>score: </label>
+                                                <input type="number">
+                                            </div></div>
+                                        </details><details>
+                                            <summary>Wisdom</summary>
+                                            <div><div>
+                                                <label>mod: </label>
+                                                <input type="text">
+                                            </div><div>
+                                                <label>save: </label>
+                                                <input type="text">
+                                            </div><div>
+                                                <label>score: </label>
+                                                <input type="number">
+                                            </div></div>
+                                        </details><details>
+                                            <summary>Charisma</summary>
+                                            <div><div>
+                                                <label>mod: </label>
+                                                <input type="text">
+                                            </div><div>
+                                                <label>save: </label>
+                                                <input type="text">
+                                            </div><div>
+                                                <label>score: </label>
+                                                <input type="number">
+                                            </div></div>
+                                        </details></div>
+                                    </details><details>
+                                        <summary>Some Data</summary>
+                                        <div><div><label>sideNode: </label>
+                                            <input type="text"></div><details>
+                                                <summary>multiNode</summary>
+                                                <ul><li>
+                                                    <input type="number"></li>
+                                                    <li><input type="number">
+                                                    </li><li>
+                                                        <input type="number">
+                                                    </li>
+                                                </ul>
+                                            </details>
+                                        </div></details>
+                                        <details>
+                                            <summary>Equipment</summary>
+                                            <div><div>
+                                                <label>capacity: </label>
+                                                <input type="text"></div>
+                                                <details>
+                                                    <summary>items</summary>
+                                                    <ul>
+                                                        <li>
+                                                            <div>
+                                                                <div>
+                                                                    <label>name: </label>
+                                                                    <input type="text">
+                                                                </div><div><label>desc: </label>
+                                                                    <input type="text">
+                                                                </div><div>
+                                                                    <label>equipped: </label>
+                                                                    <input type="checkbox" value="true">
+                                                                </div><div>
+                                                                    <label>weight: </label>
+                                                                    <input type="number">
+                                                                </div></div>
+                                                            </li><li>
+                                                                <div><div>
+                                                                    <label>name: </label>
+                                                                    <input type="text">
+                                                                </div><div>
+                                                                    <label>desc: </label>
+                                                                    <input type="text">
+                                                                </div><div>
+                                                                    <label>equipped: </label>
+                                                                    <input type="checkbox" value="false">
+                                                                </div><div><label>weight: </label>
+                                                                    <input type="number">
+                                                                </div></div>
+                                                            </li><li>
+                                                                <div><div>
+                                                                    <label>desc: </label>
+                                                                    <input type="text">
+                                                                </div><div>
+                                                                    <label>weight: </label>
+                                                                    <input type="number">
+                                                                </div></div>
+                                                            </li></ul>
+                                                        </details>
+                                                        <div>
+                                                            <label>carrying: </label>
+                                                            <input type="text">
+                                                        </div></div>
+                                                    </details>
+                                                    <details>
+                                                        <summary>Modifiers</summary>
+                                                        <div>
+                                                            <details>
+                                                                <summary>Save Increase</summary>
+                                                                <div><details><summary>targets</summary>
+                                                                    <ul>
+                                                                        <li>
+                                                                            <div>
+
+                                                                            </div>
+                                                                        </li>
+                                                                    </ul>
+                                                                </details>
+                                                                <details>
+                                                                    <summary>conditions</summary>
+                                                                    <ul>
+                                                                        <li>
+                                                                            <div>
+
+                                                                            </div>
+                                                                        </li>
+                                                                    </ul>
+                                                                </details>
+                                                            </div>
+                                                        </details>
+                                                    </div>
+                                                </details>
+                                                <div>
+                                                    <label>HP: </label>
+                                                    <input type="number"></div>
+                                                    <div><label>constructor: </label>
+                                                        <input type="text">
+                                                    </div>
+                                                </div>
+    </main>
+
+</body>
+</html>

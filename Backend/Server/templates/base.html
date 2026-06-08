@@ -6,7 +6,7 @@
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>GnollPointer</title>
-            <link rel="icon" type="image/x-con" href="###">
+            <link rel="icon" href="{{ url_for('static', filename='images/pointer_clearbackground_icon.ico') }}">
         {% endblock %}
     </head>
     <body>
@@ -15,8 +15,8 @@
             <h2 id="logo-text">GnollPointer</h2>
             <nav id="menu"> <!-- This nav bar is where we will put buttons to navigate through the website-->
                 {%block nav%}
-                    <a href="index.html">Home</a>
-                    <a href="character.html">Characters</a>
+                    <a href="/index.html">Home</a>
+                    <a href="character/character.html">Characters</a>
                 {%endblock%}
             </nav>
         </header>
@@ -26,6 +26,7 @@
             {% endblock %}
         </main>
         <footer>
+            <p>&copy; 2026 GnollPointer</p>
             {% block footer %}
 
             {% endblock %}

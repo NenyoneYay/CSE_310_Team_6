@@ -1,36 +1,8 @@
+/* Character.HTML specific stuff */
+/*-------------------------------*/
 
-
-:root {
-    --primary-color: #4e1818;
-    --parchment-color: #fff5eb;
-    --ivy: #638165;
-    --gray-background: #696969;
-    --gray-foreground: #e2e2e2;
-
-    --text-color: white;
-    --background-color: rgb(78, 24, 24);
-
-    --heading-font: 
-    --paragraph-font: 
-
-}
-
-h1, h2, h3, h4, h5, p {
-    color: var(--text-color);
-}
-
-body {
-    background-color: var(--ivy);
-}
-
-main {
-    max-width: 10 0%;
-    background-color: var(--primary-color);
-    margin: 0 auto;
-}
-
-header {
-    background-color: var(--ivy);
+#testing_testing {
+    background-color: white;
 }
 
 #character_container {
@@ -71,3 +43,6 @@ header {
 .dragging {
     opacity: 50%;
 }
+
+/*END Character.HTML specific stuff*/
+/*---------------------------------*/

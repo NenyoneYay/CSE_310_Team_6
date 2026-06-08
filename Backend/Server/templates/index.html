@@ -1,7 +1,26 @@
 {% extends "base.html" %}
+
 {% block content %}
-    <div id="welcome">
-        <h1>Welcome Message</h1>
-        <p>Welcome to GnollPointer. We set out to make the most customizable TTRPG online character sheet possible. We hope you enjoy.</p>
-    </div>
+        <section id="welcome-banner">
+            <h1>Welcome to GnollPointer!</h1>
+            <p>We set out to make the most customizable TTRPG online character sheet possible. We hope you enjoy.</p>
+        </section>
+        <section id="gallery">
+            <div class="gallery-grid">
+                <figure class="gallery-item">
+                    <img src="https://placecats.com/300/200" alt="Random cat">
+                    <figcaption>Here we can put an image caption</figcaption>
+                </figure>
+                <figure class="gallery-item">
+                    <img src="https://placecats.com/300/200?fit=contain&position=top" alt="Random cat">
+                    <figcaption>Here we can put an image caption</figcaption>
+                </figure>
+                
+            </div>
+        </section>
+        <section id="character-intro">
+            <h2>Click here to start your adventure!</h2>
+            <button id="create-character">Create Character</button>
+            <button id = "upload-character">Load Character</button>
+        </section>
 {% endblock %}

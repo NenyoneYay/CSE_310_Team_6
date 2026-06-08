@@ -11,7 +11,7 @@
 
 <body>
     <header>
-
+        <p>This is a header</p>
     </header>
     <main>
         <button id="new_character_button">New Character</button>
@@ -23,38 +23,52 @@
             </div>
         </div>
 
-        <div id="tabs">
-            <button id="sheet_select_button_character">Character Sheet</button>
-            <button id="sheet_select_button_information">Info Sheet</button>
-            <button id="sheet_select_button_spells">Spells Sheet</button>
-            <button id="sheet_select_new_sheet">+</button>
-        </div>
+        <div id="character_container">
 
-        <div id="sheet_character" class="hidden" class="sheet">
-            <p>This is a character sheet</p>
-            <div id="character_sheet_header">
-                <img src="images/gnollpointer_source.png">
+
+            <div id="tabs">
+                <button id="sheet_select_button_character">Character Sheet</button>
+                <button id="sheet_select_button_information">Info Sheet</button>
+                <button id="sheet_select_button_spells">Spells Sheet</button>
+                <button id="sheet_select_new_sheet">+</button>
             </div>
-        </div>
-        <div id="sheet_information" class="hidden" class="sheet">
-            <p>When GnollPointer was but a young Gnoll, he snuck into student's pantrys and stole their top ramen.</p>
-        </div>
-        <div id="sheet_spells" class="hidden" class="sheet">
-            <p>Fireball</p>
-            <p>Fireball</p>
-            <p>Fireball</p>
-            <p>Fireball</p>
-            <p>Fireball</p>
-            <p>Fireball</p>
-            <p>Fireball</p>
-            <p>Fireball</p>
-            <p>Fireball</p>
-            <p>Fireball</p>
-            <p>Fireball</p>
-            <p>Fireball</p>
-            <p>Fireball</p>
-            <p>Fireball</p>
-            <p>Fireball</p>
+
+            <div id="sheet_character" class="hidden" class="sheet">
+                <p>This is a character sheet</p>
+                <div id="character_sheet_header">
+                    <img src="images/gnollpointer_source.png">
+                </div>
+                <summary>
+                    <details>Hello</details>
+                </summary>
+            </div>
+            <div id="sheet_information" class="hidden" class="sheet">
+                <p>When GnollPointer was but a young Gnoll, he snuck into student's pantrys and stole their top ramen.</p>
+            </div>
+
+            <div id="sheet_spells" class="hidden" class="sheet">
+                <div id="cantrip-container">Cantrips
+                    <div class="spell" draggable="true">
+                        <p>Fireball</p>
+                    </div>
+                    <div class="spell" draggable="true">
+                        <p>Prestidigitation</p>
+                    </div>
+                    <div class="spell" draggable="true"> 
+                        <p>Disguise Self</p>
+                    </div>
+                    <div class="spell" draggable="true">
+                        <p>Disguise your Mom</p>
+                    </div>
+                </div>
+                <button id="button_spell_addcantrip">+</button>
+                <div id="spell-container-level1">Level One Spells
+                    <div class="spell" draggable="true">
+                        <p>Eat Pie</p>
+                    </div>
+                </div>
+                <button id="button_spell_addcontainer">+</button>
+            </div>
         </div>
     </main>
     <footer>

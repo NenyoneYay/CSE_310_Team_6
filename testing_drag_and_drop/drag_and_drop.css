@@ -1,0 +1,47 @@
+*{
+    box-sizing: border-box;
+    margin: 0;
+}
+
+.content{
+    width:100%;
+    min-height: 100vh;
+    background: #0b0423;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.grid_container{
+    width: 400px;
+    min-height: 300px;
+    margin: 20px;
+    border: 2px dashed white;
+    display: grid;
+    grid-template-columns: 50% 50%;
+    grid-template-rows: 33% 33% 33%;
+}
+
+.draggable_item{
+    background: #3b3b40;
+    /* margin: 30px; */
+    height: 100%;
+    width: 100%;
+    color: white;
+    display: flex;
+    align-items: center;
+    cursor: move;
+
+}
+
+.draggable_item img{
+    height: 100px;
+}
+
+.draggable_item p{
+    padding: 5px;
+}
+
+.dragging{
+    opacity: .5;
+}

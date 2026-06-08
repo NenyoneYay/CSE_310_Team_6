@@ -1,18 +1,139 @@
-header{
+/* Custom Properties / Color Palette */
+:root {
+    --primary-color: #4e1818;
+    --parchment-color: #fff5eb;
+    --ivy: #638165;
+    --gray-background: #696969;
+    --gray-foreground: #e2e2e2;
+
+    --text-color: white;
+    --background-color: rgb(78, 24, 24);
+
+    --heading-font: 
+    --paragraph-font: 
+
+}
+
+/*Base Styles */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--primary-color);
+    color: var(--parchment-color);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    line-height: 1.6;
+}
+
+/* Header & Navigation */
+header {
+    background-color: var(--ivy);
     display: flex;
-    flex-direction: row;
-    justify-content: space-between;
     align-items: center;
     padding: 1rem 2rem;
-    border-bottom: 1px solid gray;
+    border-bottom: 2px solid var(--ivy);
 }
 
-nav{
+#logo {
+    height: 40px;
+    margin-right: 1rem;
+}
+
+#logo-text {
+    font-size: 1.5rem;
+    margin-right: auto;
+}
+
+#menu a {
+    color: var(--parchment-color);
+    text-decoration: none;
+    margin-left: 1.5rem;
+    font-weight: bold;
+    transition: color 0.2s ease;
+}
+
+#menu a:hover, #menu a.active {
+    color: var(--background-color);
+}
+
+/* Main Layout */
+#dashboard {
+    max-width: 1200px;
+    margin: 2rem auto;
+    padding: 0 1rem;
     display: flex;
-    list-style: none;
-    gap: 30px;
+    flex-direction: column;
+    gap: 2.5rem;
 }
 
-#welcome {
+/* Gallery */
+#gallery{
     text-align: center;
+}
+
+#gallery h2{
+    font-size: 2rem;
+    margin-bottom: 2rem;
+}
+
+.gallery-grid{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+}
+
+.gallery-item img{
+    width: 100%;
+    height: auto;
+    border-radius: 6px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    background-color: rgba(0,0,0,0.2);
+}
+
+.gallery-item figcaption {
+    margin-top: 0.75rem;
+    font-weight: bold;
+    color: var(--text-muted);
+}
+
+/* Character Intro */
+#character-intro{
+    text-align: center;
+}
+
+#create-character{
+    background-color: var(--gray-background);
+    color: var(--gray-foreground);
+    border-radius: 6px;
+    width: auto;
+    height: 2rem;
+    padding: 2px;
+}
+
+#create-character:hover{
+    background-color: var(--gray-foreground);
+    color: var(--gray-background);
+}
+
+/* Footer */
+footer {
+    text-align: center;
+    padding: 2rem;
+    margin-top: 4rem;
+    background-color: rgba(0, 0, 0, 0.3);
+    border-top: 1px solid rgba(255, 245, 235, 0.1);
+}
+
+.footer-links {
+    margin-top: 0.5rem;
+}
+
+.footer-links a {
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 0.85rem;
+    margin: 0 0.5rem;
 }

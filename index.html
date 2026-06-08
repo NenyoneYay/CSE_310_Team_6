@@ -5,30 +5,43 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="styles/styles.css">
     <title>GnollPointer</title>
-    <link rel="icon" type="image/x-con" href="###">
+    <link rel="icon" type="image/x-icon" href="images/pointer_clearbackground_icon.ico">
 </head>
 <body>
     <header>
-        <img src="###" alt="GnollPointer Logo" id="logo">
+        <img src="images/gnollpointer_clearbackground_icon.png" alt="GnollPointer Logo" id="logo">
         <h2 id="logo-text">GnollPointer</h2>
-        <nav id="menu"> <!-- This nav bar is where we will put buttons to navigate through the website-->
-            <a href="index.html">Home</a>
+        <nav id="menu">
+            <a href="index.html" class="active">Dashboard</a>
             <a href="character.html">Characters</a>
         </nav>
     </header>
 
-
-    <main>
-        <div id="welcome">
-            <h1>Welcome Message</h1>
-            <p>text explaining the purpose of the website</p>
-        </div>
-
+    <main id="dashboard">
+        <section id="welcome-banner">
+            <h1>Welcome to GnollPointer!</h1>
+            <p>We set out to make the most customizable TTRPG online character sheet possible. We hope you enjoy.</p>
+        </section>
+        <section id="gallery">
+            <div class="gallery-grid">
+                <figure class="gallery-item">
+                    <img src="###" alt="placeholder">
+                    <figcaption>Here we can put an image caption</figcaption>
+                </figure>
+                <figure class="gallery-item">
+                    <img src="###" alt="placeholder">
+                    <figcaption>Here we can put an image caption</figcaption>
+                </figure>
+            </div>
+        </section>
+        <section id="character-intro">
+            <h2>Click here to start your adventure!</h2>
+            <button id="create-character">Create Character</button>
+        </section>
     </main>
 
-
     <footer>
-
+        <p>&copy; 2026 GnollPointer</p>
     </footer>
 </body>
 </html>
