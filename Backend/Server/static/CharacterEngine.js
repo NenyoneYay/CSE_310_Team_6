@@ -221,19 +221,10 @@ class Character {
         // do the html rendering here
         const recursor = (treeRoot, level = 0) => {
             if (treeRoot == null) return null;
-            if (treeRoot instanceof DataNode) {
-                let newInput = document.createElement("input");
-                newInput.type = treeRoot.inputType ?? "number";
-                newInput.value = treeRoot.accessors.value;
-                treeRoot.attachInput(newInput);
-                return newInput;
-            } else if (treeRoot instanceof BaseNode) {
-                let newInput = document.createElement("input");
-                newInput.type = treeRoot.inputType ?? "text";
-                newInput.value = treeRoot.accessors.value;
-                return newInput;
-            }
-            if (Array.isArray(treeRoot)) {
+            
+            if (treeRoot instanceof BaseNode) {
+                return treeRoot.renderHTML();
+            } else if (Array.isArray(treeRoot)) {
                 let ul = document.createElement("ul");
                 treeRoot.forEach((item) => {
                     let li = document.createElement("li");
@@ -398,9 +389,9 @@ class Path {
         }
 
         for(let i = 0;i < str.length;) {
-            // If the whole thing is a group, move on before the Regex gets mad.
+            // If for some reason the string is consumed already, quit now.
             if (i >= str.length)
-                continue;
+                break;
 
             Path.tokensRegex.lastIndex = i;
             const m = Path.tokensRegex.exec(str)
@@ -410,6 +401,7 @@ class Path {
             if (m[1] !== undefined) {
                 for (let i=0;i<m[1].length;i++) {
                     tokens.pop();
+                    // tokens.push({type:'T_BACK',value:'..'});
                 }
             }
 
@@ -512,10 +504,23 @@ class Path {
             if(treeRoot == null) return undefined;
 
             switch(tokens[cursor].type) {
+                case 'T_BACK':
+                    if(treeRoot instanceof Container) {
+                        return recursor(treeRoot.parent,tokens,cursor+1);
+                    }
+                    break;
                 case 'O_KEY':
                     if(treeRoot instanceof BaseNode) 
-                        return recursor(BaseNode.passThrough,tokens,cursor);
-                    else if (tokens[cursor].value === '*') {
+                        return recursor(treeRoot.passThrough,tokens,cursor);
+                    else if (treeRoot instanceof Container) {
+                        if (tokens[cursor].value === '*') {
+                            return Object.values(treeRoot.contains).map((child) => {
+                                return recursor(child,tokens,cursor+1);
+                            });
+                        } else {
+                            return recursor(treeRoot.contains[tokens[cursor].value],tokens,cursor+1);
+                        }
+                    }else if (tokens[cursor].value === '*') {
                         return Object.values(treeRoot).map((child) => {
                             return recursor(child,tokens,cursor+1);
                         });
@@ -525,7 +530,7 @@ class Path {
                     break;
                 case 'T_GROUP':
                     if(treeRoot instanceof BaseNode) 
-                        return recursor(BaseNode.passThrough,tokens,cursor);
+                        return recursor(treeRoot.passThrough,tokens,cursor);
                     const concat_container = [];
                     let start_idx = 0
                     tokens[cursor].value.forEach((token,idx) => {
@@ -543,7 +548,7 @@ class Path {
                     break;
                 case 'A_LIST':
                     if(treeRoot instanceof BaseNode) 
-                        return recursor(BaseNode.passThrough,tokens,cursor);
+                        return recursor(treeRoot.passThrough,tokens,cursor);
                     if(Array.isArray(treeRoot)) {
                         let val = tokens[cursor].value
                         if(val.length > 1) {
@@ -560,7 +565,7 @@ class Path {
                     break;
                 case 'A_SLICE':
                     if(treeRoot instanceof BaseNode) 
-                        return recursor(BaseNode.passThrough,tokens,cursor);
+                        return recursor(treeRoot.passThrough,tokens,cursor);
                     if(Array.isArray(treeRoot)) {
                         let bounds = tokens[cursor].value;
                         if(bounds.max == undefined) {
@@ -577,7 +582,7 @@ class Path {
                     break;
                 case 'A_WILDCARD':
                     if(treeRoot instanceof BaseNode) 
-                        return recursor(BaseNode.passThrough,tokens,cursor);
+                        return recursor(treeRoot.passThrough,tokens,cursor);
                     if(Array.isArray(treeRoot)) {
                         return treeRoot.map(item => {
                             return recursor(item,tokens,cursor+1);
@@ -668,14 +673,38 @@ class ExprValue {
     constructor(value, rootPath=null) {
         /** @type {Map<String,Path>} */
         this.precedentPaths = new Map()
+        this.modify(value, rootPath)
+    }
 
-        this.isExpr = typeof(value) === "string"
-        this.value = undefined;
-        this.expr = undefined;
-        if (value == null || ["boolean","number","string"].includes(typeof(value))) {
-            this.value = value;
-            this.expr = this.processExpr(value, rootPath);
+    /**
+     * 
+     * @param {string|number|boolean|null} newValue 
+     * @param {Path|null} rootPath 
+     * @returns {string|number|boolean|null} The final value of this expression
+     */
+    modify(newValue, rootPath=null) {
+        this.value = newValue;
+        if(typeof(newValue) === "string") {
+            this.isExpr = newValue[0] === "=";
+            this.expr = this.isExpr ? this.processExpr(newValue,rootPath) : undefined;
+            if(newValue.startsWith("r="))
+                this.value = newValue.slice(1);
         }
+        return this.value;
+    }
+
+    /**
+     * @param {string|number|boolean|null} newValue 
+     * @returns {boolean} Whether or not the value actually changed
+     */
+    set(newValue) {
+        if(!this.isExpr) {
+            if (['number','boolean'].includes(typeof(newValue))) {
+                this.value = newValue;
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -739,9 +768,7 @@ class ExprValue {
         /** @param {Path} path */
         ExprValue.parser.functions.data = (path, fallback=NaN) => {
             const replaceVals = (val) => {
-                if (typeof(val) === "boolean") {
-                    return val;
-                } else if (typeof(val) === "string") {
+                if (["string","boolean"].includes(typeof(val))) {
                     return val;
                 } else if (typeof(val) === "number") {
                     return Number.isNaN(val) ? fallback : val;
@@ -769,38 +796,13 @@ class ExprValue {
         return this.value;
     }
 
-    modify(newValue, rootPath) {
-        const dependencyMods = [];
-        this.oldPaths = new Map(this.precedentPaths);
-        this.value = newValue;
-        this.isExpr = typeof(newValue) == "string";
-        this.expr = this.processExpr(newValue,rootPath);
-        this.precedentPaths.forEach((path, key) => {
-            if (this.oldPaths.has(key)) {
-                this.oldPaths.delete(key)
-            } else {
-                dependencyMods.push({type:"add precedent",path:path,amount:1})
-            }
-        });
-        this.oldPaths.forEach((path,key) => {
-            dependencyMods.push({type:"remove precedent",path:path,amount:1})
-        })
-
-        return dependencyMods;
-    }
-
-    set(newValue) {
-        if(!this.isExpr) {
-            if (['number','boolean'].includes(typeof(newValue))) {
-                this.value = newValue;
-                return true;
-            }
-        }
-        return false;
-    }
-
     getSaveData() {
-        return this.isExpr ? this.value: this.valueCache;
+        if(this.isExpr)
+            return this.value;
+        else if (typeof(this.value) === "string" && this.value[0] === '=')
+            return "r"+this.value;
+        else
+            return this.value;
     }
 }
 
@@ -862,6 +864,162 @@ ExprValue.parser.functions.flatten = function (arr) {
         return pv;
     }
     return arr.reduce(reducer,[]);
+}
+
+/*
+    "data":{
+        HP: DataNode {
+            value:10,
+            min:0,
+            max:110
+        },
+        Ability Scores: Container {
+            parent: null,
+            contains: {
+                Strength: Container {
+                    parent: Container -> Ability Scores
+                    contains: {
+                        score: DataNode {parent:Container -> Strength, value: 10, min: 0, max: 20},
+                        mod: DataNode {value:"=floor(data('.score')/2)-5"}
+                        save: DataNode {value:"=.mod"}
+                    }
+                }
+            }
+        },
+        Equipment: Container {
+            parent: null,
+            contains: {
+                items: Container {
+                    parent: Container -> Equipment,
+                    contains: Array<Container>[
+                        {
+                            parent: Container -> items,
+                            contains: {
+                                name: Data
+                                weight: Data
+                                equipped: Data
+                                modifiers: Modifier
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+    }
+
+    {
+        "Equipment": Container {
+            "__okeys":["carrying","capacity","other","items"]
+            "carrying":"=sum(data('.items[*].weight'))"
+            "capacity":"=data('Ability Scores.Strength.score') * 15"
+            "other": [
+                10,
+                20,
+                30
+            ],
+            "items":[
+                Container {
+                    "__okeys":["name","description","weight","equipped","modifier"]
+                    "name": "shield",
+                    "weight": 5,
+                    "equipped": false,
+                    "modifier": {
+                        "__type": "modifier",
+                        "target":
+                    }
+                },
+                Container {
+                    "__okeys":["name","description","weight","equipped","modifier","equip","unequip"]
+                    "name": "shield",
+                    "qty":1,
+                    "description": "",
+                    "weight": 5,
+                    "equipped": true,
+                    "modifier":{
+                        "__type": "modifier",
+                        "target": "Combat.AC",
+                        "operation":"add",
+                        "value": 2,
+                        "condition":"=data('.equipped')"
+                    },
+                    "equip":{
+                        "__type": "action",
+                        "operation":"replace",
+                        "target":".equipped",
+                        "value":true,
+                        "condition":"=compareEach("!=",data('..[*].(name,equipped)'),[data('.name'),true])"
+                    },
+                    "unequip":{
+                        "__type": "action",
+                        "operation":"replace",
+                        "target":".equipped",
+                        "value":false
+                    }
+                },
+            ]
+        }
+    }
+
+    {
+        "data"...,
+        "UI":{
+            "settings":{
+                "keyOrder":["Ability Scores"],
+                "Ability Scores":{
+                    "keyOrder":["Strength","Wisdom","Charisma"],
+                    "Strength"
+                }
+            }
+        }
+    }
+
+    
+*/
+class Container {
+    static defaultUI_info = {
+        direction: "column",
+        order:0
+    }
+    /**
+     * @param {Container} parent
+     * @param {{__UI_info:{direction:"row"|"column",order:number},[x:string]:*}} containerObj
+     */
+    constructor(parent,containerObj) {
+        this.parent = parent;
+        this.renderedElement = null;
+
+        let __UI_info;
+        this.contains = {};
+        this.okeys = [];
+
+        // Split containerObj keys into __UI_info and remaining keys in the "contains" property
+        ({__UI_info,...this.contains} = containerObj);
+
+        // Make sure __UI_info keys are valid. Replace with default values when needed.
+        this.__UI_info = (({direction, order}) => {
+            if(typeof(direction) !== "string" || !["row","column"].includes(direction)) 
+                direction = Container.defaultUI_info.direction;
+            if(typeof(order) !== "number") 
+                order = Container.defaultUI_info.order;
+            return {direction, order};
+        })({...Container.defaultUI_info,...__UI_info});
+    }
+
+    /**
+     * @returns {HTMLElement}
+     */
+    renderHTML() {
+        this.renderedElement = document.createElement('div');
+        this.renderedElement.style.display = "flex";
+        this.renderedElement.style.flexDirection = this.direction;
+        this.renderedElement.style.order = this.order;
+        for(const [key,value] of Object.entries(this.contains)) {
+            if(value instanceof Container || value instanceof BaseNode) {
+                this.renderedElement.appendChild(value.renderHTML());
+            }
+        }
+        return this.renderedElement;
+    }
 }
 
 class BaseNode {
@@ -939,6 +1097,14 @@ class BaseNode {
             default:
                 this.inputType = null;
         }
+    }
+
+    renderHTML() {
+        this.renderedElement = document.createElement("input");
+        renderedElement.type = this.inputType ?? "text";
+        renderedElement.value = this.accessors.value;
+        this.renderedElement.addEventListener("change",this.inputListenerHandler);
+        return this.renderedElement;
     }
 
     /**
@@ -1135,19 +1301,25 @@ class BaseNode {
 }
 
 class DataNode extends BaseNode {
+    static defaultDataObj = {
+        value:null,
+        min=null,
+        max=null,
+        listeners = []
+    }
     /**
      * @param {boolean} virtual 
      * @param {*} context 
      * @param {string} path 
      * @param {{
-     *     value:(string|number|boolean),
+     *     value:(string|number|boolean|null),
      *     max?:(string|number),
      *     min?:(string|number),
      *     listeners?:Array<Object>
      *   }?} dataObj
      */
     constructor(virtual, context, path, dataObj) {
-        let {value,min=null,max=null,listeners=[]} = dataObj ?? {value:null};
+        let {value,min,max,listeners} = {...DataNode.defaultDataObj,...dataObj};
         super(virtual, context, path,{value:value, min:min, max:max, listeners:listeners});
 
         this.value = new ExprValue(value,this.path);
@@ -1188,16 +1360,34 @@ class DataNode extends BaseNode {
     }
 
     modify({value=undefined,min=undefined,max=undefined}) {
-        let success = false;
+        /** @param {ExprValue} accessor */
+        const getDepMods = (accessor,newVal) => {
+            const dependencyMods = [];
+            this.oldPaths = new Map(accessor.precedentPaths);
+            accessor.modify(newVal,this.path);
+            accessor.precedentPaths.forEach((path, key) => {
+                if (this.oldPaths.has(key)) {
+                    this.oldPaths.delete(key)
+                } else {
+                    dependencyMods.push({type:"add precedent",path:path,amount:1})
+                }
+            });
+            this.oldPaths.forEach((path,key) => {
+                dependencyMods.push({type:"remove precedent",path:path,amount:1})
+            })
+            return dependencyMods;
+        }
+
         if(value != undefined) {
-            this.dependencyModifications.push(...this.value.modify(value,this.path));
+            this.dependencyModifications.push(...getDepMods(this.value,value));
         }
         if(min != undefined) { 
-            this.dependencyModifications.push(...this.min.modify(min,this.path)); 
+            this.dependencyModifications.push(...getDepMods(this.min,min)); 
         }
         if(max != undefined) { 
-            this.dependencyModifications.push(...this.max.modify(max,this.path)); 
+            this.dependencyModifications.push(...getDepMods(this.max,max)); 
         }
+
         this.evaluateDependencies();
         this.setDirty();
         this.evaluate();
