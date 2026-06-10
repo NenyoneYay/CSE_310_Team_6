@@ -1,4 +1,6 @@
-class Rect2 {
+import { Vector2 } from './Vector2.js';
+ 
+export class Rect2 {
     /** 
      * @param {Vector2} pos
      * @param {Vector2} size
