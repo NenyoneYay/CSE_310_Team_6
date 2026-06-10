@@ -1,5 +1,5 @@
-class Vector2 {
-
+export class Vector2 {
+ 
     /** 
      * @param {Number} x 
      * @param {Number} y*/
