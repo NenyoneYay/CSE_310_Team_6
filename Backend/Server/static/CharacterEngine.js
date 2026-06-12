@@ -137,6 +137,29 @@ class Character {
 
     }
 
+    /*
+    
+    {
+        key1: [
+            [
+                {
+                    key1_1: "hello"
+                }
+            ],
+            [
+                {
+                    key2_1: "world"
+                }
+            ]
+        ]
+    } =>
+
+    key1_1, "hello", this = key1
+    key2_1, "world", this = key1
+    key1, [[{key1_1}],[{key2_1}]], this = rootobj
+
+    */
+
     parseFile(fileData){
         this.destroy();
         let jsonData = JSON.parse(fileData,function (key,value) {
@@ -150,6 +173,14 @@ class Character {
                 this[sanatizedKey] = rval; // sanatize object prototype keys
                 rval = undefined;
             }
+
+            if(Object.hasOwn(this,"__okeys") && Array.isArray(this["__okeys"])) {
+                this["__okeys"].push(key)
+            } else {
+                this["__okeys"] = [key];
+            }
+            print(this);
+
             return rval;
         });
         let contextData = jsonData.data;
@@ -918,6 +949,11 @@ ExprValue.parser.functions.flatten = function (arr) {
                 30
             ],
             "items":[
+                [
+                    [
+
+                    ]
+                ]
                 Container {
                     "__okeys":["name","description","weight","equipped","modifier"]
                     "name": "shield",
@@ -987,22 +1023,24 @@ class Container {
     constructor(parent,containerObj) {
         this.parent = parent;
         this.renderedElement = null;
-
-        let __UI_info;
-        this.contains = {};
+        this.content = null;
+        this.isArray = false;
+        if (Array.isArray(containerObj)) {
+            this.content = containerObj;
+            this.isArray = true;
+        }else {
+            this.__UIdir = "column"
+            this.content = {};
         this.okeys = [];
 
-        // Split containerObj keys into __UI_info and remaining keys in the "contains" property
-        ({__UI_info,...this.contains} = containerObj);
-
-        // Make sure __UI_info keys are valid. Replace with default values when needed.
-        this.__UI_info = (({direction, order}) => {
-            if(typeof(direction) !== "string" || !["row","column"].includes(direction)) 
-                direction = Container.defaultUI_info.direction;
-            if(typeof(order) !== "number") 
-                order = Container.defaultUI_info.order;
-            return {direction, order};
-        })({...Container.defaultUI_info,...__UI_info});
+            // Split containerObj keys into __UIdir and remaining keys in the "content" property
+            ({__UIdir:this.__UIdir,...this.content} = {_UIdir:this.__UIdir,...containerObj});
+            if (!(["row","column"].includes(this.__UIdir))) {
+                this.__UIdir = "column";
+            }
+            
+            
+        }
     }
 
     /**
