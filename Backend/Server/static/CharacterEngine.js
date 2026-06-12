@@ -875,10 +875,10 @@ ExprValue.parser.functions.flatten = function (arr) {
         },
         Ability Scores: Container {
             parent: null,
-            contains: {
+            contents: {
                 Strength: Container {
                     parent: Container -> Ability Scores
-                    contains: {
+                    contents: {
                         score: DataNode {parent:Container -> Strength, value: 10, min: 0, max: 20},
                         mod: DataNode {value:"=floor(data('.score')/2)-5"}
                         save: DataNode {value:"=.mod"}
@@ -888,13 +888,13 @@ ExprValue.parser.functions.flatten = function (arr) {
         },
         Equipment: Container {
             parent: null,
-            contains: {
+            contents: {
                 items: Container {
                     parent: Container -> Equipment,
-                    contains: Array<Container>[
+                    contents: Array<Container>[
                         {
                             parent: Container -> items,
-                            contains: {
+                            contents: {
                                 name: Data
                                 weight: Data
                                 equipped: Data
@@ -984,7 +984,8 @@ class Container {
      * @param {Container} parent
      * @param {{__UI_info:{direction:"row"|"column",order:number},[x:string]:*}} containerObj
      */
-    constructor(parent,containerObj) {
+    constructor(id,parent,containerObj) {
+        this.id = id;
         this.parent = parent;
         this.renderedElement = null;
 
@@ -993,7 +994,7 @@ class Container {
         this.okeys = [];
 
         // Split containerObj keys into __UI_info and remaining keys in the "contains" property
-        ({__UI_info,...this.contains} = containerObj);
+        ({__UI_info,...this.contents} = containerObj);
 
         // Make sure __UI_info keys are valid. Replace with default values when needed.
         this.__UI_info = (({direction, order}) => {
@@ -1012,7 +1013,6 @@ class Container {
         this.renderedElement = document.createElement('div');
         this.renderedElement.style.display = "flex";
         this.renderedElement.style.flexDirection = this.direction;
-        this.renderedElement.style.order = this.order;
         for(const [key,value] of Object.entries(this.contains)) {
             if(value instanceof Container || value instanceof BaseNode) {
                 this.renderedElement.appendChild(value.renderHTML());
@@ -1101,8 +1101,8 @@ class BaseNode {
 
     renderHTML() {
         this.renderedElement = document.createElement("input");
-        renderedElement.type = this.inputType ?? "text";
-        renderedElement.value = this.accessors.value;
+        this.renderedElement.type = this.inputType ?? "text";
+        this.renderedElement.value = this.accessors.value;
         this.renderedElement.addEventListener("change",this.inputListenerHandler);
         return this.renderedElement;
     }
