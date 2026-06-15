@@ -166,22 +166,26 @@ class Character {
             const sanatizedKey = sanatizeKey(key);
             const [baseKey,sigil] = sanatizedKey.split('#');
             let rval = value;
-            if (sigil != undefined) {
-                this[baseKey] = null;
-            }
-            if (sanatizedKey != key && rval != undefined) {
-                this[baseKey] = rval; // sanatize object prototype keys
-                rval = undefined;
-            }
-
+            
             if(Object.hasOwn(this,"__okeys") && Array.isArray(this["__okeys"])) {
                 this["__okeys"].push(baseKey)
             } else {
                 this["__okeys"] = [baseKey];
             }
-
-            this[baseKey]["__parent"] = this;
-
+            
+            if(rval instanceof Object && key !== "") { rval["__parent"] = this; }
+            
+            if (sanatizedKey != key && rval != undefined) {
+                this[baseKey] = rval; // sanatize object prototype keys
+                rval = undefined;
+            }
+            if (sigil != undefined) {
+                this[baseKey] = rval;
+                if(this[baseKey] instanceof Object){
+                    this[baseKey]["__type"] = sigil;
+                }
+                rval = undefined;
+            }
             console.log(this);
 
             return rval;
@@ -189,7 +193,10 @@ class Character {
         let contextData = jsonData.data;
         /** @type {BaseNode[]} */
         let newNodes = [];
-        const makeNode = (newNode) => { newNodes.push(newNode); return newNode; }
+        const makeNode = (newNode) => {
+            newNodes.push(newNode); 
+            return newNode; 
+        }
         const joinPath = (base,...ext) => {return base!=='' ? `${base}${ext.map(v => '.'+v).join('')}` : ext.join('.')}
 
         const contextRecursor = (dataTree, path) => {
@@ -198,7 +205,7 @@ class Character {
             } else if (Array.isArray(dataTree)) {
                 dataTree.forEach((item,idx) => contextRecursor(item,`${path}[${idx}]`))
             } else if (dataTree instanceof Object) {
-                Object.keys(dataTree).forEach((key) => {
+                dataTree["__okeys"].forEach((key) => {
                     let [baseKey, sigil] = key.split('#');
                     if(Object.hasOwn(dataTree[key],"__type")) {
                         sigil = dataTree[key]["__type"];
@@ -208,36 +215,32 @@ class Character {
                     switch (sigil) {
                         case "data": // DataNode
                             if (Array.isArray(data)) {
-                                dataTree[key] = dataTree[key].map((nodeData,idx) => {
+                                for (const [idx,nodeData] of dataTree[key].entries()) {
                                     if (nodeData == null) return null;
                                     let raw = typeof(nodeData) === 'object' ? nodeData : {value: nodeData}
-                                    return makeNode(new DataNode(false,contextData,`${newPath}.${idx}`,raw));
-                                });
+                                    dataTree[key][idx] = makeNode(new DataNode(false,dataTree[key],contextData,`${newPath}.${idx}`,raw));
+                                }
                             } else if (["string","number","boolean"].includes(typeof(data))) {
-                                dataTree[key] = makeNode(new DataNode(false,contextData,newPath,{value: data}));
+                                dataTree[key] = makeNode(new DataNode(false,dataTree,contextData,newPath,{value: data}));
                             } else if (data != null) {
-                                dataTree[key] = makeNode(new DataNode(false,contextData,newPath,data));
+                                dataTree[key] = makeNode(new DataNode(false,dataTree,contextData,newPath,data));
                             }
                             break;
                         case undefined:
                             // base datatypes turn into data nodes except for descriptions
                             if (typeof(data) === "string") {
                                 if(data.length > 0 && data[0] === "=") {
-                                    dataTree[key] = makeNode(new DataNode(false,contextData,newPath,{value: data}));
+                                    dataTree[key] = makeNode(new DataNode(false,dataTree,contextData,newPath,{value: data}));
                                 } else {
-                                    dataTree[key] = makeNode(new BaseNode(false,contextData,newPath,data));
+                                    dataTree[key] = makeNode(new BaseNode(false,dataTree,contextData,newPath,data));
                                 }
                             } else if (["number","boolean"].includes(typeof(data))){
-                                dataTree[key] = makeNode(new DataNode(false,contextData,newPath,{value: data}));
+                                dataTree[key] = makeNode(new DataNode(false,dataTree,contextData,newPath,{value: data}));
                             }
                             break;
                         // other node types/sigils will be defined here
                         default:
                             console.log(`Unknown sigil ${sigil}`)
-                    }
-                    if(baseKey !== key) {
-                        dataTree[baseKey] = dataTree[key];
-                        delete dataTree[key];
                     }
 
                     contextRecursor(dataTree[baseKey],newPath);
@@ -317,7 +320,9 @@ class Character {
                 return;
             } else if (treeRoot instanceof Object) {
                 Object.keys(treeRoot).forEach((key) => {
-                    recursor(treeRoot[key], level+1);
+                    if(!key.startsWith("__")) {
+                        recursor(treeRoot[key], level+1);
+                    }
                 });
                 return;
             }
@@ -340,7 +345,9 @@ class Character {
                 return;
             } else if (treeRoot instanceof Object) {
                 Object.keys(treeRoot).forEach((key) => {
+                    if(!key.startsWith("__")) {
                         recursor(treeRoot[key], level+1);
+                    }
                 });
                 return;
             }
@@ -385,7 +392,7 @@ class Path {
         #accessor1,accessor2
     */
 
-
+//Update path
     /**
      * 
      * @param {string} path 
@@ -437,8 +444,8 @@ class Path {
 
             if (m[1] !== undefined) {
                 for (let i=0;i<m[1].length;i++) {
-                    tokens.pop();
-                    // tokens.push({type:'T_BACK',value:'..'});
+                    // tokens.pop();
+                    tokens.push({type:'T_BACK',value:'..'});
                 }
             }
 
@@ -494,6 +501,7 @@ class Path {
         }
         if(contextStack.length > 0) throw SyntaxError(`EOF: Unbalanced Parentheses. Missing closing ')'`);
         
+        // Remove????
         const pathReducer = (pv,cv) => {
             let tokenStr = ''
             const startOfPath = pv === '' || (pv.length > 0 && ",(".includes(pv[pv.length-1]))
@@ -542,8 +550,8 @@ class Path {
 
             switch(tokens[cursor].type) {
                 case 'T_BACK':
-                    if(treeRoot instanceof Container) {
-                        return recursor(treeRoot.parent,tokens,cursor+1);
+                    if(Object.hasOwn(treeRoot,"__parent")) {
+                        return recursor(treeRoot.__parent,tokens,cursor+1);
                     }
                     break;
                 case 'O_KEY':
@@ -551,16 +559,24 @@ class Path {
                         return recursor(treeRoot.passThrough,tokens,cursor);
                     else if (treeRoot instanceof Container) {
                         if (tokens[cursor].value === '*') {
-                            return Object.values(treeRoot.contains).map((child) => {
-                                return recursor(child,tokens,cursor+1);
-                            });
+                            const rval = []
+                            for (const [key,child] of Object.entries(treeRoot.content)) {
+                                if(!key.startsWith("__")) {
+                                    rval.push(recursor(child,tokens,cursor+1));
+                                }
+                            }
+                            return rval;
                         } else {
-                            return recursor(treeRoot.contains[tokens[cursor].value],tokens,cursor+1);
+                            return recursor(treeRoot.content[tokens[cursor].value],tokens,cursor+1);
                         }
                     }else if (tokens[cursor].value === '*') {
-                        return Object.values(treeRoot).map((child) => {
-                            return recursor(child,tokens,cursor+1);
-                        });
+                        const rval = []
+                        for (const [key,child] of Object.entries(treeRoot)) {
+                            if(!key.startsWith("__")) {
+                                rval.push(recursor(child,tokens,cursor+1));
+                            }
+                        }
+                        return rval;
                     } else {
                         return recursor(treeRoot[tokens[cursor].value],tokens,cursor+1);
                     }
@@ -801,7 +817,7 @@ class ExprValue {
     }
 
     evaluate(contextData) {
-        
+        //Update path
         /** @param {Path} path */
         ExprValue.parser.functions.data = (path, fallback=NaN) => {
             const replaceVals = (val) => {
@@ -1070,15 +1086,19 @@ class BaseNode {
     /**
      * 
      * @param {boolean} virtual 
+     * Remove???
      * @param {*} context 
      * @param {string} path 
      * @param {*} dataObj 
      */
-    constructor(virtual,context,path,dataObj) {
+    constructor(virtual,parent,context,path,dataObj) {
         let dataVal = dataObj;
         if (dataObj != null && dataObj instanceof Object)
             ({ value: dataVal } = dataObj)
+        this.__parent = parent;
+        //Remove???
         this.context = context;
+        //Update path
         this.path = new Path(path)
         this.raw = dataObj
         this.accessors = {
@@ -1183,6 +1203,7 @@ class BaseNode {
             this.visited = true;
         } else {
             this.visited = false;
+            //Update path
             this.error = `Node Source: '${this.path.absolutePath}' is part of a dependency loop.`;
             this.isErrorSrc = true;
             this.renderedElement.value = this.accessors.value;
@@ -1243,6 +1264,7 @@ class BaseNode {
 
     evaluateDependencies() {
         this.dependencyModifications.forEach((mod) => {
+            //Update Path
             const resolvedPaths = mod.path.resolve(this.context,false) ?? null;
             const pathCrawler = (pathResult) => {
                 if(pathResult == null) return;
@@ -1266,7 +1288,11 @@ class BaseNode {
                     pathResult.forEach(item => pathCrawler(item));
                     return;
                 } else if (pathResult instanceof Object) {
-                    Object.values(pathResult).forEach((value) => pathCrawler(value));
+                    for (const [key,value] of Object.entries(pathResult)) {
+                        if(!key.startsWith("__")) {
+                            pathCrawler(value);
+                        }
+                    }
                     return;
                 }
                 return;
@@ -1353,6 +1379,7 @@ class DataNode extends BaseNode {
     }
     /**
      * @param {boolean} virtual 
+     * Remove???
      * @param {*} context 
      * @param {string} path 
      * @param {{
@@ -1362,10 +1389,10 @@ class DataNode extends BaseNode {
      *     listeners?:Array<Object>
      *   }?} dataObj
      */
-    constructor(virtual, context, path, dataObj) {
+    constructor(virtual, parent, context, path, dataObj) {
         let {value,min,max,listeners} = {...DataNode.defaultDataObj,...dataObj};
-        super(virtual, context, path,{value:value, min:min, max:max, listeners:listeners});
-
+        super(virtual, parent, context, path,{value:value, min:min, max:max, listeners:listeners});
+        //Update Pathes
         this.value = new ExprValue(value,this.path);
         this.max = new ExprValue(max,this.path);
         this.min = new ExprValue(min,this.path);
@@ -1408,6 +1435,7 @@ class DataNode extends BaseNode {
         const getDepMods = (accessor,newVal) => {
             const dependencyMods = [];
             this.oldPaths = new Map(accessor.precedentPaths);
+            //Update Path
             accessor.modify(newVal,this.path);
             accessor.precedentPaths.forEach((path, key) => {
                 if (this.oldPaths.has(key)) {
@@ -1499,6 +1527,7 @@ class DataNode extends BaseNode {
                                 break;
                         }
                         for(const [path,accessorList] of node.target.accessors.entries()) {
+                            //update path?
                             if(path.includes(this.path)) {
                                 // do somthing with accesorList
                                 // default to 'value'
@@ -1540,6 +1569,7 @@ class DataNode extends BaseNode {
             } catch (e) {
                 this.isErrorSrc = true;
                 this.error = e.message;
+                //Update Path
                 e.message = `Node Source: ${this.path.absolutePath} ${e.message}`
                 throw e;
             }
@@ -1575,6 +1605,7 @@ class DataNode extends BaseNode {
 class ModifierNode extends BaseNode {
     /**
      * @param {boolean} virtual 
+     * Remove???
      * @param {*} context 
      * @param {string} path 
      * @param {{
@@ -1584,16 +1615,16 @@ class ModifierNode extends BaseNode {
      *  tier: number
      * }} dataObj
      */
-    constructor(virtual, context, path, dataObj) {
+    constructor(virtual, parent, context, path, dataObj) {
         const {target,operation,value,tier=0} = dataObj;
-        super(virtual,context,path, {target,operation,value,tier});
-
+        super(virtual, parent, context,path, {target,operation,value,tier});
+        //Update Path
         this.target = new Path(target, this.path);
         this.dependencyModifications.push({type:"add dependent",path:this.target,amount:1});
 
         this.operation = operation;
         this.tier = tier;
-
+        //Update Path here too
         this.value = new ExprValue(value, this.path);
         this.value.precedentPaths.forEach(depPath => {
             this.dependencyModifications.push({type:"add precedent",path:depPath,amount:1});
@@ -1610,8 +1641,8 @@ class ModifierNode extends BaseNode {
 }
 
 class PlaceholderNode extends BaseNode{
-    constructor(virtual, context, path, data) {
-        super(virtual,context,path, data)
+    constructor(virtual, parent, context, path, data) {
+        super(virtual,parent,context,path, data)
     }
 }
 
@@ -1663,11 +1694,11 @@ let testFileData = `{
                 
         },
         "Some Data":{
-            "multiNode#data":[
-                {"value":10},
-                {"value":20},
-                {"value":30},
-                {"value":"=data('Equipment.items[1].name')=='Shield'"}
+            "multiNode":[
+                {"__type":"data","value":10},
+                {"__type":"data","value":20},
+                {"__type":"data","value":30},
+                {"__type":"data","value":"=data('Equipment.items[1].name')=='Shield'"}
             ],
             "sideNode":"=data('.multiNode[1]')"
         },
