@@ -170,16 +170,19 @@ class Character {
                 this[baseKey] = null;
             }
             if (sanatizedKey != key && rval != undefined) {
-                this[sanatizedKey] = rval; // sanatize object prototype keys
+                this[baseKey] = rval; // sanatize object prototype keys
                 rval = undefined;
             }
 
             if(Object.hasOwn(this,"__okeys") && Array.isArray(this["__okeys"])) {
-                this["__okeys"].push(key)
+                this["__okeys"].push(baseKey)
             } else {
-                this["__okeys"] = [key];
+                this["__okeys"] = [baseKey];
             }
-            print(this);
+
+            this[baseKey]["__parent"] = this;
+
+            console.log(this);
 
             return rval;
         });
@@ -196,7 +199,10 @@ class Character {
                 dataTree.forEach((item,idx) => contextRecursor(item,`${path}[${idx}]`))
             } else if (dataTree instanceof Object) {
                 Object.keys(dataTree).forEach((key) => {
-                    const [baseKey, sigil] = key.split('#');
+                    let [baseKey, sigil] = key.split('#');
+                    if(Object.hasOwn(dataTree[key],"__type")) {
+                        sigil = dataTree[key]["__type"];
+                    }
                     let data = dataTree[key];
                     const newPath = joinPath(path,baseKey);
                     switch (sigil) {
@@ -265,7 +271,7 @@ class Character {
                 return ul;
             } else if (treeRoot instanceof Object) {
                 let div = document.createElement("div");
-                Object.keys(treeRoot).forEach((key) => {
+                treeRoot["__okeys"].forEach((key) => {
                     let name = (key.length > 0 && key[0] ==="~") ? key.slice(1) : key;
                     if(treeRoot[key] instanceof BaseNode) {
                         let container = document.createElement("div");
@@ -1341,9 +1347,9 @@ class BaseNode {
 class DataNode extends BaseNode {
     static defaultDataObj = {
         value:null,
-        min=null,
-        max=null,
-        listeners = []
+        min:null,
+        max:null,
+        listeners: []
     }
     /**
      * @param {boolean} virtual 
@@ -1492,14 +1498,15 @@ class DataNode extends BaseNode {
                                 //Skip over node
                                 break;
                         }
-                    }
-
-                    for(const [path,accessorList] of node.target.accessors.entries()) {
-                        if(path.includes(this.path)) {
-                            // do somthing with accesorList
-                            // default to 'value'
+                        for(const [path,accessorList] of node.target.accessors.entries()) {
+                            if(path.includes(this.path)) {
+                                // do somthing with accesorList
+                                // default to 'value'
+                            }
                         }
                     }
+
+                    
                     /*
                     someModifier#modifer {
                         target: "Ability Scores.*.score#value,max;Equipment.capacity#max"
