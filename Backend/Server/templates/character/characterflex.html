@@ -1,4 +1,14 @@
 {% extends "base.html" %}
+
+{% block head %}
+    {{ super() }}
+    <link rel="stylesheet" href="{{ url_for('static', filename='characterstyles.css') }}">
+    <script src="{{ url_for('static', filename='character.js')}}" defer></script>
+    <script src="{{ url_for('static', filename='CharacterEngine.js')}}" defer></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.42.0/dist/tabler-icons.min.css" media="all" onload="this.media='all'">
+    <link rel="stylesheet" href="playground.css">
+{% endblock %}
+
 {% block content %}
         <h2 class="sr-only">Draggable character sheet with editable fields</h2>
 
