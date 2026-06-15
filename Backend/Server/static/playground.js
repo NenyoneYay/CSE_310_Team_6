@@ -311,7 +311,9 @@ function render() {
         inner.appendChild(lbl);
         inner.appendChild(inputEl);
 
-
+        const badge = document.createElement("span");
+        badge.className = "field-type-badge";
+        badge.textContent = field.type;
 
         const delF = document.createElement("button");
         delF.className = "delete-btn";
