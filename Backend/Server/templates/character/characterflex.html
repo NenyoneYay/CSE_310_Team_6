@@ -1,18 +1,22 @@
+{% extends "base.html" %}
 
-<html>
-    <head>
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.42.0/dist/tabler-icons.min.css" media="all" onload="this.media='all'">
+{% block head %}
+    {{ super() }}
+    <link rel="stylesheet" href="{{ url_for('static', filename='playground.css') }}">
+    <script src="{{ url_for('static', filename='character.js')}}" defer></script>
+    <script src="{{ url_for('static', filename='CharacterEngine.js')}}" defer></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.42.0/dist/tabler-icons.min.css" media="all" onload="this.media='all'">
+    <link rel="stylesheet" href="playground.css">
+    <script src="{{ url_for('static', filename='playground.js')}}" defer></script>
+{% endblock %}
 
-        <link rel="stylesheet" href="playground.css">
-        <script src="playground.js" defer></script>
-    </head>
-    <body>
-                
+{% block content %}
         <h2 class="sr-only">Draggable character sheet with editable fields</h2>
 
         <div class="sheet">
         <div class="toolbar">
             <span>Character sheet builder</span>
+            <button id="btn-mode"><i class="ti ti-pencil"></i> Edit mode</button>
             <button id="btn-save"><i class="ti ti-download" aria-hidden="true"></i> Save JSON</button>
             <label style="cursor:pointer">
             <button id="btn-load-trigger"><i class="ti ti-upload" aria-hidden="true"></i> Load JSON</button>
@@ -30,6 +34,5 @@
 
         <div class="json-area" id="json-preview" style="display:none"></div>
         </div>
-
-    </body>
-</html>
+    
+{% endblock %}
