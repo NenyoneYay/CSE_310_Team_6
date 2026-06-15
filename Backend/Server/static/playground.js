@@ -213,7 +213,7 @@ function render() {
 
         const hdr = document.createElement("div");
         hdr.className = "section-header";
-        hdr.draggable = true;
+        hdr.draggable = !editMode;
         hdr.innerHTML = `<i class="ti ti-grip-vertical drag-handle" aria-hidden="true"></i>`;
 
         const titleInp = document.createElement("input");
@@ -230,6 +230,7 @@ function render() {
         delBtn.className = "delete-btn";
         delBtn.title = "Remove section";
         delBtn.innerHTML = `<i class="ti ti-x"></i>`;
+        delBtn.style.display = editMode ? "none" : "";
         delBtn.addEventListener("click", () => {
 
         releaseId(sec.id);
@@ -293,7 +294,7 @@ function render() {
     sec.fields.forEach((field, fi) => {
 
         const fEl = document.createElement("div");
-        fEl.className = "field"; fEl.draggable = true; fEl.dataset.fid = field.id;
+        fEl.className = "field"; fEl.draggable = !editMode; fEl.dataset.fid = field.id;
 
         const handle = document.createElement("i");
         handle.className = "ti ti-grip-vertical field-handle";
@@ -319,6 +320,7 @@ function render() {
         delF.className = "delete-btn";
         delF.title = "Remove field";
         delF.innerHTML = `<i class="ti ti-x"></i>`;
+        delF.style.display = editMode ? "none" : "";
         delF.addEventListener("click", e => {
 
             e.stopPropagation();
@@ -546,8 +548,18 @@ document.getElementById("btn-preview").addEventListener("click", () => {
         ? `<i class="ti ti-code" aria-hidden="true"></i> Hide JSON`
         : `<i class="ti ti-code" aria-hidden="true"></i> Show JSON`;
     updatePreview();
-
 });
+    // hides buttons while not in edit mode
+    let editMode = false;
+    const modeBtn = document.getElementById("btn-mode");
+    modeBtn.addEventListener("click", () => {
+    editMode = !editMode;
+    modeBtn.innerHTML = editMode
+        ? `<i class="ti ti-pencil-off"></i> Edit mode`
+        : `<i class="ti ti-pencil"></i> Edit mode`;
+    render();
+
+    });
 
 function updatePreview() {
 
