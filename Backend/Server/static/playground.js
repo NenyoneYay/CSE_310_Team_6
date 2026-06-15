@@ -275,6 +275,9 @@ function render() {
         const fromIdx = sheet.sections.findIndex(s => s.id === dragSrc);
         const [moved] = sheet.sections.splice(fromIdx, 1);
         sheet.sections.splice(si, 0, moved);
+        
+        // TODO: update HTML instead of re-render
+        
         render(); updatePreview();
             
     });
@@ -549,24 +552,25 @@ document.getElementById("btn-preview").addEventListener("click", () => {
         : `<i class="ti ti-code" aria-hidden="true"></i> Show JSON`;
     updatePreview();
 });
-    // hides buttons while not in edit mode
-    let editMode = false;
-    const modeBtn = document.getElementById("btn-mode");
-    modeBtn.addEventListener("click", () => {
-    editMode = !editMode;
-    modeBtn.innerHTML = editMode
-        ? `<i class="ti ti-pencil-off"></i> Edit mode`
-        : `<i class="ti ti-pencil"></i> Edit mode`;
-    render();
+    
+// hides buttons while not in edit mode
+let editMode = false;
+const modeBtn = document.getElementById("btn-mode");
+modeBtn.addEventListener("click", () => {
+editMode = !editMode;
+modeBtn.innerHTML = editMode
+    ? `<i class="ti ti-pencil-off"></i> Edit mode`
+    : `<i class="ti ti-pencil"></i> Edit mode`;
+render();
 
-    });
+});
 
 function updatePreview() {
 
     if (!previewVisible) return;
         document.getElementById("json-preview").textContent = JSON.stringify(sheet, null, 2);
 
-    }
+}
 
 render();
         
