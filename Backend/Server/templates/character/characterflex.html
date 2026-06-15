@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+        <h2 class="sr-only">Draggable character sheet with editable fields</h2>
+
+        <div class="sheet">
+        <div class="toolbar">
+            <span>Character sheet builder</span>
+            <button id="btn-save"><i class="ti ti-download" aria-hidden="true"></i> Save JSON</button>
+            <label style="cursor:pointer">
+            <button id="btn-load-trigger"><i class="ti ti-upload" aria-hidden="true"></i> Load JSON</button>
+            <input type="file" id="file-input" accept=".json" style="display:none">
+            </label>
+            <button id="btn-preview"><i class="ti ti-code" aria-hidden="true"></i> Show JSON</button>
+        </div>
+
+        <div class="section-list" id="section-list"></div>
+
+        <div class="add-section-row" style="margin-top:12px">
+            <input id="new-section-name" placeholder="New section name…">
+            <button id="btn-add-section"><i class="ti ti-plus" aria-hidden="true"></i> Add section</button>
+        </div>
+
+        <div class="json-area" id="json-preview" style="display:none"></div>
+        </div>
+    
+{% endblock %}
