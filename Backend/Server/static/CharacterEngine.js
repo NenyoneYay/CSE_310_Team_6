@@ -884,7 +884,6 @@ ExprValue.parser.functions.prod = function (arr) {
     return arr.reduce((pv,cv) => pv * cv,0);
 }
 ExprValue.parser.functions.aprod = function (arr1, arr2) {
-    console.log("aprod:",arr1,arr2)
     const rval = new Array(Math.max(arr1.length,arr2.length));
     for(let i = 0;i < rval.length;i++) {
         if(i < arr1.length && i<arr2.length) rval[i] = arr1[i] * arr2[i];
