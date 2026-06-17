@@ -71,8 +71,25 @@
         color: blue;
     }
 </style>
+
 <script>
     var characterNameBox = document.getElementById("character_name_box");
+
+    characterNameBox.addEventListener('click', selectName);
+
+    function selectName(event) {
+            // Ignore clicks that aren't on a <p>
+    if (event.target.tagName === "P") {
+
+        characterNameBox.foreach(removeit(e){
+            e.classList.remove("selected");
+        })
+
+        event.target.classList.add("selected");
+
+        console.log("Selected:", event.target.textContent);
+    }
+    }
 
 
 
@@ -83,10 +100,6 @@
     //     console.log("I've been clicked!");
     // }
 
-    console.log(typeof(characterNameList));
-    console.log(characterNameList[0]);
-    console.log(characterNameList[1]);
-    console.log(characterNameList[2].innerText);
     // characterNameList.forEach(testing);
     // function testing(item) {
     //     console.log("Testing");
