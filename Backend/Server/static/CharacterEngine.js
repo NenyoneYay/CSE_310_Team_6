@@ -79,7 +79,7 @@ class Character {
     constructor(fileData) {
         this.root = undefined;
         this.parseFile(fileData)
-        // // here is some prototype data to get the logic down first
+        // // here is some prototype data for rules
         // this.fileData = {
         //     "rules":{
         //         "Stats.*":[
@@ -89,52 +89,8 @@ class Character {
         //             }
         //         ]
         //     },
-        //     "data":{
-        //         "HP#data":{
-        //             "value":30,
-        //             "max":110,
-        //             "eventTriggers":[
-        //                 {
-        //                     "events":["Long Rest"],
-        //                     "action":{
-        //                         "set":{"target":"#value","value":"#max"}
-        //                     }
-        //                 }
-        //             ]
-        //         },
-        //         "Stats":{
-        //             "Strength":{
-        //                 "score#data": {
-        //                     "value":10,
-        //                     "max":20
-        //                 }
-        //             }
-        //         }
-        //     },
-        //     "manualEvents":[
-        //         "Long Rest",
-        //         "Short Rest",
-        //         "Day Start",
-        //         "Start Combat"
-        //     ],
-        //     "modifiers":{
-
-        //     }
+        //     "data": ...
         // }
-
-        // this.expectedRoot = {
-        //     "HP":new DataNode("HP",{
-        //         value:30,
-        //         max:110
-        //     }),
-        //     "Stats":{
-        //         "Strength":{
-        //             "score": new DataNode(false,"Stats.Strength.score",{value:0, max:20}),
-        //             "mod":   new DataNode(true ,"Stats.Strength.mod"  ,{value:"floor(data('.score')/2) - 5"}),
-        //             "save":  new DataNode(true ,"Stats.Strength.save" ,{value:"data('.mod')"               })
-        //         }
-        //     }
-        // };
 
     }
 
@@ -415,13 +371,6 @@ class Path {
         } else {
             this.tokens = this.tokenize(path);
         }
-
-        //Ability Scores.(Strength,Charisma).score#value
-        // => [<Strength Score val>,<Charisma Score val>]
-        // resolveAccessors = false => [<Strength.score>,<Charisma.score>]
-
-        //Ability Scores.Strength.score#value,max;Equipment.carrying capacity#max
-        /** @type Map<String,string[]> */
 
         Path.tokensRegex.lastIndex = 0;
     }
@@ -957,120 +906,6 @@ ExprValue.parser.functions.flatten = function (arr) {
     return arr.reduce(reducer,[]);
 }
 
-/*
-    "data":{
-        HP: DataNode {
-            value:10,
-            min:0,
-            max:110
-        },
-        Ability Scores: Container {
-            parent: null,
-            contents: {
-                Strength: Container {
-                    parent: Container -> Ability Scores
-                    contents: {
-                        score: DataNode {parent:Container -> Strength, value: 10, min: 0, max: 20},
-                        mod: DataNode {value:"=floor(data('.score')/2)-5"}
-                        save: DataNode {value:"=.mod"}
-                    }
-                }
-            }
-        },
-        Equipment: Container {
-            parent: null,
-            contents: {
-                items: Container {
-                    parent: Container -> Equipment,
-                    contents: Array<Container>[
-                        {
-                            parent: Container -> items,
-                            contents: {
-                                name: Data
-                                weight: Data
-                                equipped: Data
-                                modifiers: Modifier
-                            }
-                        }
-                    ]
-                }
-            }
-        }
-    }
-
-    {
-        "Equipment": Container {
-            "__okeys":["carrying","capacity","other","items"]
-            "carrying":"=sum(data('.items[*].weight'))"
-            "capacity":"=data('Ability Scores.Strength.score') * 15"
-            "other": [
-                10,
-                20,
-                30
-            ],
-            "items":[
-                [
-                    [
-
-                    ]
-                ]
-                Container {
-                    "__okeys":["name","description","weight","equipped","modifier"]
-                    "name": "shield",
-                    "weight": 5,
-                    "equipped": false,
-                    "modifier": {
-                        "__type": "modifier",
-                        "target":
-                    }
-                },
-                Container {
-                    "__okeys":["name","description","weight","equipped","modifier","equip","unequip"]
-                    "name": "shield",
-                    "qty":1,
-                    "description": "",
-                    "weight": 5,
-                    "equipped": true,
-                    "modifier":{
-                        "__type": "modifier",
-                        "target": "Combat.AC",
-                        "operation":"add",
-                        "value": 2,
-                        "condition":"=data('.equipped')"
-                    },
-                    "equip":{
-                        "__type": "action",
-                        "operation":"replace",
-                        "target":".equipped",
-                        "value":true,
-                        "condition":"=compareEach("!=",data('..[*].(name,equipped)'),[data('.name'),true])"
-                    },
-                    "unequip":{
-                        "__type": "action",
-                        "operation":"replace",
-                        "target":".equipped",
-                        "value":false
-                    }
-                },
-            ]
-        }
-    }
-
-    {
-        "data"...,
-        "UI":{
-            "settings":{
-                "keyOrder":["Ability Scores"],
-                "Ability Scores":{
-                    "keyOrder":["Strength","Wisdom","Charisma"],
-                    "Strength"
-                }
-            }
-        }
-    }
-
-    
-*/
 class Container {
     static defaultUI_info = {
         direction: "column",
@@ -1483,15 +1318,6 @@ class BaseNode {
                 node.dependents.delete(this);
             }
 
-
-            // let nextVal = (node.dependents.get(this) ?? 0) - amount;
-            // if (nextVal > 0) node.dependents.set(this,nextVal);
-            // else node.dependents.delete(this);
-
-            // nextVal = (this.precedents.get(node) ?? 0) - amount;
-            // if (nextVal > 0) this.precedents.set(node,nextVal);
-            // else this.precedents.delete(node);
-
             this.evaluate();
         }
     }
@@ -1535,15 +1361,6 @@ class BaseNode {
             } else {
                 this.dependents.delete(node);
             }
-
-
-            // let nextVal = (node.precedents.get(this) ?? 0) - amount;
-            // if (nextVal > 0) node.precedents.set(this,nextVal);
-            // else node.precedents.delete(this);
-
-            // nextVal = (this.dependents.get(node) ?? 0) - amount;
-            // if (nextVal > 0) this.dependents.set(node,nextVal);
-            // else this.dependents.delete(node);
 
             node.evaluate();
         }
@@ -1688,13 +1505,6 @@ class DataNode extends BaseNode {
     evaluate() {
         if(this.dirty) {
             try {
-                // // Paranoia code. Removed for efficiency. 
-                // // Just trust that dependent updates always work.
-                // for (let node of this.dependencies) {
-                //     if (node instanceof BaseNode) {
-                //         node.evaluate();
-                //     }
-                // }
 
                 const root = this.findRoot();
 
@@ -1862,8 +1672,6 @@ class DataNode extends BaseNode {
 class ModifierNode extends BaseNode {
     /**
      * @param {boolean} virtual 
-     * Remove???
-     * @param {*} context 
      * @param {string} path 
      * @param {{
      *  target:string,
