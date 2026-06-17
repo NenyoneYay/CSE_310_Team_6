@@ -44,6 +44,7 @@ function displayContents(contents) {
         const element = document.getElementById('error-content');
         element.textContent = `Error: ${err.name}: ${err.message}`;
         document.getElementById('file-input').value = '';
+        throw err
     }
 }
 
@@ -137,29 +138,6 @@ class Character {
 
     }
 
-    /*
-    
-    {
-        key1: [
-            [
-                {
-                    key1_1: "hello"
-                }
-            ],
-            [
-                {
-                    key2_1: "world"
-                }
-            ]
-        ]
-    } =>
-
-    key1_1, "hello", this = key1
-    key2_1, "world", this = key1
-    key1, [[{key1_1}],[{key2_1}]], this = rootobj
-
-    */
-
     parseFile(fileData){
         this.destroy();
         let jsonData = JSON.parse(fileData,function (key,value) {
@@ -186,7 +164,6 @@ class Character {
                 }
                 rval = undefined;
             }
-            console.log(this);
 
             return rval;
         });
@@ -199,11 +176,11 @@ class Character {
         }
         const joinPath = (base,...ext) => {return base!=='' ? `${base}${ext.map(v => '.'+v).join('')}` : ext.join('.')}
 
-        const contextRecursor = (dataTree, path) => {
+        const contextRecursor = (dataTree) => {
             if (dataTree == null || dataTree instanceof BaseNode) {
                 return;
             } else if (Array.isArray(dataTree)) {
-                dataTree.forEach((item,idx) => contextRecursor(item,`${path}[${idx}]`))
+                dataTree.forEach((item,idx) => contextRecursor(item))
             } else if (dataTree instanceof Object) {
                 dataTree["__okeys"].forEach((key) => {
                     let [baseKey, sigil] = key.split('#');
@@ -211,49 +188,56 @@ class Character {
                         sigil = dataTree[key]["__type"];
                     }
                     let data = dataTree[key];
-                    const newPath = joinPath(path,baseKey);
                     switch (sigil) {
+                        case undefined:
+                            // base datatypes turn into data nodes
+                            if (["number","boolean","string"].includes(typeof(data))){
+                                dataTree[key] = makeNode(new DataNode(false,dataTree,{value: data}));
+                            }
+                            break;
                         case "data": // DataNode
                             if (Array.isArray(data)) {
                                 for (const [idx,nodeData] of dataTree[key].entries()) {
-                                    if (nodeData == null) return null;
-                                    let raw = typeof(nodeData) === 'object' ? nodeData : {value: nodeData}
-                                    dataTree[key][idx] = makeNode(new DataNode(false,dataTree[key],contextData,`${newPath}.${idx}`,raw));
+                                    if (nodeData == null) continue;
+                                    let raw = (nodeData instanceof Object) ? nodeData : {value: nodeData}
+                                    dataTree[key][idx] = makeNode(new DataNode(false,dataTree[key],raw));
                                 }
                             } else if (["string","number","boolean"].includes(typeof(data))) {
-                                dataTree[key] = makeNode(new DataNode(false,dataTree,contextData,newPath,{value: data}));
-                            } else if (data != null) {
-                                dataTree[key] = makeNode(new DataNode(false,dataTree,contextData,newPath,data));
+                                dataTree[key] = makeNode(new DataNode(false,dataTree,{value: data}));
+                            } else if (data instanceof Object) {
+                                dataTree[key] = makeNode(new DataNode(false,dataTree,data));
                             }
                             break;
-                        case undefined:
-                            // base datatypes turn into data nodes except for descriptions
-                            if (typeof(data) === "string") {
-                                if(data.length > 0 && data[0] === "=") {
-                                    dataTree[key] = makeNode(new DataNode(false,dataTree,contextData,newPath,{value: data}));
-                                } else {
-                                    dataTree[key] = makeNode(new BaseNode(false,dataTree,contextData,newPath,data));
+                        case "modifier":
+                            if (Array.isArray(data)) {
+                                for (const [idx,nodeData] of dataTree[key].entries()) {
+                                    if (!(nodeData instanceof Object)) continue;
+                                    dataTree[key][idx] = makeNode(new ModifierNode(false,dataTree[key],nodeData));
                                 }
-                            } else if (["number","boolean"].includes(typeof(data))){
-                                dataTree[key] = makeNode(new DataNode(false,dataTree,contextData,newPath,{value: data}));
+                            } else if (data instanceof Object){
+                                dataTree[key] = makeNode(new ModifierNode(false,dataTree,data));
                             }
                             break;
-                        // other node types/sigils will be defined here
+                            // other node types/sigils will be defined here
                         default:
                             console.log(`Unknown sigil ${sigil}`)
                     }
 
-                    contextRecursor(dataTree[baseKey],newPath);
+                    contextRecursor(dataTree[baseKey]);
                 });
             }
         }
-        contextRecursor(contextData,'');
+        contextRecursor(contextData);
         this.root = contextData;
+        delete this.root.__parent;
         newNodes.forEach((newNode) => {
-            // register dependencies??
+            // register dependencies
             newNode.evaluateDependencies();
+        });
+        newNodes.forEach((newNode) => {
+            // evaluate node values
             newNode.evaluate();
-        })
+        });
         return jsonData;
     }
     
@@ -392,19 +376,44 @@ class Path {
         #accessor1,accessor2
     */
 
+    static absolutePathStr(obj, root=null) {
+        if(root!=null && obj === root) return "";
+        if(obj != null && obj instanceof Object) {
+            const parentObj = obj["__parent"];
+            if(parentObj != undefined) {
+                const parentPath = Path.absolutePathStr(parentObj,root);
+                if (Array.isArray(parentObj)) {
+                    return parentPath + `[${parentObj.indexOf(obj)}]`
+                } else {
+                    return parentPath + `${parentPath === "" ? "" : "."}${Object.keys(parentObj).find((key) => parentObj[key] === obj) ?? "<Not found>"}`
+                }
+            } else {
+                return "";
+            }
+        }
+        return undefined;
+    }
+
 //Update path
     /**
      * 
      * @param {string} path 
-     * @param {Path} rootPath 
+     * @param {Path|Object} root
      */
-    constructor(path, rootPath=null) {
+    constructor(path, root=null) {
         /** @type {string} */
         this.raw = path;
 
         // tokenize the path syntax from path
-        this.absolutePath = '';
-        this.tokens = this.tokenize(path, rootPath);
+        /** @type {Array<{type:string,value:any}>} */
+        this.tokens = [];
+        if(root instanceof Path)
+            this.tokens = this.tokenize(path, root);
+        else if (root instanceof Object && Object.hasOwn(root,"__parent")) {
+            this.tokens = this.tokenize(path, undefined, root);
+        } else {
+            this.tokens = this.tokenize(path);
+        }
 
         //Ability Scores.(Strength,Charisma).score#value
         // => [<Strength Score val>,<Charisma Score val>]
@@ -421,15 +430,19 @@ class Path {
      * @param {rootPath} Path
      * */
 
-    tokenize (str,rootPath=null,tokensRegex = Path.tokensRegex) {
-        if (str == undefined) return;
+    tokenize (str,rootPath=null,rootObj=null) {
+        if (str == undefined) return [];
 
         /** @type {Object[]} */
         const contextStack = [];
 
         let tokens = [];
-        if (rootPath != null && (str.length === 0 || ".#".includes(str[0]))) {
-            tokens = new Array(...rootPath.tokens);
+        if(str.length === 0 || ".#".includes(str[0])){
+            if (rootPath != null) {
+                tokens = new Array(...rootPath.tokens);
+            } else if (rootObj != null) {
+                tokens.push({type:"T_ROOT",value:rootObj});
+            }
         }
 
         for(let i = 0;i < str.length;) {
@@ -445,7 +458,7 @@ class Path {
             if (m[1] !== undefined) {
                 for (let i=0;i<m[1].length;i++) {
                     // tokens.pop();
-                    tokens.push({type:'T_BACK',value:'..'});
+                    tokens.push({type:'T_BACK',value:'.'});
                 }
             }
 
@@ -501,11 +514,23 @@ class Path {
         }
         if(contextStack.length > 0) throw SyntaxError(`EOF: Unbalanced Parentheses. Missing closing ')'`);
         
-        // Remove????
+        return tokens;
+    }
+
+    getAbsolutePathStr(root) {
+        /**
+         * @param {{type:string,value:any}} pv 
+         * @param {{type:string,value:any}} cv 
+         * @returns 
+         */
         const pathReducer = (pv,cv) => {
             let tokenStr = ''
-            const startOfPath = pv === '' || (pv.length > 0 && ",(".includes(pv[pv.length-1]))
+            const startOfPath = pv === '' || (pv.length > 0 && ";,(.".includes(pv[pv.length-1]))
             switch (cv.type) {
+                case 'T_ROOT':
+                    tokenStr = Path.absolutePathStr(root,cv.value);
+                    break;
+                case 'T_BACK':
                 case 'O_KEY':
                     tokenStr = (startOfPath ? '' : '.') + cv.value;
                     break;
@@ -533,22 +558,24 @@ class Path {
 
             return pv + tokenStr;
         }
-        
-        this.absolutePath = tokens.reduce(pathReducer,'');
-        return tokens;
+
+        return this.tokens.reduce(pathReducer,'');
     }
 
     /**
-     * @param {Object} data
+     * @param {Object} root
      * @param {Boolean} resolveAccessors
      * @returns {(Object|BaseNode|undefined)}
      */
-    resolve(data,resolveAccessors=true) {
+    resolve(root,resolveAccessors=true) {
         const recursor = (treeRoot,tokens = this.tokens, cursor=0) => {
             if(cursor >= tokens.length) return treeRoot;
             if(treeRoot == null) return undefined;
 
             switch(tokens[cursor].type) {
+                case 'T_ROOT':
+                    return recursor(tokens[cursor].value,tokens,cursor+1);
+                    break;
                 case 'T_BACK':
                     if(Object.hasOwn(treeRoot,"__parent")) {
                         return recursor(treeRoot.__parent,tokens,cursor+1);
@@ -559,26 +586,24 @@ class Path {
                         return recursor(treeRoot.passThrough,tokens,cursor);
                     else if (treeRoot instanceof Container) {
                         if (tokens[cursor].value === '*') {
-                            const rval = []
-                            for (const [key,child] of Object.entries(treeRoot.content)) {
-                                if(!key.startsWith("__")) {
-                                    rval.push(recursor(child,tokens,cursor+1));
-                                }
-                            }
-                            return rval;
+                            /** @type {Array<string>} */
+                            const keys = treeRoot.content?.["__okeys"] ?? Object.keys(treeRoot.content).filter((val) => !val.startsWith("__"));
+                            return keys.map((key) => {
+                                return recursor(treeRoot.content[key],tokens,cursor+1);
+                            });
                         } else {
                             return recursor(treeRoot.content[tokens[cursor].value],tokens,cursor+1);
                         }
-                    }else if (tokens[cursor].value === '*') {
-                        const rval = []
-                        for (const [key,child] of Object.entries(treeRoot)) {
-                            if(!key.startsWith("__")) {
-                                rval.push(recursor(child,tokens,cursor+1));
-                            }
+                    }else if(treeRoot instanceof Object) { 
+                        if (tokens[cursor].value === '*') {
+                            /** @type {Array<string>} */
+                            const keys = treeRoot?.["__okeys"] ?? Object.keys(treeRoot).filter((val) => !val.startsWith("__"));
+                            return keys.map((key) => {
+                                return recursor(treeRoot[key],tokens,cursor+1);
+                            });
+                        } else {
+                            return recursor(treeRoot[tokens[cursor].value],tokens,cursor+1);
                         }
-                        return rval;
-                    } else {
-                        return recursor(treeRoot[tokens[cursor].value],tokens,cursor+1);
                     }
                     break;
                 case 'T_GROUP':
@@ -614,7 +639,6 @@ class Path {
                             return recursor(getWrappedIdx(val[0],treeRoot),tokens,cursor+1);
                         }
                     }
-                    return undefined;
                     break;
                 case 'A_SLICE':
                     if(treeRoot instanceof BaseNode) 
@@ -631,7 +655,6 @@ class Path {
                             })
                         }
                     }
-                    return undefined;
                     break;
                 case 'A_WILDCARD':
                     if(treeRoot instanceof BaseNode) 
@@ -641,41 +664,46 @@ class Path {
                             return recursor(item,tokens,cursor+1);
                         })
                     }
-                    return undefined;
                     break;
                 case 'N_ACCESSORS':
                     if(treeRoot instanceof BaseNode) {
                         if(!resolveAccessors) 
-                            return {node:treeRoot,accessors:tokens[cursor].value};
+                            return {__type:"pathLeaf",node:treeRoot,accessors:tokens[cursor].value};
                         if (tokens[cursor].value.length === 1) 
                             return treeRoot.accessors[tokens[cursor].value];
                         return this.tokens[cursor].value.map(accessor => {
                             return treeRoot.accessors[accessor];
                         });
                     }
-                    return undefined;
                     break;
                 default:
                     return recursor(treeRoot,tokens,cursor+1);
                     break;  
             }
+            return undefined;
         }
+
+
 
         const query_container = [];
         let query_start_idx = 0
         this.tokens.forEach((token,idx) => {
             if(token.type === 'CONCAT') {
-                query_container.push(recursor(data,this.tokens,query_start_idx));
+                query_container.push(recursor(root,this.tokens,query_start_idx));
                 query_start_idx = idx+1;
             }
         });
-        query_container.push(recursor(data,this.tokens,query_start_idx));
+        query_container.push(recursor(root,this.tokens,query_start_idx));
 
         if (query_container.length === 1) return query_container[0];
         return query_container;
     }
 
-    includes(path,resolveAccessors=true) {
+    /** 
+     * @param {Object} root
+     * @param {Object} obj
+     */
+    includes(root, obj) {
         
         const query_container = [];
         let compare_idx = 0
@@ -721,25 +749,25 @@ class ExprValue {
     /**
      * 
      * @param {(string|number)} value 
-     * @param {Path} rootPath 
+     * @param {Object|Path} root 
      */
-    constructor(value, rootPath=null) {
+    constructor(value, root=null) {
         /** @type {Map<String,Path>} */
         this.precedentPaths = new Map()
-        this.modify(value, rootPath)
+        this.modify(value, root)
     }
 
     /**
      * 
      * @param {string|number|boolean|null} newValue 
-     * @param {Path|null} rootPath 
+     * @param {Object|Path|null} root 
      * @returns {string|number|boolean|null} The final value of this expression
      */
-    modify(newValue, rootPath=null) {
+    modify(newValue, root=null) {
         this.value = newValue;
         if(typeof(newValue) === "string") {
             this.isExpr = newValue[0] === "=";
-            this.expr = this.isExpr ? this.processExpr(newValue,rootPath) : undefined;
+            this.expr = this.isExpr ? this.processExpr(newValue,root) : undefined;
             if(newValue.startsWith("r="))
                 this.value = newValue.slice(1);
         }
@@ -755,6 +783,14 @@ class ExprValue {
             if (['number','boolean'].includes(typeof(newValue))) {
                 this.value = newValue;
                 return true;
+            } else if (typeof(newValue) === "string") {
+                if(newValue.startsWith("r=")) {
+                    this.value = newValue.slice(1);
+                    return true;
+                }else if(newValue[0] != '=') {
+                    this.value = newValue;
+                    return true;
+                }
             }
         }
         return false;
@@ -763,10 +799,10 @@ class ExprValue {
     /**
      * 
      * @param {string} value 
-     * @param {Path} rootPath 
+     * @param {Object|Path|null} root 
      * @returns 
      */
-    processExpr(value, rootPath) {
+    processExpr(value, root) {
         // Preprocess text
         
         // Empty strings are not expressions
@@ -801,10 +837,10 @@ class ExprValue {
         let pathfound = false;
         for (let token of expr.tokens) {
             if (token.type == 'INUMBER' && pathfound) {
-                let pathObj = new Path(token.value,rootPath);
-                let existingPath = this.precedentPaths.get(pathObj.absolutePath)
+                let pathObj = new Path(token.value, root);
+                let existingPath = this.precedentPaths.get(token.value)
                 if (existingPath == undefined) {
-                    this.precedentPaths.set(pathObj.absolutePath,pathObj);      // add path to dependencies
+                    this.precedentPaths.set(token.value,pathObj);      // add path to dependencies
                     existingPath = pathObj;
                 }
                 token.value = existingPath;                                     // replace data() input with path object
@@ -816,7 +852,7 @@ class ExprValue {
         return expr
     }
 
-    evaluate(contextData) {
+    evaluate(root) {
         //Update path
         /** @param {Path} path */
         ExprValue.parser.functions.data = (path, fallback=NaN) => {
@@ -833,7 +869,7 @@ class ExprValue {
                     return fallback;
                 }
             }
-            let result = path.resolve(contextData);
+            let result = path.resolve(root);
             if (result instanceof ExprValue) {
                 throw EvalError("This isn't supposed to happen!!")
             } else if (Array.isArray(result)) {
@@ -898,6 +934,7 @@ ExprValue.parser.functions.prod = function (arr) {
     return arr.reduce((pv,cv) => pv * cv,0);
 }
 ExprValue.parser.functions.aprod = function (arr1, arr2) {
+    console.log("aprod:",arr1,arr2)
     const rval = new Array(Math.max(arr1.length,arr2.length));
     for(let i = 0;i < rval.length;i++) {
         if(i < arr1.length && i<arr2.length) rval[i] = arr1[i] * arr2[i];
@@ -1086,21 +1123,15 @@ class BaseNode {
     /**
      * 
      * @param {boolean} virtual 
-     * Remove???
-     * @param {*} context 
-     * @param {string} path 
+     * @param {Object} parent
      * @param {*} dataObj 
      */
-    constructor(virtual,parent,context,path,dataObj) {
+    constructor(virtual,parent,dataObj) {
         let dataVal = dataObj;
         if (dataObj != null && dataObj instanceof Object)
             ({ value: dataVal } = dataObj)
         this.__parent = parent;
-        //Remove???
-        this.context = context;
-        //Update path
-        this.path = new Path(path)
-        this.raw = dataObj
+        this.raw = dataObj;
         this.accessors = {
             value: dataVal
         };
@@ -1109,9 +1140,9 @@ class BaseNode {
 
         // dependents and precedents are mapped directly to nodes after
         // the character data tree is constructed. Maps are used to 
-        /** @type {Map<BaseNode,{count:Number,accessors:string[]}>} */
+        /** @type {Map<BaseNode,{[accessor:string]:Number}>} */
         this.dependents = new Map();
-        /** @type {Map<BaseNode,Number>} */
+        /** @type {Map<BaseNode,{[accessor:string]:Number}>} */
         this.precedents = new Map();
 
         // dependencyModifications defines what changes need to be made in the next
@@ -1127,8 +1158,10 @@ class BaseNode {
         this.warning = null;
         this.isErrorSrc = false;
 
+        this.inputType = null;
         this.renderedElement = null;
-        this.inputListenerHandler = (event) => {
+        this.renderedValue = null;
+        this.inputChangeHandler = (event) => {
             let newVal = this.accessors.value;
             switch (this.inputType) {
                 case "number":
@@ -1143,12 +1176,32 @@ class BaseNode {
                 default:
                     if (this.renderedElement != null)
                         newVal = this.renderedElement.value;
-                }
+            }
             this.set({value:newVal});
         }
+        this.inputBlurHandler = (event) => {
+            this.evaluate();
+        }
+    }
 
-        this.inputType = null;
-        switch (typeof(dataVal)) {
+    getName() {
+        if(Array.isArray(this.__parent))
+            return this.__parent.indexOf(this);
+        else
+            return Object.keys(this.__parent).find(key => this.__parent[key] === this);
+    }
+    
+    findRoot() {
+        let parentObj = this;
+        while (parentObj instanceof Object && parentObj.__parent != undefined) {
+            parentObj = parentObj.__parent;
+        }
+        return parentObj;
+    }
+
+    renderHTML(value = null) {
+        if(value == null) value = this.accessors.value;
+        switch (typeof(value)) {
             case "string":
                 this.inputType = "text";
                 break;
@@ -1161,14 +1214,35 @@ class BaseNode {
             default:
                 this.inputType = null;
         }
+
+        if(this.renderedElement == null || this.renderedElement.type != this.inputType) {
+            const newElement = document.createElement("input");
+            newElement.type = this.inputType ?? "text";
+            if(this.renderedElement != null) {
+                const oldElement = this.renderedElement;
+                oldElement.parentElement.replaceChild(newElement,oldElement);
+            }
+            this.renderedElement = newElement;
+            this.updateRenderedElement(value);
+            this.renderedElement.addEventListener("change",this.inputChangeHandler);
+            this.renderedElement.addEventListener("blur", this.inputBlurHandler);
+        }
+        return this.renderedElement;
     }
 
-    renderHTML() {
-        this.renderedElement = document.createElement("input");
-        this.renderedElement.type = this.inputType ?? "text";
-        this.renderedElement.value = this.accessors.value;
-        this.renderedElement.addEventListener("change",this.inputListenerHandler);
-        return this.renderedElement;
+    updateRenderedElement(value) {
+        if (this.renderedElement != null) {
+            switch (this.inputType) {
+                case "checkbox":
+                    this.renderedElement.checked = !!value;
+                    break; 
+                case "text":
+                case "number":
+                default:
+                    this.renderedElement.value = value;
+            }
+            this.renderedValue = value;
+        }
     }
 
     /**
@@ -1177,7 +1251,7 @@ class BaseNode {
      */
     attachInput (element) {
         this.renderedElement = element;
-        element.addEventListener("change",this.inputListenerHandler);
+        element.addEventListener("change",this.inputChangeHandler);
         this.evaluate();
     }
 
@@ -1186,12 +1260,11 @@ class BaseNode {
      * @param {HTMLInputElement} element 
      */
     detachInput () {
-        this.renderedElement?.removeEventListener("change",this.inputListenerHandler)
+        this.renderedElement?.removeEventListener("change",this.inputChangeHandler)
         this.renderedElement = null;
     }
 
     set(value) {
-        this.accessors.value = value;
         this.setDirty();
         this.evaluate();
     }
@@ -1204,7 +1277,7 @@ class BaseNode {
         } else {
             this.visited = false;
             //Update path
-            this.error = `Node Source: '${this.path.absolutePath}' is part of a dependency loop.`;
+            this.error = `Node Source: '${Path.absolutePathStr(this)}' is part of a dependency loop.`;
             this.isErrorSrc = true;
             this.renderedElement.value = this.accessors.value;
             throw EvalError(this.error);
@@ -1229,17 +1302,8 @@ class BaseNode {
     }
 
     evaluate() {
-        if (this.renderedElement != null) {
-            switch (this.inputType) {
-                case "checkbox":
-                    this.renderedElement.checked = !!this.accessors.value;
-                    break; 
-                case "text":
-                case "number":
-                default:
-                    this.renderedElement.value = this.accessors.value;
-            }
-        }
+        if(document.activeElement !== this.renderedElement)
+            this.updateRenderedElement(this.accessors.value);
         
         if (this.dirty) {
             this.dirty = false;
@@ -1263,27 +1327,31 @@ class BaseNode {
     }
 
     evaluateDependencies() {
+        const root = this.findRoot();
         this.dependencyModifications.forEach((mod) => {
+            if(mod == null || mod.path == null || mod.type == null) return;
             //Update Path
-            const resolvedPaths = mod.path.resolve(this.context,false) ?? null;
+            const resolvedPaths = mod.path.resolve(root,false) ?? null;
             const pathCrawler = (pathResult) => {
                 if(pathResult == null) return;
-                else if (pathResult instanceof BaseNode) {
+                else if (pathResult instanceof Object && pathResult.__type === "pathLeaf") {
                     switch (mod.type) {
                         case "add precedent":
-                            this.registerPrecedent(pathResult,mod.amount);
+                            this.registerPrecedent(pathResult.node,pathResult.accessors,mod.amount);
                             break;
                         case "add dependent":
-                            this.registerDependent(pathResult,mod.amount);
+                            this.registerDependent(pathResult.node,pathResult.accessors,mod.amount);
                             break;
                         case "remove precedent":
-                            this.unregisterPrecedent(pathResult,mod.amount);
+                            this.unregisterPrecedent(pathResult.node,pathResult.accessors,mod.amount);
                             break;
                         case "remove dependent":
-                            this.unregisterDependent(pathResult,mod.amount);
+                            this.unregisterDependent(pathResult.node,pathResult.accessors,mod.amount);
                             break;
                     }
                     return;
+                } else if (pathResult instanceof BaseNode) {
+                    pathCrawler({__type:"pathLeaf",node:pathResult,accessors:["node"]});
                 } else if (Array.isArray(pathResult)) {
                     pathResult.forEach(item => pathCrawler(item));
                     return;
@@ -1304,53 +1372,170 @@ class BaseNode {
         this.dependencyModifications = [];
     }
 
-    registerPrecedent(node, amount = 1) {
+    /**
+     * @param {BaseNode} node 
+     * @param {string[]} accessors 
+     * @param {Number} amount 
+     */
+    registerPrecedent(node, accessors = null, amount = 1) {
         if (node instanceof BaseNode) {
-            this.precedents.set(node,(this.precedents.get(node) ?? 0) + amount);
-            node.dependents.set(this,(node.dependents.get(this) ?? 0) + amount);
+            const newPrecedentVal = this.precedents.get(node) ?? {};
+            const newDependentVal = node.dependents.get(this) ?? {};
+            if (accessors == null) {
+                accessors = ["value"];
+            }
+
+            for (const accessor of accessors) {
+                const pCount = newPrecedentVal?.[accessor] ?? 0;
+                const dCount = newDependentVal?.[accessor] ?? 0;
+                newPrecedentVal[accessor] = pCount + amount;
+                newDependentVal[accessor] = dCount + amount;
+            }
+            this.precedents.set(node,newPrecedentVal);
+            node.dependents.set(this,newDependentVal);
         }
     }
 
-    registerDependent(node, amount = 1) {
+    /**
+     * @param {BaseNode} node 
+     * @param {string[]} accessors 
+     * @param {Number} amount 
+     */
+    registerDependent(node, accessors = null, amount = 1) {
         if (node instanceof BaseNode) {
-            this.dependents.set(node,(this.dependents.get(node) ?? 0) + amount);
-            node.precedents.set(this,(node.precedents.get(this) ?? 0) + amount);
+            const newPrecedentVal = node.precedents.get(this) ?? {};
+            const newDependentVal = this.dependents.get(node) ?? {};
+            if (accessors == null) {
+                accessors = ["value"];
+            }
+            
+            for (const accessor of accessors) {
+                const pCount = newPrecedentVal?.[accessor] ?? 0;
+                const dCount = newDependentVal?.[accessor] ?? 0;
+                newPrecedentVal[accessor] = pCount + amount;
+                newDependentVal[accessor] = dCount + amount;
+            }
+
+            this.dependents.set(node,newDependentVal);
+            node.precedents.set(this,newPrecedentVal);
         }
     }
 
     unregisterDependencies() {
-        for(let [node,amount] of this.precedents) {
-            node.unregisterDependent(this,amount);
+        for(const [node,accessors] of this.precedents) {
+            for (const [accessor,amount] of Object.entries(accessors)) {
+                node.unregisterDependent(this,[accessor],amount);
+            }
         }
 
-        for(let [node,amount] of this.dependents) {
-            node.unregisterPrecedent(this,amount);
+        for(const [node,accessors] of this.dependents) {
+            for (const [accessor,amount] of Object.entries(accessors)){
+                node.unregisterPrecedent(this,[accessor],amount);
+            }
         }
     }
 
-    unregisterPrecedent(node, amount = 1){
+    /**
+     * 
+     * @param {BaseNode} node 
+     * @param {string[]} accessors 
+     * @param {Number} amount 
+     */
+    unregisterPrecedent(node, accessors = null, amount = 1){
         if (node instanceof BaseNode) {
-            let nextVal = (node.dependents.get(this) ?? 0) - amount;
-            if (nextVal > 0) node.dependents.set(this,nextVal);
-            else node.dependents.delete(this);
+            const newPrecedentVal = this.precedents.get(node) ?? {};
+            const newDependentVal = node.dependents.get(this) ?? {};
+            if (accessors == null) {
+                accessors = ["value"];
+            }
+            
+            for (const accessor of accessors) {
+                const pCount = newPrecedentVal?.[accessor] ?? 0;
+                const dCount = newDependentVal?.[accessor] ?? 0;
+                if(newPrecedentVal?.[accessor] != undefined) {
+                    if(pCount > amount) newPrecedentVal[accessor] = pCount - amount;
+                    else delete newPrecedentVal[accessor];
+                }
 
-            nextVal = (this.precedents.get(node) ?? 0) - amount;
-            if (nextVal > 0) this.precedents.set(node,nextVal);
-            else this.precedents.delete(node);
+                if(newDependentVal?.[accessor] != undefined) {
+                    if(dCount > amount) newDependentVal[accessor] = pCount - amount;
+                    else delete newDependentVal[accessor];
+                }
+            }
+
+            if(Object.keys(newPrecedentVal).length > 0) {
+                this.precedents.set(node,newPrecedentVal);
+            } else {
+                this.precedents.delete(node);
+            }
+
+            if(Object.keys(newDependentVal).length > 0) {
+                node.dependents.set(this,newDependentVal);
+            } else {
+                node.dependents.delete(this);
+            }
+
+
+            // let nextVal = (node.dependents.get(this) ?? 0) - amount;
+            // if (nextVal > 0) node.dependents.set(this,nextVal);
+            // else node.dependents.delete(this);
+
+            // nextVal = (this.precedents.get(node) ?? 0) - amount;
+            // if (nextVal > 0) this.precedents.set(node,nextVal);
+            // else this.precedents.delete(node);
 
             this.evaluate();
         }
     }
 
-    unregisterDependent(node, amount) {
+    /**
+     * 
+     * @param {BaseNode} node 
+     * @param {string[]} accessors 
+     * @param {Number} amount 
+     */
+    unregisterDependent(node, accessors = null, amount = 1) {
         if (node instanceof BaseNode) {
-            let nextVal = (node.precedents.get(this) ?? 0) - amount;
-            if (nextVal > 0) node.precedents.set(this,nextVal);
-            else node.precedents.delete(this);
+            const newPrecedentVal = node.precedents.get(this) ?? {};
+            const newDependentVal = this.dependents.get(node) ?? {};
+            if (accessors == null) {
+                accessors = ["value"];
+            }
+            
+            for (const accessor of accessors) {
+                const pCount = newPrecedentVal?.[accessor] ?? 0;
+                const dCount = newDependentVal?.[accessor] ?? 0;
+                if(newPrecedentVal?.[accessor] != undefined) {
+                    if(pCount > amount) newPrecedentVal[accessor] = pCount - amount;
+                    else delete newPrecedentVal[accessor];
+                }
 
-            nextVal = (this.dependents.get(node) ?? 0) - amount;
-            if (nextVal > 0) this.dependents.set(node,nextVal);
-            else this.dependents.delete(node);
+                if(newDependentVal?.[accessor] != undefined) {
+                    if(dCount > amount) newDependentVal[accessor] = pCount - amount;
+                    else delete newDependentVal[accessor];
+                }
+            }
+
+            if(Object.keys(newPrecedentVal).length > 0) {
+                node.precedents.set(this,newPrecedentVal);
+            } else {
+                node.precedents.delete(this);
+            }
+
+            if(Object.keys(newDependentVal).length > 0) {
+                this.dependents.set(node,newDependentVal);
+            } else {
+                this.dependents.delete(node);
+            }
+
+
+            // let nextVal = (node.precedents.get(this) ?? 0) - amount;
+            // if (nextVal > 0) node.precedents.set(this,nextVal);
+            // else node.precedents.delete(this);
+
+            // nextVal = (this.dependents.get(node) ?? 0) - amount;
+            // if (nextVal > 0) this.dependents.set(node,nextVal);
+            // else this.dependents.delete(node);
 
             node.evaluate();
         }
@@ -1364,7 +1549,6 @@ class BaseNode {
     destroy() {
         this.detachInput();
         this.unregisterDependencies();
-        delete this.context;
         delete this.raw;
         delete this.accessors;
     }
@@ -1379,8 +1563,6 @@ class DataNode extends BaseNode {
     }
     /**
      * @param {boolean} virtual 
-     * Remove???
-     * @param {*} context 
      * @param {string} path 
      * @param {{
      *     value:(string|number|boolean|null),
@@ -1389,13 +1571,13 @@ class DataNode extends BaseNode {
      *     listeners?:Array<Object>
      *   }?} dataObj
      */
-    constructor(virtual, parent, context, path, dataObj) {
+    constructor(virtual, parent, dataObj) {
         let {value,min,max,listeners} = {...DataNode.defaultDataObj,...dataObj};
-        super(virtual, parent, context, path,{value:value, min:min, max:max, listeners:listeners});
+        super(virtual, parent,{value:value, min:min, max:max, listeners:listeners});
         //Update Pathes
-        this.value = new ExprValue(value,this.path);
-        this.max = new ExprValue(max,this.path);
-        this.min = new ExprValue(min,this.path);
+        this.value = new ExprValue(value,this);
+        this.max = new ExprValue(max,this);
+        this.min = new ExprValue(min,this);
 
         this.value.precedentPaths.forEach(depPath => {
             this.dependencyModifications.push({type:"add precedent",path:depPath,amount:1});
@@ -1416,8 +1598,35 @@ class DataNode extends BaseNode {
             max: undefined, 
             min: undefined
         }
+
+        this.inputFocusHandler = (event) => {
+            if (this.value.isExpr && this.renderedElement.type !== "text") {
+                this.renderHTML(this.value.value);
+                this.renderedElement.focus();
+            }
+            this.updateRenderedElement(this.value.value);
+        }
+        this.inputBlurHandler = (event) => {
+            this.evaluate();
+            if(this.value.isExpr) this.renderHTML(this.accessors.value);
+        }
+        const baseInputChangeHandler = this.inputChangeHandler;
+        this.inputChangeHandler = (event) => {
+            if(!this.value.isExpr)
+                baseInputChangeHandler(event);
+            else {
+                if(this.renderedElement?.type === "text") {
+                    this.modify({value:this.renderedElement.value})
+                }
+            }
+        }
     }
 
+    renderHTML(value = null) {
+        const rval = super.renderHTML(value);
+        this.renderedElement.addEventListener("focus",this.inputFocusHandler);
+        return rval;
+    }
 
     set({value=undefined,min=undefined,max=undefined}) {
         let success = false;
@@ -1436,7 +1645,7 @@ class DataNode extends BaseNode {
             const dependencyMods = [];
             this.oldPaths = new Map(accessor.precedentPaths);
             //Update Path
-            accessor.modify(newVal,this.path);
+            accessor.modify(newVal,this);
             accessor.precedentPaths.forEach((path, key) => {
                 if (this.oldPaths.has(key)) {
                     this.oldPaths.delete(key)
@@ -1450,13 +1659,13 @@ class DataNode extends BaseNode {
             return dependencyMods;
         }
 
-        if(value != undefined) {
+        if(value != undefined && value !== this.value.value) {
             this.dependencyModifications.push(...getDepMods(this.value,value));
         }
-        if(min != undefined) { 
+        if(min != undefined && min !== this.min.value) { 
             this.dependencyModifications.push(...getDepMods(this.min,min)); 
         }
-        if(max != undefined) { 
+        if(max != undefined && max !== this.max.value) { 
             this.dependencyModifications.push(...getDepMods(this.max,max)); 
         }
 
@@ -1476,90 +1685,135 @@ class DataNode extends BaseNode {
                 //     }
                 // }
 
+                const root = this.findRoot();
+
                 // Evaluate this node
                 // max
-                let result = this.max.evaluate(this.context);
+                let result = this.max.evaluate(root);
                 this.accessors.max = 
                     (Number.isNaN() || result == null)
                     ? null 
                     : result;
 
                 // min
-                result = this.min.evaluate(this.context);
+                result = this.min.evaluate(root);
                 this.accessors.min = 
                     (Number.isNaN(result) || result == null)
                     ? null 
                     : result;
 
-                // base (clamp to min/max if applicable)
-                this.accessors.base = this.value.evaluate(this.context);
+                this.accessors.base = this.value.evaluate(root);
+
+                // calculate modifiers
+                const modOperations = {}
+                for(const [node,accessors] of this.precedents.entries()) {
+                    if (node instanceof ModifierNode){
+                        if(!node.accessors.condition) continue;
+
+                        for (let accessor of Object.keys(accessors)) {
+                            // do something with the node operation and value
+                            // priority order: replace first, then multiply, then add
+                            if(accessor === "node") accessor = "value";
+                            if(modOperations[accessor] == undefined) {
+                                modOperations[accessor] = {};
+                            }
+                            const accessorMods = modOperations[accessor];
+                            switch(node.operation) {
+                                case "replace":
+                                    if(accessorMods?.replace == undefined)
+                                        accessorMods.replace = {__highest: node.tier}
+                                    accessorMods.replace[node.tier] = node.accessors.value;
+                                    if(node.tier > accessorMods.replace.__highest || accessorMods.replace.__highest === "default") {
+                                        accessorMods.replace.__highest = node.tier; // highest tier takes priority. "default" is lowest tier
+                                    }
+                                    break;
+                                case "multiply":
+                                    if(accessorMods.replace != undefined)
+                                        break;
+                                    if(accessorMods?.multiply == undefined)
+                                        accessorMods.multiply = {}
+                                    if(accessorMods.multiply?.[node.tier] == undefined)
+                                        accessorMods.multiply[node.tier] = node.accessors.value
+
+                                    accessorMods.multiply[node.tier] += node.accessors.value; // all multipliers of same tier add
+                                    break;
+                                case "add":
+                                    if(accessorMods.replace != undefined)
+                                        break;
+                                    if(accessorMods?.add == undefined)
+                                        accessorMods.add = {}
+                                    if(accessorMods.add?.[node.tier] == undefined)
+                                        accessorMods.add[node.tier] = node.accessors.value;
+                                    
+                                    if(node.tier === "default") {               // default tier simply adds addition modifiers together
+                                        accessorMods.add[node.tier] += node.accessors.value;
+                                    } else {                                    // specified tier sets strongest value
+                                        if(Math.abs(node.accessors.value) > accessorMods.add[node.tier]) {
+                                            accessorMods.add[node.tier] = node.accessors.value;
+                                        }
+                                    }
+                                    break;
+                                default:
+                                    //Skip over node
+                                    break;
+                            }
+                        }
+                    }
+                }
+                
+                // apply modifiers
+                //this.accessors.value = this.accessors.base;
+
+                const modProcessOrder = [];
+                const {base:modOperationsBase,...modOperationsRest} = modOperations;
+                if(modOperationsBase != undefined)
+                    modProcessOrder.push(modOperationsBase)
+                else
+                    this.accessors.value = this.accessors.base;
+                modProcessOrder.push(...Object.entries(modOperationsRest))
+
+                for (const [accessor,operations] of modProcessOrder) {
+                    if(this.accessors[accessor] != undefined) {
+                        if(operations.replace != undefined) {                   // replace operations overrule other operations
+                            this.accessors[accessor] = operations.replace[operations.replace.__highest]; // highest tier wins
+                        } else {
+                            if(operations.add != undefined) {                   // add comes before multipliers
+                                for(const value of Object.values(operations.add)) {
+                                    this.accessors[accessor] += value;
+                                }
+                            }
+                            if(operations.multiply != undefined) {              // multiply occurs after
+                                for(const value of Object.values(operations.multiply)) {
+                                    this.accessors[accessor] *= value;
+                                }
+                            }
+                        }
+                    }
+                    if(accessor === "base") {
+                        this.accessors.value = this.accessors.base;
+                    }
+                }
+
+                // Clamp all values after the dust settles
                 if (this.accessors.min != null) {
                     this.accessors.base = Math.max(
                         this.accessors.base,
                         this.accessors.min
                     )
+
+                    this.accessors.value = Math.max(
+                        this.accessors.value,
+                        this.accessors.min
+                    )
+                    
                 }
+
                 if (this.accessors.max != null) {
                     this.accessors.base = Math.min(
                         this.accessors.base,
                         this.accessors.max
                     )
-                }
 
-                // apply modifiers
-                
-                for(const node of this.precedents.keys()) {
-                    if (node instanceof ModifierNode){
-                        // do something with the node operation and value
-                        // priority order: replace first, then multiply, then add
-                        switch(node.operation) {
-                            case "replace":
-
-                                break;
-                            case "multiply":
-
-                                break;
-                            case "add":
-                                
-                                break;
-                            default:
-                                //Skip over node
-                                break;
-                        }
-                        for(const [path,accessorList] of node.target.accessors.entries()) {
-                            //update path?
-                            if(path.includes(this.path)) {
-                                // do somthing with accesorList
-                                // default to 'value'
-                            }
-                        }
-                    }
-
-                    
-                    /*
-                    someModifier#modifer {
-                        target: "Ability Scores.*.score#value,max;Equipment.capacity#max"
-                    } 
-                        => target.accessors: {
-                            "Ability Scores.*.score":['value','max'],
-                            "Equipment.capacity":['max']
-                        }
-
-                        nodes[0].path = "Ability Scores.Strength.score"
-                        nodes[1].path = "Ability Scores.Chraisma.score"
-                     */
-                }
-
-                this.accessors.value = this.accessors.base;
-
-                // Clamp value after the dust settles
-                if (this.accessors.min != null) {
-                    this.accessors.value = Math.max(
-                        this.accessors.value,
-                        this.accessors.min
-                    )
-                }
-                if (this.accessors.max != null) {
                     this.accessors.value = Math.min(
                         this.accessors.value,
                         this.accessors.max
@@ -1570,7 +1824,7 @@ class DataNode extends BaseNode {
                 this.isErrorSrc = true;
                 this.error = e.message;
                 //Update Path
-                e.message = `Node Source: ${this.path.absolutePath} ${e.message}`
+                e.message = `Node Source: ${Path.absolutePathStr(this)} ${e.message}`
                 throw e;
             }
         }
@@ -1589,17 +1843,6 @@ class DataNode extends BaseNode {
     destroy () {
         super.destroy();
     }
-
-    modifierAdd(tier){
-        
-    }
-    
-    modifierMultiply(tier){
-        
-    }
-    modifierReplace(tier){
-        
-    }
 }
 
 class ModifierNode extends BaseNode {
@@ -1615,34 +1858,61 @@ class ModifierNode extends BaseNode {
      *  tier: number
      * }} dataObj
      */
-    constructor(virtual, parent, context, path, dataObj) {
-        const {target,operation,value,tier=0} = dataObj;
-        super(virtual, parent, context,path, {target,operation,value,tier});
+    constructor(virtual, parent, dataObj) {
+        const {target,operation,value,condition,tier=0} = dataObj;
+        super(virtual, parent, {target,operation,value,condition,tier});
         //Update Path
-        this.target = new Path(target, this.path);
+        if(target != undefined)
+            this.target = new Path(target, this);
+        else
+            this.target = null;
         this.dependencyModifications.push({type:"add dependent",path:this.target,amount:1});
 
         this.operation = operation;
-        this.tier = tier;
+        this.tier = "default";
+        if (typeof(tier) === "string") {
+            this.tier = sanatizeKey(tier);
+        } else if (typeof(tier) === "number") {
+            this.tier = tier;
+        }
         //Update Path here too
-        this.value = new ExprValue(value, this.path);
+        this.value = new ExprValue(value, this);
         this.value.precedentPaths.forEach(depPath => {
             this.dependencyModifications.push({type:"add precedent",path:depPath,amount:1});
         })
+
+        this.condition = new ExprValue(condition ?? true, this);
+        this.condition.precedentPaths.forEach(depPath => {
+            this.dependencyModifications.push({type:"add precedent",path:depPath,amount:1});
+        })
+
+        this.accessors = {
+            value: value,
+            condition: condition ?? true
+        }
 
     }
 
     evaluate() {
         if (this.dirty) {
-            this.accessors.value = this.value.evaluate(this.context);
+            const root = this.findRoot();
+            this.accessors.value = this.value.evaluate(root);
+            this.accessors.condition = this.condition.evaluate(root);
         }
         super.evaluate();
+    }
+
+    set({value = undefined}) {
+        let success = false;
+        if(value != undefined && this.value.set(value)) success = true;
+        if(success) this.setDirty();
+        this.evaluate();
     }
 }
 
 class PlaceholderNode extends BaseNode{
-    constructor(virtual, parent, context, path, data) {
-        super(virtual,parent,context,path, data)
+    constructor(virtual, parent, data) {
+        super(virtual,parent, data)
     }
 }
 
