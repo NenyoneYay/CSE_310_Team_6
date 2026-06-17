@@ -229,6 +229,7 @@ class Character {
         }
         contextRecursor(contextData);
         this.root = contextData;
+        // Make root node into root node
         delete this.root.__parent;
         newNodes.forEach((newNode) => {
             // register dependencies
@@ -1177,8 +1178,17 @@ class BaseNode {
                     if (this.renderedElement != null)
                         newVal = this.renderedElement.value;
             }
-            this.set({value:newVal});
+            if(document.activeElement === this.renderedElement) {
+                this.set({value:newVal});
+            } else  {
+                this.evaluate();
+            }
         }
+
+        this.inputFocusHandler = (event) => {
+            
+        }
+
         this.inputBlurHandler = (event) => {
             this.evaluate();
         }
@@ -1599,6 +1609,7 @@ class DataNode extends BaseNode {
             min: undefined
         }
 
+        const baseInputFocusHandler = this.inputFocusHandler;
         this.inputFocusHandler = (event) => {
             if (this.value.isExpr && this.renderedElement.type !== "text") {
                 this.renderHTML(this.value.value);
@@ -1708,6 +1719,7 @@ class DataNode extends BaseNode {
                 const modOperations = {}
                 for(const [node,accessors] of this.precedents.entries()) {
                     if (node instanceof ModifierNode){
+
                         if(!node.accessors.condition) continue;
 
                         for (let accessor of Object.keys(accessors)) {
@@ -1777,14 +1789,16 @@ class DataNode extends BaseNode {
                         if(operations.replace != undefined) {                   // replace operations overrule other operations
                             this.accessors[accessor] = operations.replace[operations.replace.__highest]; // highest tier wins
                         } else {
-                            if(operations.add != undefined) {                   // add comes before multipliers
-                                for(const value of Object.values(operations.add)) {
-                                    this.accessors[accessor] += value;
-                                }
-                            }
-                            if(operations.multiply != undefined) {              // multiply occurs after
+
+                            if(operations.multiply != undefined) {              // TODO: Come back to this and decide if multiply or add comes first
                                 for(const value of Object.values(operations.multiply)) {
                                     this.accessors[accessor] *= value;
+                                }
+                            }
+
+                            if(operations.add != undefined) {                   
+                                for(const value of Object.values(operations.add)) {
+                                    this.accessors[accessor] += value;
                                 }
                             }
                         }
