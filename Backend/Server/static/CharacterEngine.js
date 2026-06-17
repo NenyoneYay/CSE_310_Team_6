@@ -1161,7 +1161,7 @@ class BaseNode {
 
         this.inputType = null;
         this.renderedElement = null;
-        this.renderedValue = null;
+
         this.inputChangeHandler = (event) => {
             let newVal = this.accessors.value;
             switch (this.inputType) {
@@ -1178,11 +1178,10 @@ class BaseNode {
                     if (this.renderedElement != null)
                         newVal = this.renderedElement.value;
             }
-            if(document.activeElement === this.renderedElement) {
+            if(document.activeElement === this.renderedElement)
                 this.set({value:newVal});
-            } else  {
+            else
                 this.evaluate();
-            }
         }
 
         this.inputFocusHandler = (event) => {
@@ -1230,11 +1229,11 @@ class BaseNode {
             newElement.type = this.inputType ?? "text";
             if(this.renderedElement != null) {
                 const oldElement = this.renderedElement;
-                oldElement.parentElement.replaceChild(newElement,oldElement);
+                oldElement.replaceWith(newElement);
             }
             this.renderedElement = newElement;
             this.updateRenderedElement(value);
-            this.renderedElement.addEventListener("change",this.inputChangeHandler);
+            this.renderedElement.addEventListener("input",this.inputChangeHandler);
             this.renderedElement.addEventListener("blur", this.inputBlurHandler);
         }
         return this.renderedElement;
@@ -1251,7 +1250,6 @@ class BaseNode {
                 default:
                     this.renderedElement.value = value;
             }
-            this.renderedValue = value;
         }
     }
 
@@ -1627,7 +1625,9 @@ class DataNode extends BaseNode {
                 baseInputChangeHandler(event);
             else {
                 if(this.renderedElement?.type === "text") {
-                    this.modify({value:this.renderedElement.value})
+                    this.modify({value:this.renderedElement.value});
+                } else {
+                    this.evaluate();
                 }
             }
         }
