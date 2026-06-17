@@ -92,16 +92,19 @@ details div {
 }
 
 #html-content{
-    max-width: 30%;
     border-right: 1px solid black;
-    height:700px;
 }
 
 summary{
     border:1px solid black;
 }
-#html content input{
-    width:5ch;
+
+summary:hover {
+    cursor: pointer;
+}
+
+#html-content input{
+    max-width: 100%;
 }
 li{
     list-style:none;

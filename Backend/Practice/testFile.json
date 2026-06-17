@@ -40,7 +40,8 @@
                 {"value":20},
                 {"value":30}
             ],
-            "sideNode":"=data('.multiNode.1')"
+            "sideNode":"=data('.multiNode.1')",
+            "accessor":"=data('Ability Scores.Strength.score#max')"
         },
         "Equipment":{
             "capacity":"=data('Ability Scores.Strength.score') * 15",
@@ -67,50 +68,30 @@
         "constructor":"malicious code",
         "Modifiers":{
             "Save Increase#modifier":{
-                "targets":["Ability Scores.*.save"],
-                "conditions":["items.*.equipped"]
-            }
-        },
-        "Classes":{
-            "Warlock":{
-                "Traits":{
-                    "Gift of Strength":{
-                        "desc":"bla",
-                        "Strength Boost#modifier":{
-                            "target":"Ability Scores.Strength.score",
-                            "operation":"add",
-                            "value":5
-                        },
-                        "Super boost#modifer":{
-                            "target":"Ability Scores.Strength.score#value,max",
-                            "operation":"replace",
-                            "tier":20000000,
-                            "value":19
-                        }
-                    }
-                }
-            }
-        },
-        "Race":{
-            "Elf":{
-                "Traits":{
-                    "Speed#modifier":{
-                        "target": "Speed",
-                        "operation":"replace",
-                        "value":30,
-                        "conditions":["= map(data(\"Equipment.items[*].(type,equipped)\",false), 'x[1] ? x[0] : [PLACEHOLDER NEEDS TO BE EMPTY STRING]')"],
-                        "asdf":       "      [['armor',true],['armor',false],['Shield',true],[undefined,false]] => ['armor',true]"
-                    },
-                    "Elf Dexterity":{
-                        "desc": "blablabla",
-                        "Dexterity Boost#modifier":{
-                            "target": "Ability Scores.Dexterity.score",
-                            "operation": "add",
-                            "value": 2
-                        }
-
-                    }
-                }
+                "target":"Ability Scores.*.save",
+                "operation":"add",
+                "value":2
+            },
+            "beltEquipped":true,
+            "Strength Boost":{
+                "__type":"modifier",
+                "target":"Ability Scores.Strength.score",
+                "operation":"add",
+                "value":5
+            },
+            "Belt of Strength":{
+                "__type":"modifier",
+                "target":"Ability Scores.Strength.score#value,max",
+                "operation":"replace",
+                "tier":20000000,
+                "value":25,
+                "condition":"=data('.beltEquipped')"
+            },
+            "Dexterity Boost":{
+                "__type":"modifier",
+                "target": "Ability Scores.Dexterity.score",
+                "operation": "add",
+                "value": 2
             }
         }
     }
