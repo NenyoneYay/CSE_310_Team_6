@@ -1,48 +1,3 @@
-const idRegistry = new Set();
-
-function genId() {
-
-    let id;
-
-    do {
-        id = "id_" + Math.random().toString(36).slice(2, 9); 
-    }
-    while (idRegistry.has(id));
-
-    idRegistry.add(id);
-    return id;
-
-}
-function registerIds(sheet) {
-
-    idRegistry.clear();
-    const seen = new Set();
-    for (const sec of sheet.content) {
-
-        if (seen.has(sec.id)) 
-            sec.id = genId();
-        else {
-            seen.add(sec.id); 
-            idRegistry.add(sec.id); 
-        }
-
-        for (const field of sec.content) {
-
-            if (seen.has(field.id)) 
-                field.id = genId();
-            else {
-                seen.add(field.id); idRegistry.add(field.id); 
-            }
-    
-        }
-
-    }
-
-}
-
-function releaseId(id) {
-    idRegistry.delete(id); 
-}
 
 let sheet = {
 
@@ -53,24 +8,20 @@ let sheet = {
     },
     content: [
         {
-            id: null, 
             type: "section",
             label: "Basics", 
             content: [
                 {
-                    id: null, 
                     label: "Name",  
                     type: "text",   
                     value: "" 
                 },
                 {
-                    id: null, 
                     label: "Class", 
                     type: "text",   
                     value: "" 
                 },
                 {
-                    id: null, 
                     label: "Level", 
                     type: "number", 
                     value: "1" 
@@ -78,41 +29,34 @@ let sheet = {
             ]
         },
         {
-            id: null, 
             label: "Ability scores", 
             content: [
                 {
-                    id: null, 
                     label: "Strength",     
                     type: "number", 
                     value: "10" 
                 },
                 {
-                    id: null, 
                     label: "Dexterity",    
                     type: "number", 
                     value: "10" 
                 },
                 {
-                    id: null, 
                     label: "Constitution", 
                     type: "number", 
                     value: "10" 
                 },
                 {
-                    id: null, 
                     label: "Intelligence", 
                     type: "number", 
                     value: "10" 
                 },
                 {
-                    id: null, 
                     label: "Wisdom",       
                     type: "number", 
                     value: "10" 
                 },
                 {
-                    id: null, 
                     label: "Charisma",     
                     type: "number", 
                     value: "10" 
@@ -120,24 +64,20 @@ let sheet = {
             ]
         },
         {
-            id: null, 
             label: "Combat", 
             type: "section",
             content: [
                 {
-                    id: null, 
                     label: "HP",    
                     type: "number", 
                     value: "" 
                 },
                 {
-                    id: null, 
                     label: "AC",    
                     type: "number", 
                     value: "" 
                 },
                 {
-                    id: null, 
                     label: "Speed", 
                     type: "text",   
                     value: "30ft" 
@@ -148,13 +88,6 @@ let sheet = {
 
 };
 
-for (const sec of sheet.content) {
-
-    sec.id = genId();
-    for (const field of sec.content) 
-        field.id = genId();
-
-}
 
 let dragSrc = null, dragType = null, dragSrcParent = null;
 let dragSrcElem = null, dragSrcSepElem = null;
@@ -225,7 +158,6 @@ function makeField(label, type, parent, container) {
             fd = label;
         } else if (typeof(label) === "string") {
             fd = {
-                id: genId(),
                 label,
                 type,
                 value:""
@@ -242,9 +174,9 @@ function makeField(label, type, parent, container) {
     const fEl = document.createElement("div");
     fEl.className = "field"; fEl.dataset.fid = data.id;
 
-    if(!editMode) {
+    if(!previewMode) {
         const handle = document.createElement("i");
-        handle.draggable = !editMode;
+        handle.draggable = !previewMode;
         handle.className = "ti ti-grip-vertical drag-handle";
         handle.setAttribute("aria-hidden","true");
 
@@ -267,37 +199,32 @@ function makeField(label, type, parent, container) {
     badge.className = "field-type-badge";
     badge.textContent = data.type;
 
-    const delF = document.createElement("button");
-    delF.className = "delete-btn";
-    delF.title = "Remove field";
-    delF.innerHTML = `<i class="ti ti-x"></i>`;
-    if(editMode) {
-        delF.classList.add("hidden")
-    } else {
-        delF.classList.remove("hidden")
-    }
-    // delF.style.display = editMode ? "none" : "";
-    delF.addEventListener("click", e => {
-
-        e.stopPropagation();
-        const fIdx = parent.content.findIndex(f => f.id === data.id);
-        releaseId(data.id);
-        parent.content.splice(fIdx, 1);
-        fEl.remove();
-
-        if(parent.content.length <= 0) {
-            makeEmptyMessage(container);
-        }
-
-        updatePreview();
-        
-    });
-
-    
     fEl.appendChild(inner);
     fEl.appendChild(badge);
-    fEl.appendChild(delF);
-    if(!editMode) {
+    if(!previewMode) {
+        const delF = document.createElement("button");
+        delF.className = "delete-btn";
+        delF.title = "Remove field";
+        delF.innerHTML = `<i class="ti ti-x"></i>`;
+        delF.addEventListener("click", e => {
+
+            e.stopPropagation();
+            const fIdx = parent.content.findIndex(f => f === data);
+            releaseId(data.id);
+            parent.content.splice(fIdx, 1);
+            
+            // Update HTML
+            fEl.remove();
+            sepEl.remove();
+            updatePreview();
+
+            if(parent.content.length <= 0) {
+                makeEmptyMessage(container);
+            }
+            
+        });
+        fEl.appendChild(delF);
+
         fEl.addEventListener("dragstart", e => {
 
             if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") 
@@ -316,7 +243,7 @@ function makeField(label, type, parent, container) {
         });
         fEl.addEventListener("dragover", e => {
 
-            if (dragSrcParent === parent && dragSrc !== data.id) {
+            if (dragSrcParent === parent && dragSrc !== data) {
 
                 e.preventDefault(); 
                 e.stopPropagation(); 
@@ -332,9 +259,9 @@ function makeField(label, type, parent, container) {
             e.preventDefault(); 
             e.stopPropagation();
 
-            if (dragSrcParent === parent && dragSrc !== data.id) {
-                const fromIdx = dragSrcParent.content.findIndex(f => f.id === dragSrc.id);
-                const toIdx = dragSrcParent.content.findIndex(f => f.id === data.id );
+            if (dragSrcParent === parent && dragSrc !== data) {
+                const fromIdx = dragSrcParent.content.findIndex(f => f === dragSrc);
+                const toIdx = dragSrcParent.content.findIndex(f => f === data );
                 const [moved] = dragSrcParent.content.splice(fromIdx, 1);
                 parent.content.splice(toIdx, 0, moved);
                 
@@ -368,7 +295,6 @@ function makeSection(label, parent, container) {
             sd = label;
         } else if (typeof(label) === "string") {
             sd = {
-                id: genId(),
                 label,
                 type:"section",
                 content:[]
@@ -389,9 +315,9 @@ function makeSection(label, parent, container) {
     const hdr = document.createElement("div");
     hdr.className = "section-header";
 
-    if(!editMode) {
+    if(!previewMode) {
         const handle = document.createElement("i");
-        handle.draggable = !editMode;
+        handle.draggable = !previewMode;
         handle.className = "ti ti-grip-vertical drag-handle";
         handle.setAttribute("aria-hidden","true");
 
@@ -408,28 +334,28 @@ function makeSection(label, parent, container) {
     });
     hdr.appendChild(titleInp);
 
-    const delBtn = document.createElement("button");
-    delBtn.className = "delete-btn";
-    delBtn.title = "Remove section";
-    delBtn.innerHTML = `<i class="ti ti-x"></i>`;
-    if(editMode) {
-        delBtn.classList.add("hidden")
-    } else {
-        delBtn.classList.remove("hidden")
-    }
-    // delBtn.style.display = editMode ? "none" : "";
-    delBtn.addEventListener("click", () => {
-        data.content.forEach(f => releaseId(f.id));
-        const secIdx = parent.content.findIndex(s => s.id === data.id);
-        parent.content.splice(secIdx, 1);
-        releaseId(data.id);
-        // Update HTML
-        secEl.remove();
-        updatePreview();
-    });
-    hdr.appendChild(delBtn);
+    if(!previewMode) {
+        const delBtn = document.createElement("button");
+        delBtn.className = "delete-btn";
+        delBtn.title = "Remove section";
+        delBtn.innerHTML = `<i class="ti ti-x"></i>`;
+        // delBtn.style.display = editMode ? "none" : "";
+        delBtn.addEventListener("click", () => {
+            data.content.forEach(f => releaseId(f.id));
+            const secIdx = parent.content.findIndex(s => s === data);
+            parent.content.splice(secIdx, 1);
+            releaseId(data.id);
+            // Update HTML
+            secEl.remove();
+            sepEl.remove();
+            updatePreview();
 
-    if(!editMode) {
+            if(parent.content.length <= 0) {
+                makeEmptyMessage(container);
+            }
+        });
+        hdr.appendChild(delBtn);
+
         hdr.addEventListener("dragstart", e => {
 
             dragType = "section"; dragSrc = data; dragSrcParent = parent;
@@ -444,7 +370,7 @@ function makeSection(label, parent, container) {
         });
         hdr.addEventListener("dragover", e => {
 
-            if (dragSrcParent === parent && dragSrc !== data.id) {
+            if (dragSrcParent === parent && dragSrc !== data) {
                 e.preventDefault(); 
                 e.dataTransfer.dropEffect = "move";
 
@@ -456,9 +382,9 @@ function makeSection(label, parent, container) {
         hdr.addEventListener("drop", e => {
 
             e.preventDefault();
-            if (dragSrcParent === parent && dragSrc !== data.id) {
-                const fromIdx = dragSrcParent.content.findIndex(s => s.id === dragSrc.id);
-                const toIdx = dragSrcParent.content.findIndex(s => s.id === data.id );
+            if (dragSrcParent === parent && dragSrc !== data) {
+                const fromIdx = dragSrcParent.content.findIndex(s => s === dragSrc);
+                const toIdx = dragSrcParent.content.findIndex(s => s === data );
                 const [moved] = dragSrcParent.content.splice(fromIdx, 1);
                 parent.content.splice(toIdx, 0, moved);
                 
@@ -495,7 +421,7 @@ function makeSection(label, parent, container) {
     secEl.appendChild(hdr);
     secEl.appendChild(fieldList);
 
-    if(!editMode) {
+    if(!previewMode) {
         const addRow = document.createElement("div");
         addRow.className = "add-field-row";
 
@@ -623,7 +549,6 @@ document.getElementById("file-input").addEventListener("change", e => {
             if (!parsed.content) {
                 alert("Invalid character sheet JSON."); return; 
             }
-            registerIds(parsed); sheet = parsed; 
             render();
             
         } catch {
@@ -653,15 +578,15 @@ document.getElementById("btn-preview").addEventListener("click", () => {
 });
     
 // hides buttons while not in edit mode
-let editMode = false;
+let previewMode = false;
 const modeBtn = document.getElementById("btn-mode");
 modeBtn.addEventListener("click", () => {
-    editMode = !editMode;
-    modeBtn.innerHTML = editMode
+    previewMode = !previewMode;
+    modeBtn.innerHTML = previewMode
         ? `<i class="ti ti-pencil-off"></i> Edit mode`
         : `<i class="ti ti-pencil"></i> Edit mode`;
     
-    if(editMode) {
+    if(previewMode) {
         sectionLabelInp.classList.add("hidden");
         sectionAddBtn.classList.add("hidden");
     } else {
