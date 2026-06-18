@@ -1,26 +1,36 @@
 {% extends "base.html" %}
 
+{% block head %}
+    {{super()}}
+    <link rel="stylesheet" href="{{ url_for('static', filename='home.css') }}" >
+{% endblock %}
+
 {% block content %}
         <section id="welcome-banner">
             <h1>Welcome to GnollPointer!</h1>
-            <p>We set out to make the most customizable TTRPG online character sheet possible. We hope you enjoy.</p>
+            <p>Create a character sheet for any TTRPG.</p>
         </section>
         <section id="gallery">
             <div class="gallery-grid">
-                <figure class="gallery-item">
-                    <img src="https://placecats.com/300/200" alt="Random cat">
-                    <figcaption>Here we can put an image caption</figcaption>
-                </figure>
-                <figure class="gallery-item">
-                    <img src="https://placecats.com/300/200?fit=contain&position=top" alt="Random cat">
-                    <figcaption>Here we can put an image caption</figcaption>
-                </figure>
+                
+                <a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ" class="link_card">
+                    <img src="{{ url_for('static', filename='images/Placeholder.png')}}">
+                    <p>
+                        New Character
+                    </p>
+                </a>
+
+                <a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ" class="link_card">
+                    <img src="{{ url_for('static', filename='images/Placeholder.png')}}">
+                    <p>
+                        My Characters
+                    </p>
+                </a>
                 
             </div>
         </section>
-        <section id="character-intro">
-            <h2>Click here to start your adventure!</h2>
-            <button id="create-character">Create Character</button>
-            <button id = "upload-character">Load Character</button>
+        <section id="other-stuff">
+            <a href="style_page.html" id="style-link">Change Style?</a>
         </section>
+        
 {% endblock %}

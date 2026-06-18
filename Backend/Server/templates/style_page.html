@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block head %}
+    {{super()}}
+    <link rel="stylesheet" href="{{ url_for('static', filename='style_page.css') }}" >
+{% endblock %}
+
+{% block content %}
+        <a href="index.html" id="back_link">Back</a>
+        <div class="style-category" id="font-category">
+            <div class="style-setting">
+                
+            </div>
+        </div>
+        
+{% endblock %}
