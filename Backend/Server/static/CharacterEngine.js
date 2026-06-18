@@ -1067,6 +1067,7 @@ class BaseNode {
             }
             this.renderedElement = newElement;
             this.updateRenderedElement(value);
+            this.renderedElement.addEventListener("focus", this.inputFocusHandler);
             this.renderedElement.addEventListener("input",this.inputChangeHandler);
             this.renderedElement.addEventListener("blur", this.inputBlurHandler);
         }
@@ -1432,6 +1433,9 @@ class DataNode extends BaseNode {
             this.updateRenderedElement(this.value.value);
         }
         this.inputBlurHandler = (event) => {
+            if (this.value.isExpr && this.renderedElement?.type === "text"){
+                this.modify({value:this.renderedElement.value});
+            }
             this.evaluate();
             if(this.value.isExpr) this.renderHTML(this.accessors.value);
         }
@@ -1439,20 +1443,7 @@ class DataNode extends BaseNode {
         this.inputChangeHandler = (event) => {
             if(!this.value.isExpr)
                 baseInputChangeHandler(event);
-            else {
-                if(this.renderedElement?.type === "text") {
-                    this.modify({value:this.renderedElement.value});
-                } else {
-                    this.evaluate();
-                }
-            }
         }
-    }
-
-    renderHTML(value = null) {
-        const rval = super.renderHTML(value);
-        this.renderedElement.addEventListener("focus",this.inputFocusHandler);
-        return rval;
     }
 
     set({value=undefined,min=undefined,max=undefined}) {
@@ -1467,7 +1458,11 @@ class DataNode extends BaseNode {
     }
 
     modify({value=undefined,min=undefined,max=undefined}) {
-        /** @param {ExprValue} accessor */
+        /**
+         * @param {ExprValue} accessor 
+         * @param {string|boolean|number} newVal 
+         * @returns {Array<{type:string,path:Path,amount:Number}>}
+         */
         const getDepMods = (accessor,newVal) => {
             const dependencyMods = [];
             this.oldPaths = new Map(accessor.precedentPaths);
@@ -1712,6 +1707,26 @@ class ModifierNode extends BaseNode {
             condition: condition ?? true
         }
 
+        this.inputFocusHandler = (event) => {
+            if (this.value.isExpr && this.renderedElement.type !== "text") {
+                this.renderHTML(this.value.value);
+                this.renderedElement.focus();
+            }
+            this.updateRenderedElement(this.value.value);
+        }
+        this.inputBlurHandler = (event) => {
+            if (this.value.isExpr && this.renderedElement?.type === "text"){
+                this.modify({value:this.renderedElement.value});
+            }
+            this.evaluate();
+            if(this.value.isExpr) this.renderHTML(this.accessors.value);
+        }
+        const baseInputChangeHandler = this.inputChangeHandler;
+        this.inputChangeHandler = (event) => {
+            if(!this.value.isExpr)
+                baseInputChangeHandler(event);
+        }
+
     }
 
     evaluate() {
@@ -1721,6 +1736,43 @@ class ModifierNode extends BaseNode {
             this.accessors.condition = this.condition.evaluate(root);
         }
         super.evaluate();
+    }
+
+    modify({value = undefined, condition = undefined}) {
+        /**
+         * @param {ExprValue} accessor 
+         * @param {string|boolean|number} newVal 
+         * @returns {Array<{type:string,path:Path,amount:Number}>}
+         */
+        const getDepMods = (accessor,newVal) => {
+            const dependencyMods = [];
+            this.oldPaths = new Map(accessor.precedentPaths);
+            //Update Path
+            accessor.modify(newVal,this);
+            accessor.precedentPaths.forEach((path, key) => {
+                if (this.oldPaths.has(key)) {
+                    this.oldPaths.delete(key)
+                } else {
+                    dependencyMods.push({type:"add precedent",path:path,amount:1})
+                }
+            });
+            this.oldPaths.forEach((path,key) => {
+                dependencyMods.push({type:"remove precedent",path:path,amount:1})
+            })
+            return dependencyMods;
+        }
+
+        if(value != undefined && value !== this.value.value) {
+            this.dependencyModifications.push(...getDepMods(this.value,value));
+        }
+
+        if(condition != undefined && condition !== this.condition.value) {
+            this.dependencyModifications.push(...getDepMods(this.condition,condition));
+        }
+
+        this.evaluateDependencies();
+        this.setDirty();
+        this.evaluate();
     }
 
     set({value = undefined}) {
