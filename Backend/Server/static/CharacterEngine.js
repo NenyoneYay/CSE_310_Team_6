@@ -79,7 +79,7 @@ class Character {
     constructor(fileData) {
         this.root = undefined;
         this.parseFile(fileData)
-        // // here is some prototype data to get the logic down first
+        // // here is some prototype data for rules
         // this.fileData = {
         //     "rules":{
         //         "Stats.*":[
@@ -89,52 +89,8 @@ class Character {
         //             }
         //         ]
         //     },
-        //     "data":{
-        //         "HP#data":{
-        //             "value":30,
-        //             "max":110,
-        //             "eventTriggers":[
-        //                 {
-        //                     "events":["Long Rest"],
-        //                     "action":{
-        //                         "set":{"target":"#value","value":"#max"}
-        //                     }
-        //                 }
-        //             ]
-        //         },
-        //         "Stats":{
-        //             "Strength":{
-        //                 "score#data": {
-        //                     "value":10,
-        //                     "max":20
-        //                 }
-        //             }
-        //         }
-        //     },
-        //     "manualEvents":[
-        //         "Long Rest",
-        //         "Short Rest",
-        //         "Day Start",
-        //         "Start Combat"
-        //     ],
-        //     "modifiers":{
-
-        //     }
+        //     "data": ...
         // }
-
-        // this.expectedRoot = {
-        //     "HP":new DataNode("HP",{
-        //         value:30,
-        //         max:110
-        //     }),
-        //     "Stats":{
-        //         "Strength":{
-        //             "score": new DataNode(false,"Stats.Strength.score",{value:0, max:20}),
-        //             "mod":   new DataNode(true ,"Stats.Strength.mod"  ,{value:"floor(data('.score')/2) - 5"}),
-        //             "save":  new DataNode(true ,"Stats.Strength.save" ,{value:"data('.mod')"               })
-        //         }
-        //     }
-        // };
 
     }
 
@@ -229,6 +185,7 @@ class Character {
         }
         contextRecursor(contextData);
         this.root = contextData;
+        // Make root node into root node
         delete this.root.__parent;
         newNodes.forEach((newNode) => {
             // register dependencies
@@ -414,13 +371,6 @@ class Path {
         } else {
             this.tokens = this.tokenize(path);
         }
-
-        //Ability Scores.(Strength,Charisma).score#value
-        // => [<Strength Score val>,<Charisma Score val>]
-        // resolveAccessors = false => [<Strength.score>,<Charisma.score>]
-
-        //Ability Scores.Strength.score#value,max;Equipment.carrying capacity#max
-        /** @type Map<String,string[]> */
 
         Path.tokensRegex.lastIndex = 0;
     }
@@ -934,7 +884,6 @@ ExprValue.parser.functions.prod = function (arr) {
     return arr.reduce((pv,cv) => pv * cv,0);
 }
 ExprValue.parser.functions.aprod = function (arr1, arr2) {
-    console.log("aprod:",arr1,arr2)
     const rval = new Array(Math.max(arr1.length,arr2.length));
     for(let i = 0;i < rval.length;i++) {
         if(i < arr1.length && i<arr2.length) rval[i] = arr1[i] * arr2[i];
@@ -956,120 +905,6 @@ ExprValue.parser.functions.flatten = function (arr) {
     return arr.reduce(reducer,[]);
 }
 
-/*
-    "data":{
-        HP: DataNode {
-            value:10,
-            min:0,
-            max:110
-        },
-        Ability Scores: Container {
-            parent: null,
-            contents: {
-                Strength: Container {
-                    parent: Container -> Ability Scores
-                    contents: {
-                        score: DataNode {parent:Container -> Strength, value: 10, min: 0, max: 20},
-                        mod: DataNode {value:"=floor(data('.score')/2)-5"}
-                        save: DataNode {value:"=.mod"}
-                    }
-                }
-            }
-        },
-        Equipment: Container {
-            parent: null,
-            contents: {
-                items: Container {
-                    parent: Container -> Equipment,
-                    contents: Array<Container>[
-                        {
-                            parent: Container -> items,
-                            contents: {
-                                name: Data
-                                weight: Data
-                                equipped: Data
-                                modifiers: Modifier
-                            }
-                        }
-                    ]
-                }
-            }
-        }
-    }
-
-    {
-        "Equipment": Container {
-            "__okeys":["carrying","capacity","other","items"]
-            "carrying":"=sum(data('.items[*].weight'))"
-            "capacity":"=data('Ability Scores.Strength.score') * 15"
-            "other": [
-                10,
-                20,
-                30
-            ],
-            "items":[
-                [
-                    [
-
-                    ]
-                ]
-                Container {
-                    "__okeys":["name","description","weight","equipped","modifier"]
-                    "name": "shield",
-                    "weight": 5,
-                    "equipped": false,
-                    "modifier": {
-                        "__type": "modifier",
-                        "target":
-                    }
-                },
-                Container {
-                    "__okeys":["name","description","weight","equipped","modifier","equip","unequip"]
-                    "name": "shield",
-                    "qty":1,
-                    "description": "",
-                    "weight": 5,
-                    "equipped": true,
-                    "modifier":{
-                        "__type": "modifier",
-                        "target": "Combat.AC",
-                        "operation":"add",
-                        "value": 2,
-                        "condition":"=data('.equipped')"
-                    },
-                    "equip":{
-                        "__type": "action",
-                        "operation":"replace",
-                        "target":".equipped",
-                        "value":true,
-                        "condition":"=compareEach("!=",data('..[*].(name,equipped)'),[data('.name'),true])"
-                    },
-                    "unequip":{
-                        "__type": "action",
-                        "operation":"replace",
-                        "target":".equipped",
-                        "value":false
-                    }
-                },
-            ]
-        }
-    }
-
-    {
-        "data"...,
-        "UI":{
-            "settings":{
-                "keyOrder":["Ability Scores"],
-                "Ability Scores":{
-                    "keyOrder":["Strength","Wisdom","Charisma"],
-                    "Strength"
-                }
-            }
-        }
-    }
-
-    
-*/
 class Container {
     static defaultUI_info = {
         direction: "column",
@@ -1160,7 +995,7 @@ class BaseNode {
 
         this.inputType = null;
         this.renderedElement = null;
-        this.renderedValue = null;
+
         this.inputChangeHandler = (event) => {
             let newVal = this.accessors.value;
             switch (this.inputType) {
@@ -1177,8 +1012,16 @@ class BaseNode {
                     if (this.renderedElement != null)
                         newVal = this.renderedElement.value;
             }
-            this.set({value:newVal});
+            if(document.activeElement === this.renderedElement)
+                this.set({value:newVal});
+            else
+                this.evaluate();
         }
+
+        this.inputFocusHandler = (event) => {
+            
+        }
+
         this.inputBlurHandler = (event) => {
             this.evaluate();
         }
@@ -1220,11 +1063,12 @@ class BaseNode {
             newElement.type = this.inputType ?? "text";
             if(this.renderedElement != null) {
                 const oldElement = this.renderedElement;
-                oldElement.parentElement.replaceChild(newElement,oldElement);
+                oldElement.replaceWith(newElement);
             }
             this.renderedElement = newElement;
             this.updateRenderedElement(value);
-            this.renderedElement.addEventListener("change",this.inputChangeHandler);
+            this.renderedElement.addEventListener("focus", this.inputFocusHandler);
+            this.renderedElement.addEventListener("input",this.inputChangeHandler);
             this.renderedElement.addEventListener("blur", this.inputBlurHandler);
         }
         return this.renderedElement;
@@ -1241,7 +1085,6 @@ class BaseNode {
                 default:
                     this.renderedElement.value = value;
             }
-            this.renderedValue = value;
         }
     }
 
@@ -1475,15 +1318,6 @@ class BaseNode {
                 node.dependents.delete(this);
             }
 
-
-            // let nextVal = (node.dependents.get(this) ?? 0) - amount;
-            // if (nextVal > 0) node.dependents.set(this,nextVal);
-            // else node.dependents.delete(this);
-
-            // nextVal = (this.precedents.get(node) ?? 0) - amount;
-            // if (nextVal > 0) this.precedents.set(node,nextVal);
-            // else this.precedents.delete(node);
-
             this.evaluate();
         }
     }
@@ -1527,15 +1361,6 @@ class BaseNode {
             } else {
                 this.dependents.delete(node);
             }
-
-
-            // let nextVal = (node.precedents.get(this) ?? 0) - amount;
-            // if (nextVal > 0) node.precedents.set(this,nextVal);
-            // else node.precedents.delete(this);
-
-            // nextVal = (this.dependents.get(node) ?? 0) - amount;
-            // if (nextVal > 0) this.dependents.set(node,nextVal);
-            // else this.dependents.delete(node);
 
             node.evaluate();
         }
@@ -1599,6 +1424,7 @@ class DataNode extends BaseNode {
             min: undefined
         }
 
+        const baseInputFocusHandler = this.inputFocusHandler;
         this.inputFocusHandler = (event) => {
             if (this.value.isExpr && this.renderedElement.type !== "text") {
                 this.renderHTML(this.value.value);
@@ -1607,6 +1433,9 @@ class DataNode extends BaseNode {
             this.updateRenderedElement(this.value.value);
         }
         this.inputBlurHandler = (event) => {
+            if (this.value.isExpr && this.renderedElement?.type === "text"){
+                this.modify({value:this.renderedElement.value});
+            }
             this.evaluate();
             if(this.value.isExpr) this.renderHTML(this.accessors.value);
         }
@@ -1614,18 +1443,7 @@ class DataNode extends BaseNode {
         this.inputChangeHandler = (event) => {
             if(!this.value.isExpr)
                 baseInputChangeHandler(event);
-            else {
-                if(this.renderedElement?.type === "text") {
-                    this.modify({value:this.renderedElement.value})
-                }
-            }
         }
-    }
-
-    renderHTML(value = null) {
-        const rval = super.renderHTML(value);
-        this.renderedElement.addEventListener("focus",this.inputFocusHandler);
-        return rval;
     }
 
     set({value=undefined,min=undefined,max=undefined}) {
@@ -1640,7 +1458,11 @@ class DataNode extends BaseNode {
     }
 
     modify({value=undefined,min=undefined,max=undefined}) {
-        /** @param {ExprValue} accessor */
+        /**
+         * @param {ExprValue} accessor 
+         * @param {string|boolean|number} newVal 
+         * @returns {Array<{type:string,path:Path,amount:Number}>}
+         */
         const getDepMods = (accessor,newVal) => {
             const dependencyMods = [];
             this.oldPaths = new Map(accessor.precedentPaths);
@@ -1677,13 +1499,6 @@ class DataNode extends BaseNode {
     evaluate() {
         if(this.dirty) {
             try {
-                // // Paranoia code. Removed for efficiency. 
-                // // Just trust that dependent updates always work.
-                // for (let node of this.dependencies) {
-                //     if (node instanceof BaseNode) {
-                //         node.evaluate();
-                //     }
-                // }
 
                 const root = this.findRoot();
 
@@ -1708,6 +1523,7 @@ class DataNode extends BaseNode {
                 const modOperations = {}
                 for(const [node,accessors] of this.precedents.entries()) {
                     if (node instanceof ModifierNode){
+
                         if(!node.accessors.condition) continue;
 
                         for (let accessor of Object.keys(accessors)) {
@@ -1777,14 +1593,16 @@ class DataNode extends BaseNode {
                         if(operations.replace != undefined) {                   // replace operations overrule other operations
                             this.accessors[accessor] = operations.replace[operations.replace.__highest]; // highest tier wins
                         } else {
-                            if(operations.add != undefined) {                   // add comes before multipliers
-                                for(const value of Object.values(operations.add)) {
-                                    this.accessors[accessor] += value;
-                                }
-                            }
-                            if(operations.multiply != undefined) {              // multiply occurs after
+
+                            if(operations.multiply != undefined) {              // TODO: Come back to this and decide if multiply or add comes first
                                 for(const value of Object.values(operations.multiply)) {
                                     this.accessors[accessor] *= value;
+                                }
+                            }
+
+                            if(operations.add != undefined) {                   
+                                for(const value of Object.values(operations.add)) {
+                                    this.accessors[accessor] += value;
                                 }
                             }
                         }
@@ -1848,8 +1666,6 @@ class DataNode extends BaseNode {
 class ModifierNode extends BaseNode {
     /**
      * @param {boolean} virtual 
-     * Remove???
-     * @param {*} context 
      * @param {string} path 
      * @param {{
      *  target:string,
@@ -1891,6 +1707,26 @@ class ModifierNode extends BaseNode {
             condition: condition ?? true
         }
 
+        this.inputFocusHandler = (event) => {
+            if (this.value.isExpr && this.renderedElement.type !== "text") {
+                this.renderHTML(this.value.value);
+                this.renderedElement.focus();
+            }
+            this.updateRenderedElement(this.value.value);
+        }
+        this.inputBlurHandler = (event) => {
+            if (this.value.isExpr && this.renderedElement?.type === "text"){
+                this.modify({value:this.renderedElement.value});
+            }
+            this.evaluate();
+            if(this.value.isExpr) this.renderHTML(this.accessors.value);
+        }
+        const baseInputChangeHandler = this.inputChangeHandler;
+        this.inputChangeHandler = (event) => {
+            if(!this.value.isExpr)
+                baseInputChangeHandler(event);
+        }
+
     }
 
     evaluate() {
@@ -1900,6 +1736,43 @@ class ModifierNode extends BaseNode {
             this.accessors.condition = this.condition.evaluate(root);
         }
         super.evaluate();
+    }
+
+    modify({value = undefined, condition = undefined}) {
+        /**
+         * @param {ExprValue} accessor 
+         * @param {string|boolean|number} newVal 
+         * @returns {Array<{type:string,path:Path,amount:Number}>}
+         */
+        const getDepMods = (accessor,newVal) => {
+            const dependencyMods = [];
+            this.oldPaths = new Map(accessor.precedentPaths);
+            //Update Path
+            accessor.modify(newVal,this);
+            accessor.precedentPaths.forEach((path, key) => {
+                if (this.oldPaths.has(key)) {
+                    this.oldPaths.delete(key)
+                } else {
+                    dependencyMods.push({type:"add precedent",path:path,amount:1})
+                }
+            });
+            this.oldPaths.forEach((path,key) => {
+                dependencyMods.push({type:"remove precedent",path:path,amount:1})
+            })
+            return dependencyMods;
+        }
+
+        if(value != undefined && value !== this.value.value) {
+            this.dependencyModifications.push(...getDepMods(this.value,value));
+        }
+
+        if(condition != undefined && condition !== this.condition.value) {
+            this.dependencyModifications.push(...getDepMods(this.condition,condition));
+        }
+
+        this.evaluateDependencies();
+        this.setDirty();
+        this.evaluate();
     }
 
     set({value = undefined}) {
