@@ -763,6 +763,10 @@ modeBtn.addEventListener("click", () => {
     // Re-rendering is probably fine here
     render();
 });
+if(previewMode) {
+    sectionLabelInp.classList.add("hidden");
+    sectionAddBtn.classList.add("hidden");
+}
 
 function updatePreview() {
 

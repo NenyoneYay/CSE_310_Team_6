@@ -750,6 +750,7 @@ body{
 }
 .section-expander {
     cursor: pointer;
+    color:var(--color-text-primary);
 }
 
 .drag-handle{
