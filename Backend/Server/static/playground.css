@@ -705,11 +705,7 @@ body{
     padding:10px 14px;
     background:var(--color-background-secondary);
     border-bottom:0.5px solid var(--color-border-tertiary);
-    cursor:grab;
     user-select:none
-}
-.section-header:active{
-    cursor:grabbing
 }
 .section-title{
     font-size:14px;
@@ -727,7 +723,12 @@ body{
 .drag-handle{
     color:var(--color-text-secondary);
     font-size:16px;
-    cursor:grab
+    cursor:grab;
+    height:100%;
+    align-content: center;
+}
+.drag-handle:active {
+    cursor:grabbing;
 }
 .field-list{
     display:flex;
@@ -743,18 +744,9 @@ body{
     border:0.5px solid var(--color-border-tertiary);
     border-radius:var(--border-radius-md);
     padding:8px 10px;
-    cursor:grab;
     user-select:none;
     min-width:150px;
     flex:1
-}
-.field:active{
-    cursor:grabbing
-}
-.field-handle{
-    color:var(--color-text-secondary);
-    font-size:14px;
-    flex-shrink:0
 }
 .field-inner{
     flex:1;

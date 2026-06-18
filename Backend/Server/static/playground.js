@@ -192,11 +192,10 @@ function makeFieldInput(field) {
     inp.value = field.value || "";
     inp.placeholder = field.type === "number" ? "0" : "—";
     inp.addEventListener("input", e => {
-    field.value = e.target.value; updatePreview(); 
-});
-
-// prevent drag from firing when clicking into the input
-inp.addEventListener("mousedown", e => e.stopPropagation());
+        field.value = e.target.value; updatePreview(); 
+    });
+    // prevent drag from firing when clicking into the input
+    inp.addEventListener("mousedown", e => e.stopPropagation());
     return inp;
 }
 
@@ -213,8 +212,7 @@ function render() {
 
         const hdr = document.createElement("div");
         hdr.className = "section-header";
-        hdr.draggable = !editMode;
-        hdr.innerHTML = `<i class="ti ti-grip-vertical drag-handle" aria-hidden="true"></i>`;
+        hdr.innerHTML = `<i class="ti ti-grip-vertical drag-handle" aria-hidden="true" draggable="${!editMode}"></i>`;
 
         const titleInp = document.createElement("input");
         titleInp.className = "section-title";
@@ -232,208 +230,183 @@ function render() {
         delBtn.innerHTML = `<i class="ti ti-x"></i>`;
         delBtn.style.display = editMode ? "none" : "";
         delBtn.addEventListener("click", () => {
-
-        releaseId(sec.id);
-        sec.fields.forEach(f => releaseId(f.id));
-        sheet.sections.splice(si, 1);
-        render(); updatePreview();
-            
-    });
-    hdr.appendChild(delBtn);
-
-    hdr.addEventListener("dragstart", e => {
-
-        dragType = "section"; dragSrc = sec.id;
-        setTimeout(() => secEl.classList.add("dragging"), 0);
-        e.dataTransfer.effectAllowed = "move";
-            
-    });
-    hdr.addEventListener("dragend", () => {
-        
-        secEl.classList.remove("dragging"); 
-        clearDropIndicators(); 
-    });
-    secEl.addEventListener("dragover", e => {
-
-        if (dragType !== "section") 
-            return;
-
-        e.preventDefault(); 
-        e.dataTransfer.dropEffect = "move";
-
-        clearDropIndicators(); 
-        secEl.classList.add("drop-indicator");
-            
-    });
-    secEl.addEventListener("dragleave", () => secEl.classList.remove("drop-indicator"));
-    secEl.addEventListener("drop", e => {
-
-        e.preventDefault();
-        if (dragType !== "section" || dragSrc === sec.id) 
-            return;
-
-        const fromIdx = sheet.sections.findIndex(s => s.id === dragSrc);
-        const [moved] = sheet.sections.splice(fromIdx, 1);
-        sheet.sections.splice(si, 0, moved);
-        
-        // TODO: update HTML instead of re-render
-        
-        render(); updatePreview();
-            
-    });
-
-    const fieldList = document.createElement("div");
-    fieldList.className = "field-list";
-
-    if (sec.fields.length === 0) {
-
-        const em = document.createElement("div");
-        em.className = "empty-msg";
-        em.textContent = "No fields yet — add one below.";
-        fieldList.appendChild(em);
-            
-    }
-
-    sec.fields.forEach((field, fi) => {
-
-        const fEl = document.createElement("div");
-        fEl.className = "field"; fEl.draggable = !editMode; fEl.dataset.fid = field.id;
-
-        const handle = document.createElement("i");
-        handle.className = "ti ti-grip-vertical field-handle";
-        handle.setAttribute("aria-hidden","true");
-
-        const inner = document.createElement("div");
-        inner.className = "field-inner";
-
-        const lbl = document.createElement("span");
-        lbl.className = "field-label";
-        lbl.textContent = field.label;
-
-        const inputEl = makeFieldInput(field);
-
-        inner.appendChild(lbl);
-        inner.appendChild(inputEl);
-
-        const badge = document.createElement("span");
-        badge.className = "field-type-badge";
-        badge.textContent = field.type;
-
-        const delF = document.createElement("button");
-        delF.className = "delete-btn";
-        delF.title = "Remove field";
-        delF.innerHTML = `<i class="ti ti-x"></i>`;
-        delF.style.display = editMode ? "none" : "";
-        delF.addEventListener("click", e => {
-
-            e.stopPropagation();
-            releaseId(field.id);
-            sec.fields.splice(fi, 1);
-            render(); updatePreview();
-            
+            releaseId(sec.id);
+            sec.fields.forEach(f => releaseId(f.id));
+            sheet.sections.splice(si, 1);
+            render(); 
+            updatePreview();
         });
+        hdr.appendChild(delBtn);
 
-        fEl.appendChild(handle);
-        fEl.appendChild(inner);
-        fEl.appendChild(badge);
-        fEl.appendChild(delF);
+        hdr.addEventListener("dragstart", e => {
 
-        fEl.addEventListener("dragstart", e => {
-
-            if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") 
-                return;
-
-            dragType = "field"; dragSrc = field.id; dragSrcSection = sec.id;
-            setTimeout(() => fEl.classList.add("dragging"), 0);
+            dragType = "section"; dragSrc = sec.id;
+            setTimeout(() => secEl.classList.add("dragging"), 0);
             e.dataTransfer.effectAllowed = "move";
-            e.stopPropagation();
+                
+        });
+        hdr.addEventListener("dragend", () => {
             
+            secEl.classList.remove("dragging"); 
         });
-        fEl.addEventListener("dragend", () => {
-            fEl.classList.remove("dragging"); 
-            clearDropIndicators(); 
-        });
-        fEl.addEventListener("dragover", e => {
+        secEl.addEventListener("dragover", e => {
 
-            if (dragType !== "field") 
+            if (dragType !== "section") 
                 return;
 
             e.preventDefault(); 
-            e.stopPropagation(); 
             e.dataTransfer.dropEffect = "move";
 
-            clearDropIndicators(); 
-            fEl.classList.add("drop-indicator");
-            
+            secEl.classList.add("drop-indicator");
+                
         });
-        fEl.addEventListener("dragleave", () => fEl.classList.remove("drop-indicator"));
-        fEl.addEventListener("drop", e => {
+        secEl.addEventListener("dragleave", () => secEl.classList.remove("drop-indicator"));
+        secEl.addEventListener("drop", e => {
 
-            e.preventDefault(); 
-            e.stopPropagation();
-
-            if (dragType !== "field" || dragSrc === field.id) 
+            e.preventDefault();
+            if (dragType !== "section" || dragSrc === sec.id) 
                 return;
 
-            const srcSec = sheet.sections.find(s => s.id === dragSrcSection);
-            const fromIdx = srcSec.fields.findIndex(f => f.id === dragSrc);
-            const [moved] = srcSec.fields.splice(fromIdx, 1);
-            const toIdx = sec.fields.findIndex(f => f.id === field.id);
-            sec.fields.splice(toIdx, 0, moved);
-
-            render(); 
-            updatePreview();
+            const fromIdx = sheet.sections.findIndex(s => s.id === dragSrc);
+            const [moved] = sheet.sections.splice(fromIdx, 1);
+            sheet.sections.splice(si, 0, moved);
             
+            // TODO: update HTML instead of re-render
+            
+            render(); updatePreview();
+                
         });
 
-        fieldList.appendChild(fEl);
-            
-    });
+        const fieldList = document.createElement("div");
+        fieldList.className = "field-list";
 
-    fieldList.addEventListener("dragover", e => {
-        if (dragType === "field") 
-            e.preventDefault(); 
-    });
-    fieldList.addEventListener("drop", e => {
+        if (sec.fields.length === 0) {
 
-        e.preventDefault();
-        if (dragType !== "field") 
-            return;
+            const em = document.createElement("div");
+            em.className = "empty-msg";
+            em.textContent = "No fields yet — add one below.";
+            fieldList.appendChild(em);
+                
+        }
 
-            const srcSec = sheet.sections.find(s => s.id === dragSrcSection);
-            if (!srcSec) 
-                return;
+        sec.fields.forEach((field, fi) => {
 
-            const fromIdx = srcSec.fields.findIndex(f => f.id === dragSrc);
-            if (fromIdx === -1) 
-                return;
+            const fEl = document.createElement("div");
+            fEl.className = "field"; fEl.dataset.fid = field.id;
 
-            const [moved] = srcSec.fields.splice(fromIdx, 1);
-            sec.fields.push(moved);
-            dragSrcSection = sec.id;
+            const handle = document.createElement("i");
+            handle.draggable = !editMode;
+            handle.className = "ti ti-grip-vertical drag-handle";
+            handle.setAttribute("aria-hidden","true");
 
-            render(); 
-            updatePreview();
-        });
+            const inner = document.createElement("div");
+            inner.className = "field-inner";
 
-            const addRow = document.createElement("div");
-            addRow.className = "add-field-row";
+            const lbl = document.createElement("span");
+            lbl.className = "field-label";
+            lbl.textContent = field.label;
 
-            const labelInp = document.createElement("input");
-            labelInp.placeholder = "Field label…";
+            const inputEl = makeFieldInput(field);
 
-            const typeSelect = document.createElement("select");
-            ["text","number","textarea","checkbox"].forEach(t => {
+            inner.appendChild(lbl);
+            inner.appendChild(inputEl);
 
-                const opt = document.createElement("option");
-                opt.value = t; opt.textContent = t;
-                typeSelect.appendChild(opt);
-            
+            const badge = document.createElement("span");
+            badge.className = "field-type-badge";
+            badge.textContent = field.type;
+
+            const delF = document.createElement("button");
+            delF.className = "delete-btn";
+            delF.title = "Remove field";
+            delF.innerHTML = `<i class="ti ti-x"></i>`;
+            delF.style.display = editMode ? "none" : "";
+            delF.addEventListener("click", e => {
+
+                e.stopPropagation();
+                releaseId(field.id);
+                sec.fields.splice(fi, 1);
+                render(); updatePreview();
+                
             });
 
-            const addBtn = document.createElement("button");
-            addBtn.innerHTML = `<i class="ti ti-plus" aria-hidden="true"></i>`;
-            addBtn.addEventListener("click", () => {
+            fEl.appendChild(handle);
+            fEl.appendChild(inner);
+            fEl.appendChild(badge);
+            fEl.appendChild(delF);
+
+            fEl.addEventListener("dragstart", e => {
+
+                if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") 
+                    return;
+
+                dragType = "field"; dragSrc = field.id; dragSrcSection = sec.id;
+                setTimeout(() => fEl.classList.add("dragging"), 0);
+                e.dataTransfer.effectAllowed = "move";
+                e.stopPropagation();
+                
+            });
+            fEl.addEventListener("dragend", () => {
+                fEl.classList.remove("dragging"); 
+            });
+            fEl.addEventListener("dragover", e => {
+
+                if (dragType !== "field") 
+                    return;
+
+                e.preventDefault(); 
+                e.stopPropagation(); 
+                e.dataTransfer.dropEffect = "move";
+
+                fEl.classList.add("drop-indicator");
+                
+            });
+            fEl.addEventListener("dragleave", () => fEl.classList.remove("drop-indicator"));
+            fEl.addEventListener("drop", e => {
+
+                e.preventDefault(); 
+                e.stopPropagation();
+
+                if (dragType !== "field" || dragSrc === field.id) 
+                    return;
+
+                const srcSec = sheet.sections.find(s => s.id === dragSrcSection);
+                const fromIdx = srcSec.fields.findIndex(f => f.id === dragSrc);
+                const [moved] = srcSec.fields.splice(fromIdx, 1);
+                let toIdx = sec.fields.findIndex(f => f.id === field.id);
+                if(toIdx >= fromIdx) {
+                    if(++toIdx > sec.fields.length) toIdx = sec.fields.length;
+                }
+                sec.fields.splice(toIdx, 0, moved);
+
+                // TODO: Update HTML instead of re-render
+
+                render(); 
+                updatePreview();
+                
+            });
+
+            fieldList.appendChild(fEl);
+                
+        });
+
+        const addRow = document.createElement("div");
+        addRow.className = "add-field-row";
+
+        const labelInp = document.createElement("input");
+        labelInp.placeholder = "Field label…";
+
+        const typeSelect = document.createElement("select");
+        ["text","number","textarea","checkbox"].forEach(t => {
+
+            const opt = document.createElement("option");
+            opt.value = t; opt.textContent = t;
+            typeSelect.appendChild(opt);
+        
+        });
+
+        const addBtn = document.createElement("button");
+        addBtn.innerHTML = `<i class="ti ti-plus" aria-hidden="true"></i>`;
+        addBtn.addEventListener("click", () => {
 
             const label = labelInp.value.trim();
             if (!label) 
@@ -445,6 +418,9 @@ function render() {
                 value: "" 
             });
             labelInp.value = "";
+
+            // TODO: Update HTML instead of re-render
+
             render(); updatePreview();
             
         });
@@ -467,12 +443,6 @@ function render() {
 
 }
 
-function clearDropIndicators() {
-
-    document.querySelectorAll(".drop-indicator").forEach(el => el.classList.remove("drop-indicator"));
-
-}
-
 document.getElementById("btn-add-section").addEventListener("click", () => {
 
     const inp = document.getElementById("new-section-name");
@@ -484,6 +454,8 @@ document.getElementById("btn-add-section").addEventListener("click", () => {
     });
 
     inp.value = ""; 
+
+    // TODO: update HTML instead of re-render
     render();
 
 });
@@ -529,7 +501,8 @@ document.getElementById("file-input").addEventListener("change", e => {
             if (!parsed.sections) {
                 alert("Invalid character sheet JSON."); return; 
             }
-            registerIds(parsed); sheet = parsed; render();
+            registerIds(parsed); sheet = parsed; 
+            render();
             
         } catch {
             alert("Could not parse JSON file."); 
@@ -561,8 +534,9 @@ editMode = !editMode;
 modeBtn.innerHTML = editMode
     ? `<i class="ti ti-pencil-off"></i> Edit mode`
     : `<i class="ti ti-pencil"></i> Edit mode`;
-render();
-
+    
+    // Re-rendering is probably fine here
+    render();
 });
 
 function updatePreview() {
