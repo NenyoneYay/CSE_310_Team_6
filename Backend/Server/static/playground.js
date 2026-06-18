@@ -372,11 +372,7 @@ function render() {
                 const srcSec = sheet.sections.find(s => s.id === dragSrcSection);
                 const fromIdx = srcSec.fields.findIndex(f => f.id === dragSrc);
                 const [moved] = srcSec.fields.splice(fromIdx, 1);
-                let toIdx = sec.fields.findIndex(f => f.id === field.id);
-                if(toIdx >= fromIdx) {
-                    if(++toIdx > sec.fields.length) toIdx = sec.fields.length;
-                }
-                sec.fields.splice(toIdx, 0, moved);
+                sec.fields.splice(fi, 0, moved);
 
                 // TODO: Update HTML instead of re-render
 
