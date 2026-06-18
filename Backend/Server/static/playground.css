@@ -717,6 +717,8 @@ body{
 /*.section:has(> .field-list:not(.hidden)) + .seperator:has(+ .section > .field-list.hidden),
 .section:has(> .field-list.hidden) + .seperator:has(+ .section > .field-list:not(.hidden)),*/
 
+.field:not(:has(textarea.field-input)) + .seperator:has(+ .field textarea.field-input),
+.field:has(textarea.field-input) + .seperator:has(+ .field),
 /* If a field is immediately followed by a section... */
 .field + .seperator:has(+ .section),
 /* ...or if a section is immediately followed by a field */
@@ -807,10 +809,10 @@ body{
     border-bottom:0.5px solid transparent;
     color:var(--color-text-primary);
     font-family:var(--font-sans);
-    width:100%;
     padding:0;
     cursor:text;
     min-width:2ch;
+    width:100%;
 }
 .field-input:focus{
     outline:none;
@@ -820,7 +822,8 @@ body{
     color:var(--color-text-disabled);
 }
 .field-input[type=number]{
-    -moz-appearance:textfield
+    -moz-appearance:textfield;
+    max-width:5ch;
 }
 .field-input[type=number]::-webkit-outer-spin-button,
 .field-input[type=number]::-webkit-inner-spin-button{
@@ -832,8 +835,10 @@ body{
     cursor:pointer;
     accent-color:var(--color-text-info)
 }
-.field-input[type=textarea] {
+textarea.field-input {
     min-width:5ch;
+    max-width:unset;
+    width:100%;
     min-height:40px;
     line-height:1.4
 }

@@ -211,13 +211,24 @@ function makeEmptyMessage(container) {
 function makeFieldInput(fieldData) {
 
     if (fieldData.type === "textarea") {
-
+        const getVisualRows = (textarea) => {
+            const computedStyle = window.getComputedStyle(textarea);
+            
+            // Get the line height pixel value
+            const lineHeight = parseInt(computedStyle.lineHeight, 10);
+            
+            // Get actual text height inside the element
+            const scrollHeight = textarea.scrollHeight; 
+            
+            // Calculate total visible rows
+            return Math.floor(scrollHeight / lineHeight);
+        }
         const ta = document.createElement("textarea");
         ta.className = "field-input";
         ta.value = fieldData.value || "";
         ta.rows = 2;
         ta.addEventListener("input", e => {
-            fieldData.value = e.target.value; 
+            fieldData.value = e.target.value;
             updatePreview(); 
         });
         ta.addEventListener("mousedown", e => e.stopPropagation());
@@ -242,9 +253,12 @@ function makeFieldInput(fieldData) {
     inp.type = fieldData.type === "number" ? "number" : "text";
     inp.className = "field-input";
     inp.value = fieldData.value || "";
+    inp.style.minWidth = Math.min(String(fieldData.value || "").length,5) + "ch";
     inp.placeholder = fieldData.type === "number" ? "0" : "—";
     inp.addEventListener("input", e => {
-        fieldData.value = e.target.value; updatePreview(); 
+        fieldData.value = e.target.value;
+        inp.style.minWidth = Math.min(String(fieldData.value || "").length,5) + "ch";
+        updatePreview(); 
     });
     // prevent drag from firing when clicking into the input
     inp.addEventListener("mousedown", e => e.stopPropagation());
@@ -307,6 +321,7 @@ function makeField(fieldData, type, parent, container) {
 
     const inner = document.createElement("div");
     inner.className = "field-inner";
+    if(data.type === "textarea") inner.style.flexDirection="column";
 
     const lbl = document.createElement("span");
     lbl.className = "field-label";
