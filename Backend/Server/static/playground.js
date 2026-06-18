@@ -32,34 +32,136 @@ let sheet = {
             label: "Ability scores", 
             content: [
                 {
-                    label: "Strength",     
-                    type: "number", 
-                    value: "10" 
+                    label: "Strength",
+                    expanded: false,
+                    type: "section", 
+                    content: [
+                        {
+                            label:"score",
+                            type:"number",
+                            value:"10"
+                        },
+                        {
+                            label:"mod",
+                            type:"number",
+                            value:"0"
+                        },
+                        {
+                            label:"save",
+                            type:"number",
+                            value:"0"
+                        }
+                    ] 
                 },
                 {
-                    label: "Dexterity",    
-                    type: "number", 
-                    value: "10" 
+                    label: "Dexterity",
+                    expanded: false,
+                    type: "section", 
+                    content: [
+                        {
+                            label:"score",
+                            type:"number",
+                            value:"10"
+                        },
+                        {
+                            label:"mod",
+                            type:"number",
+                            value:"0"
+                        },
+                        {
+                            label:"save",
+                            type:"number",
+                            value:"0"
+                        }
+                    ] 
                 },
                 {
-                    label: "Constitution", 
-                    type: "number", 
-                    value: "10" 
+                    label: "Constitution",
+                    expanded: false,
+                    type: "section", 
+                    content: [
+                        {
+                            label:"score",
+                            type:"number",
+                            value:"10"
+                        },
+                        {
+                            label:"mod",
+                            type:"number",
+                            value:"0"
+                        },
+                        {
+                            label:"save",
+                            type:"number",
+                            value:"0"
+                        }
+                    ] 
                 },
                 {
-                    label: "Intelligence", 
-                    type: "number", 
-                    value: "10" 
+                    label: "Intelligence",
+                    expanded: false,
+                    type: "section", 
+                    content: [
+                        {
+                            label:"score",
+                            type:"number",
+                            value:"10"
+                        },
+                        {
+                            label:"mod",
+                            type:"number",
+                            value:"0"
+                        },
+                        {
+                            label:"save",
+                            type:"number",
+                            value:"0"
+                        }
+                    ] 
                 },
                 {
-                    label: "Wisdom",       
-                    type: "number", 
-                    value: "10" 
+                    label: "Wisdom",
+                    expanded: false,
+                    type: "section", 
+                    content: [
+                        {
+                            label:"score",
+                            type:"number",
+                            value:"10"
+                        },
+                        {
+                            label:"mod",
+                            type:"number",
+                            value:"0"
+                        },
+                        {
+                            label:"save",
+                            type:"number",
+                            value:"0"
+                        }
+                    ] 
                 },
                 {
-                    label: "Charisma",     
-                    type: "number", 
-                    value: "10" 
+                    label: "Charisma",
+                    expanded: false,
+                    type: "section", 
+                    content: [
+                        {
+                            label:"score",
+                            type:"number",
+                            value:"10"
+                        },
+                        {
+                            label:"mod",
+                            type:"number",
+                            value:"0"
+                        },
+                        {
+                            label:"save",
+                            type:"number",
+                            value:"0"
+                        }
+                    ] 
                 }
             ]
         },
@@ -111,7 +213,7 @@ function makeFieldInput(fieldData) {
     if (fieldData.type === "textarea") {
 
         const ta = document.createElement("textarea");
-        ta.className = "field-textarea";
+        ta.className = "field-input";
         ta.value = fieldData.value || "";
         ta.rows = 2;
         ta.addEventListener("input", e => {
@@ -348,10 +450,31 @@ function makeSection(secData, parent, container) {
         hdr.appendChild(handle);
     }
 
+    const expander = document.createElement("i");
+    if(data.expanded ?? true) {
+        expander.className = "ti ti-caret-up section-expander";
+    } else {
+        expander.className = "ti ti-caret-down section-expander";
+    }
+    expander.addEventListener("click", ev => {
+        data.expanded = !(data.expanded ?? true);
+
+        if(data.expanded) {
+            expander.className = "ti ti-caret-up section-expander";
+            fieldList.classList.remove("hidden");
+            addRow?.classList?.remove("hidden");
+        } else {
+            expander.className = "ti ti-caret-down section-expander";
+            fieldList.classList.add("hidden");
+            addRow?.classList?.add("hidden");
+        }
+    });
+    hdr.append(expander);
+
     const titleInp = document.createElement("input");
     titleInp.className = "section-title";
     titleInp.value = data.label;
-    titleInp.addEventListener("mousedown", e => e.stopPropagation());
+    titleInp.disabled = previewMode;
     titleInp.addEventListener("input", e => {
         data.label = e.target.value; 
         updatePreview(); 
@@ -430,6 +553,9 @@ function makeSection(secData, parent, container) {
     const fieldList = document.createElement("div");
     fieldList.className = "field-list";
     fieldList.style.flexDirection = data.direction ?? "row";
+    if(!(data.expanded ?? true)) {
+        fieldList.classList.add("hidden")
+    }
 
     if (data.content.length === 0) {
         makeEmptyMessage(fieldList);
@@ -442,9 +568,13 @@ function makeSection(secData, parent, container) {
     secEl.appendChild(hdr);
     secEl.appendChild(fieldList);
 
+    let addRow = null
     if(!previewMode) {
-        const addRow = document.createElement("div");
+        addRow = document.createElement("div");
         addRow.className = "add-field-row";
+        if(!(data.expanded ?? true)) {
+            addRow.classList.add("hidden");
+        }
 
         const labelInp = document.createElement("input");
         labelInp.placeholder = "Field label…";
@@ -599,7 +729,7 @@ document.getElementById("btn-preview").addEventListener("click", () => {
 });
     
 // hides buttons while not in edit mode
-let previewMode = false;
+let previewMode = true;
 const modeBtn = document.getElementById("btn-mode");
 modeBtn.addEventListener("click", () => {
     previewMode = !previewMode;

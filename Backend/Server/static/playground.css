@@ -702,7 +702,7 @@ body{
     overflow:hidden;
     min-width: min-content;
     flex: 1 1 min-content;
-    
+    height: max-content;
 }
 
 .seperator {
@@ -712,6 +712,10 @@ body{
 .seperator:last-child {
     border: none;
 }
+
+
+/*.section:has(> .field-list:not(.hidden)) + .seperator:has(+ .section > .field-list.hidden),
+.section:has(> .field-list.hidden) + .seperator:has(+ .section > .field-list:not(.hidden)),*/
 
 /* If a field is immediately followed by a section... */
 .field + .seperator:has(+ .section),
@@ -742,6 +746,10 @@ body{
     outline:none;
     border-bottom:1px solid var(--color-border-primary)
 }
+.section-expander {
+    cursor: pointer;
+}
+
 .drag-handle{
     color:var(--color-text-secondary);
     font-size:16px;
@@ -756,8 +764,9 @@ body{
     display:flex;
     flex-wrap:wrap;
     gap:4px;
-    padding:12px
+    padding:12px;
 }
+
 .field{
     display:flex;
     align-items:center;
@@ -786,6 +795,10 @@ body{
     text-transform:uppercase;
     letter-spacing:0.04em
 }
+.field-label::after {
+    content:":";
+}
+
 .field-input{
     font-size:13px;
     font-weight:500;
@@ -803,6 +816,9 @@ body{
     outline:none;
     border-bottom-color:var(--color-border-primary)
 }
+.field-input:disabled {
+    color:var(--color-text-disabled);
+}
 .field-input[type=number]{
     -moz-appearance:textfield
 }
@@ -816,26 +832,13 @@ body{
     cursor:pointer;
     accent-color:var(--color-text-info)
 }
-.field-textarea{
-    font-size:13px;
-    font-weight:500;
-    background:transparent;
-    border:none;
-    border-bottom:0.5px solid transparent;
-    color:var(--color-text-primary);
-    font-family:var(--font-sans);
-    width:100%;
-    padding:0;
-    cursor:text;
-    resize:none;
+.field-input[type=textarea] {
+    min-width:5ch;
     min-height:40px;
     line-height:1.4
 }
-.field-textarea:focus{
-    outline:none;
-    border-bottom-color:var(--color-border-primary)
-}
-.field-input:hover,.field-textarea:hover{
+
+.field-input:hover{
     border-bottom-color:var(--color-border-tertiary)
 }
 .field-type-badge {
