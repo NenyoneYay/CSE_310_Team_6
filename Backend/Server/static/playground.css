@@ -837,7 +837,7 @@ body{
 }
 textarea.field-input {
     min-width:5ch;
-    max-width:unset;
+    resize:vertical;
     width:100%;
     min-height:40px;
     line-height:1.4
