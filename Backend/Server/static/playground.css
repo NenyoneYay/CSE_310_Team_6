@@ -1,11 +1,13 @@
 :root {
 color-scheme: light dark;
-    /* --color-background-primary: light-dark(rgba(255, 255, 255, 1), rgba(48, 48, 46, 1)); */
-    --color-background-secondary: light-dark(rgba(245, 244, 237, 1), rgba(38, 38, 36, 1));
+    --color-background-primary: light-dark(rgba(255, 255, 255, 1), rgba(48, 48, 46, 1));
+    --color-background-secondary: light-dark(rgb(245, 242, 234), rgba(38, 38, 36, 1));
     --color-background-info: light-dark(rgba(214, 228, 246, 1), rgba(37, 62, 95, 1));
     --color-background-danger: light-dark(rgba(247, 236, 236, 1), rgba(96, 42, 40, 1));
     --color-background-success: light-dark(rgba(233, 241, 220, 1), rgba(27, 70, 20, 1));
     --color-background-warning: light-dark(rgba(246, 238, 223, 1), rgba(72, 58, 15, 1));
+    --color-background-inactive: light-dark(rgba(228, 227, 224, 0.897), rgb(61, 61, 59));
+    --color-background-active: light-dark(rgba(255, 255, 255, 1), rgba(48, 48, 46, 1));
     --color-text-primary: light-dark(rgba(20, 20, 19, 1), rgba(250, 249, 245, 1));
     --color-text-secondary: light-dark(rgba(61, 61, 58, 1), rgba(194, 192, 182, 1));
     --color-text-tertiary: light-dark(rgba(115, 114, 108, 1), rgba(156, 154, 146, 1));
@@ -128,7 +130,7 @@ cursor: pointer;
 button:not(#action-btns button):not(form.elicit button) {
 padding: 8px 16px;
 font-size: 14px;
-background: transparent;
+background: var(--color-background-inactive);;
 color: var(--color-text-primary);
 border: 0.5px solid var(--color-border-secondary);
 border-radius: var(--border-radius-md);
@@ -138,7 +140,7 @@ transition:
     transform 0.1s;
 }
 button:not(#action-btns button):not(form.elicit button):hover {
-background: var(--color-background-secondary);
+background: var(--color-background-active);
 }
 button:not(#action-btns button):not(form.elicit button):active {
 background: var(--color-border-tertiary);
@@ -690,14 +692,34 @@ body{
 .section-list{
     display:flex;
     flex-direction:column;
-    gap:12px
+    gap: 6px;
 }
+
 .section{
-    background:var(--parchment-color);
+    background:var(--color-background-primary);
     border:0.5px solid var(--color-border-secondary);
     border-radius:var(--border-radius-lg);
-    overflow:hidden
+    overflow:hidden;
+    min-width: min-content;
+    flex: 1 1 min-content;
+    
 }
+
+.seperator {
+    flex: 0 0 0%;
+    border: var(--color-border-disabled) solid 1px;
+}
+.seperator:last-child {
+    border: none;
+}
+
+/* If a field is immediately followed by a section... */
+.field + .seperator:has(+ .section),
+/* ...or if a section is immediately followed by a field */
+.section + .seperator:has(+ .field){
+    flex: 1 1 100%; /* split the row using the separator */
+} 
+
 .section-header{
     display:flex;
     align-items:center;
@@ -733,7 +755,7 @@ body{
 .field-list{
     display:flex;
     flex-wrap:wrap;
-    gap:8px;
+    gap:4px;
     padding:12px
 }
 .field{
@@ -745,9 +767,11 @@ body{
     border-radius:var(--border-radius-md);
     padding:8px 10px;
     user-select:none;
-    min-width:150px;
-    flex:1
+    min-width: min-content;
+    flex:1 1 min-content;
 }
+
+
 .field-inner{
     flex:1;
     display:flex;
@@ -856,7 +880,7 @@ body{
     display:flex;
     gap:8px;
     align-items:center;
-    margin-top:4px
+    margin-top:4px;
 }
 .add-section-row input{
     font-size:13px;
@@ -895,4 +919,7 @@ body{
     color:var(--color-text-secondary);
     padding:8px 0;
     font-style:italic
+}
+.hidden {
+    display:none !important;
 }

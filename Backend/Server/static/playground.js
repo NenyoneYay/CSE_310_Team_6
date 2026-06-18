@@ -17,7 +17,7 @@ function registerIds(sheet) {
 
     idRegistry.clear();
     const seen = new Set();
-    for (const sec of sheet.sections) {
+    for (const sec of sheet.content) {
 
         if (seen.has(sec.id)) 
             sec.id = genId();
@@ -26,7 +26,7 @@ function registerIds(sheet) {
             idRegistry.add(sec.id); 
         }
 
-        for (const field of sec.fields) {
+        for (const field of sec.content) {
 
             if (seen.has(field.id)) 
                 field.id = genId();
@@ -51,11 +51,12 @@ let sheet = {
         system: "Custom", 
         version: "1" 
     },
-    sections: [
+    content: [
         {
             id: null, 
+            type: "section",
             label: "Basics", 
-            fields: [
+            content: [
                 {
                     id: null, 
                     label: "Name",  
@@ -79,7 +80,7 @@ let sheet = {
         {
             id: null, 
             label: "Ability scores", 
-            fields: [
+            content: [
                 {
                     id: null, 
                     label: "Strength",     
@@ -121,7 +122,8 @@ let sheet = {
         {
             id: null, 
             label: "Combat", 
-            fields: [
+            type: "section",
+            content: [
                 {
                     id: null, 
                     label: "HP",    
@@ -146,40 +148,49 @@ let sheet = {
 
 };
 
-for (const sec of sheet.sections) {
+for (const sec of sheet.content) {
 
     sec.id = genId();
-    for (const field of sec.fields) 
+    for (const field of sec.content) 
         field.id = genId();
 
 }
 
-let dragSrc = null, dragType = null, dragSrcSection = null;
+let dragSrc = null, dragType = null, dragSrcParent = null;
+let dragSrcElem = null, dragSrcSepElem = null;
 
-function makeFieldInput(field) {
+function makeEmptyMessage(container) {
+    const em = document.createElement("div");
+    em.className = "empty-msg";
+    em.textContent = "No content yet — add one below.";
+    container.appendChild(em);
+    return em;
+}
 
-    if (field.type === "textarea") {
+function makeFieldInput(fieldData) {
+
+    if (fieldData.type === "textarea") {
 
         const ta = document.createElement("textarea");
         ta.className = "field-textarea";
-        ta.value = field.value || "";
+        ta.value = fieldData.value || "";
         ta.rows = 2;
         ta.addEventListener("input", e => {
-            field.value = e.target.value; 
+            fieldData.value = e.target.value; 
             updatePreview(); 
         });
         ta.addEventListener("mousedown", e => e.stopPropagation());
         return ta;
         
     }
-    else if (field.type === "checkbox") {
+    else if (fieldData.type === "checkbox") {
 
         const cb = document.createElement("input");
         cb.type = "checkbox";
         cb.className = "field-input";
-        cb.checked = field.value === true || field.value === "true";
+        cb.checked = fieldData.value === true || fieldData.value === "true";
         cb.addEventListener("change", e => {
-            field.value = e.target.checked; 
+            fieldData.value = e.target.checked; 
             updatePreview(); 
         });
         cb.addEventListener("mousedown", e => e.stopPropagation());
@@ -187,60 +198,242 @@ function makeFieldInput(field) {
         
     }
     const inp = document.createElement("input");
-    inp.type = field.type === "number" ? "number" : "text";
+    inp.type = fieldData.type === "number" ? "number" : "text";
     inp.className = "field-input";
-    inp.value = field.value || "";
-    inp.placeholder = field.type === "number" ? "0" : "—";
+    inp.value = fieldData.value || "";
+    inp.placeholder = fieldData.type === "number" ? "0" : "—";
     inp.addEventListener("input", e => {
-        field.value = e.target.value; updatePreview(); 
+        fieldData.value = e.target.value; updatePreview(); 
     });
     // prevent drag from firing when clicking into the input
     inp.addEventListener("mousedown", e => e.stopPropagation());
     return inp;
 }
 
-function render() {
+function makeContainer(label, type, parent, parentEl) {
+    if(type === "section") {
+        makeSection(label,parent,parentEl);
+    } else {
+        makeField(label,type,parent,parentEl);
+    }
+}
 
-    const list = document.getElementById("section-list");
-    list.innerHTML = "";
+function makeField(label, type, parent, container) {
+    const data = (() => {
+        let fd = null;
+        if (label instanceof Object) {
+            fd = label;
+        } else if (typeof(label) === "string") {
+            fd = {
+                id: genId(),
+                label,
+                type,
+                value:""
+            }
+            parent.content.push(fd);
+        }
+        return fd;
+    })();
+    if (data == null) return;
 
-    sheet.sections.forEach((sec, si) => {
+    const sepEl = document.createElement("div");
+    sepEl.classList.add("seperator");
 
-        const secEl = document.createElement("div");
-        secEl.className = "section";
-        secEl.dataset.sid = sec.id;
+    const fEl = document.createElement("div");
+    fEl.className = "field"; fEl.dataset.fid = data.id;
 
-        const hdr = document.createElement("div");
-        hdr.className = "section-header";
-        hdr.innerHTML = `<i class="ti ti-grip-vertical drag-handle" aria-hidden="true" draggable="${!editMode}"></i>`;
+    if(!editMode) {
+        const handle = document.createElement("i");
+        handle.draggable = !editMode;
+        handle.className = "ti ti-grip-vertical drag-handle";
+        handle.setAttribute("aria-hidden","true");
 
-        const titleInp = document.createElement("input");
-        titleInp.className = "section-title";
-        titleInp.value = sec.label;
-        titleInp.addEventListener("mousedown", e => e.stopPropagation());
-        titleInp.addEventListener("input", e => {
-            sec.label = e.target.value; 
-            updatePreview(); 
+        fEl.appendChild(handle);
+    }
+
+    const inner = document.createElement("div");
+    inner.className = "field-inner";
+
+    const lbl = document.createElement("span");
+    lbl.className = "field-label";
+    lbl.textContent = data.label;
+
+    const inputEl = makeFieldInput(data);
+
+    inner.appendChild(lbl);
+    inner.appendChild(inputEl);
+
+    const badge = document.createElement("span");
+    badge.className = "field-type-badge";
+    badge.textContent = data.type;
+
+    const delF = document.createElement("button");
+    delF.className = "delete-btn";
+    delF.title = "Remove field";
+    delF.innerHTML = `<i class="ti ti-x"></i>`;
+    if(editMode) {
+        delF.classList.add("hidden")
+    } else {
+        delF.classList.remove("hidden")
+    }
+    // delF.style.display = editMode ? "none" : "";
+    delF.addEventListener("click", e => {
+
+        e.stopPropagation();
+        const fIdx = parent.content.findIndex(f => f.id === data.id);
+        releaseId(data.id);
+        parent.content.splice(fIdx, 1);
+        fEl.remove();
+
+        if(parent.content.length <= 0) {
+            makeEmptyMessage(container);
+        }
+
+        updatePreview();
+        
+    });
+
+    
+    fEl.appendChild(inner);
+    fEl.appendChild(badge);
+    fEl.appendChild(delF);
+    if(!editMode) {
+        fEl.addEventListener("dragstart", e => {
+
+            if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") 
+                return;
+
+            dragType = "field"; dragSrc = data; dragSrcParent = parent;
+            dragSrcElem = fEl; dragSrcSepElem = sepEl;
+            
+            setTimeout(() => fEl.classList.add("dragging"), 0);
+            e.dataTransfer.effectAllowed = "move";
+            e.stopPropagation();
+            
         });
-        hdr.appendChild(titleInp);
-
-        const delBtn = document.createElement("button");
-        delBtn.className = "delete-btn";
-        delBtn.title = "Remove section";
-        delBtn.innerHTML = `<i class="ti ti-x"></i>`;
-        delBtn.style.display = editMode ? "none" : "";
-        delBtn.addEventListener("click", () => {
-            releaseId(sec.id);
-            sec.fields.forEach(f => releaseId(f.id));
-            sheet.sections.splice(si, 1);
-            render(); 
-            updatePreview();
+        fEl.addEventListener("dragend", () => {
+            fEl.classList.remove("dragging"); 
         });
-        hdr.appendChild(delBtn);
+        fEl.addEventListener("dragover", e => {
 
+            if (dragSrcParent === parent && dragSrc !== data.id) {
+
+                e.preventDefault(); 
+                e.stopPropagation(); 
+                e.dataTransfer.dropEffect = "move";
+
+                fEl.classList.add("drop-indicator");
+            }
+            
+        });
+        fEl.addEventListener("dragleave", () => fEl.classList.remove("drop-indicator"));
+        fEl.addEventListener("drop", e => {
+
+            e.preventDefault(); 
+            e.stopPropagation();
+
+            if (dragSrcParent === parent && dragSrc !== data.id) {
+                const fromIdx = dragSrcParent.content.findIndex(f => f.id === dragSrc.id);
+                const toIdx = dragSrcParent.content.findIndex(f => f.id === data.id );
+                const [moved] = dragSrcParent.content.splice(fromIdx, 1);
+                parent.content.splice(toIdx, 0, moved);
+                
+                // Update HTML
+                if(fromIdx < toIdx) {
+                    sepEl.insertAdjacentElement('afterend',dragSrcElem);
+                } else {
+                    fEl.insertAdjacentElement('beforebegin',dragSrcElem);
+                }
+                dragSrcElem.insertAdjacentElement('afterend', dragSrcSepElem);
+                updatePreview();
+            }
+            dragSrcElem = null;
+            dragSrcSepElem = null;
+            dragSrcParent = null;
+            dragType = null;
+            dragSrc = null;
+            fEl.classList.remove("drop-indicator");
+        });
+    }
+
+    container.appendChild(fEl);
+    container.appendChild(sepEl);
+    return fEl;
+}
+
+function makeSection(label, parent, container) {
+    const data = (() => {
+        let sd = null;
+        if (label instanceof Object) {
+            sd = label;
+        } else if (typeof(label) === "string") {
+            sd = {
+                id: genId(),
+                label,
+                type:"section",
+                content:[]
+            }
+            parent.content.push(sd);
+        }
+        return sd;
+    })();
+    if (data == null) return;
+
+    const sepEl = document.createElement("div");
+    sepEl.classList.add("seperator");
+
+    const secEl = document.createElement("div");
+    secEl.className = "section";
+    secEl.dataset.sid = data.id;
+
+    const hdr = document.createElement("div");
+    hdr.className = "section-header";
+
+    if(!editMode) {
+        const handle = document.createElement("i");
+        handle.draggable = !editMode;
+        handle.className = "ti ti-grip-vertical drag-handle";
+        handle.setAttribute("aria-hidden","true");
+
+        hdr.appendChild(handle);
+    }
+
+    const titleInp = document.createElement("input");
+    titleInp.className = "section-title";
+    titleInp.value = data.label;
+    titleInp.addEventListener("mousedown", e => e.stopPropagation());
+    titleInp.addEventListener("input", e => {
+        data.label = e.target.value; 
+        updatePreview(); 
+    });
+    hdr.appendChild(titleInp);
+
+    const delBtn = document.createElement("button");
+    delBtn.className = "delete-btn";
+    delBtn.title = "Remove section";
+    delBtn.innerHTML = `<i class="ti ti-x"></i>`;
+    if(editMode) {
+        delBtn.classList.add("hidden")
+    } else {
+        delBtn.classList.remove("hidden")
+    }
+    // delBtn.style.display = editMode ? "none" : "";
+    delBtn.addEventListener("click", () => {
+        data.content.forEach(f => releaseId(f.id));
+        const secIdx = parent.content.findIndex(s => s.id === data.id);
+        parent.content.splice(secIdx, 1);
+        releaseId(data.id);
+        // Update HTML
+        secEl.remove();
+        updatePreview();
+    });
+    hdr.appendChild(delBtn);
+
+    if(!editMode) {
         hdr.addEventListener("dragstart", e => {
 
-            dragType = "section"; dragSrc = sec.id;
+            dragType = "section"; dragSrc = data; dragSrcParent = parent;
+            dragSrcElem = secEl; dragSrcSepElem = sepEl;
             setTimeout(() => secEl.classList.add("dragging"), 0);
             e.dataTransfer.effectAllowed = "move";
                 
@@ -249,142 +442,60 @@ function render() {
             
             secEl.classList.remove("dragging"); 
         });
-        secEl.addEventListener("dragover", e => {
+        hdr.addEventListener("dragover", e => {
 
-            if (dragType !== "section") 
-                return;
-
-            e.preventDefault(); 
-            e.dataTransfer.dropEffect = "move";
-
-            secEl.classList.add("drop-indicator");
-                
-        });
-        secEl.addEventListener("dragleave", () => secEl.classList.remove("drop-indicator"));
-        secEl.addEventListener("drop", e => {
-
-            e.preventDefault();
-            if (dragType !== "section" || dragSrc === sec.id) 
-                return;
-
-            const fromIdx = sheet.sections.findIndex(s => s.id === dragSrc);
-            const [moved] = sheet.sections.splice(fromIdx, 1);
-            sheet.sections.splice(si, 0, moved);
-            
-            // TODO: update HTML instead of re-render
-            
-            render(); updatePreview();
-                
-        });
-
-        const fieldList = document.createElement("div");
-        fieldList.className = "field-list";
-
-        if (sec.fields.length === 0) {
-
-            const em = document.createElement("div");
-            em.className = "empty-msg";
-            em.textContent = "No fields yet — add one below.";
-            fieldList.appendChild(em);
-                
-        }
-
-        sec.fields.forEach((field, fi) => {
-
-            const fEl = document.createElement("div");
-            fEl.className = "field"; fEl.dataset.fid = field.id;
-
-            const handle = document.createElement("i");
-            handle.draggable = !editMode;
-            handle.className = "ti ti-grip-vertical drag-handle";
-            handle.setAttribute("aria-hidden","true");
-
-            const inner = document.createElement("div");
-            inner.className = "field-inner";
-
-            const lbl = document.createElement("span");
-            lbl.className = "field-label";
-            lbl.textContent = field.label;
-
-            const inputEl = makeFieldInput(field);
-
-            inner.appendChild(lbl);
-            inner.appendChild(inputEl);
-
-            const badge = document.createElement("span");
-            badge.className = "field-type-badge";
-            badge.textContent = field.type;
-
-            const delF = document.createElement("button");
-            delF.className = "delete-btn";
-            delF.title = "Remove field";
-            delF.innerHTML = `<i class="ti ti-x"></i>`;
-            delF.style.display = editMode ? "none" : "";
-            delF.addEventListener("click", e => {
-
-                e.stopPropagation();
-                releaseId(field.id);
-                sec.fields.splice(fi, 1);
-                render(); updatePreview();
-                
-            });
-
-            fEl.appendChild(handle);
-            fEl.appendChild(inner);
-            fEl.appendChild(badge);
-            fEl.appendChild(delF);
-
-            fEl.addEventListener("dragstart", e => {
-
-                if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") 
-                    return;
-
-                dragType = "field"; dragSrc = field.id; dragSrcSection = sec.id;
-                setTimeout(() => fEl.classList.add("dragging"), 0);
-                e.dataTransfer.effectAllowed = "move";
-                e.stopPropagation();
-                
-            });
-            fEl.addEventListener("dragend", () => {
-                fEl.classList.remove("dragging"); 
-            });
-            fEl.addEventListener("dragover", e => {
-
-                if (dragType !== "field") 
-                    return;
-
+            if (dragSrcParent === parent && dragSrc !== data.id) {
                 e.preventDefault(); 
-                e.stopPropagation(); 
                 e.dataTransfer.dropEffect = "move";
 
-                fEl.classList.add("drop-indicator");
-                
-            });
-            fEl.addEventListener("dragleave", () => fEl.classList.remove("drop-indicator"));
-            fEl.addEventListener("drop", e => {
-
-                e.preventDefault(); 
-                e.stopPropagation();
-
-                if (dragType !== "field" || dragSrc === field.id) 
-                    return;
-
-                const srcSec = sheet.sections.find(s => s.id === dragSrcSection);
-                const fromIdx = srcSec.fields.findIndex(f => f.id === dragSrc);
-                const [moved] = srcSec.fields.splice(fromIdx, 1);
-                sec.fields.splice(fi, 0, moved);
-
-                // TODO: Update HTML instead of re-render
-
-                render(); 
-                updatePreview();
-                
-            });
-
-            fieldList.appendChild(fEl);
+                hdr.classList.add("drop-indicator");
+            }
                 
         });
+        hdr.addEventListener("dragleave", () => hdr.classList.remove("drop-indicator"));
+        hdr.addEventListener("drop", e => {
 
+            e.preventDefault();
+            if (dragSrcParent === parent && dragSrc !== data.id) {
+                const fromIdx = dragSrcParent.content.findIndex(s => s.id === dragSrc.id);
+                const toIdx = dragSrcParent.content.findIndex(s => s.id === data.id );
+                const [moved] = dragSrcParent.content.splice(fromIdx, 1);
+                parent.content.splice(toIdx, 0, moved);
+                
+                // Update HTML
+                if(fromIdx < toIdx) {
+                    sepEl.insertAdjacentElement('afterend',dragSrcElem);
+                } else {
+                    secEl.insertAdjacentElement('beforebegin',dragSrcElem);
+                }
+                dragSrcElem.insertAdjacentElement('afterend',dragSrcSepElem);
+                updatePreview();
+            }
+            dragSrcElem = null;
+            dragSrcSepElem = null;
+            dragSrcParent = null;
+            dragType = null;
+            dragSrc = null;
+            hdr.classList.remove("drop-indicator");
+        });
+    }
+
+    const fieldList = document.createElement("div");
+    fieldList.className = "field-list";
+    fieldList.style.flexDirection = data.direction ?? "row";
+
+    if (data.content.length === 0) {
+        makeEmptyMessage(fieldList);
+    }
+
+    data.content.forEach((field, fi) => {
+        makeContainer(field,field.type ?? "section",data,fieldList);
+    });
+
+    secEl.appendChild(hdr);
+    secEl.appendChild(fieldList);
+
+    if(!editMode) {
         const addRow = document.createElement("div");
         addRow.className = "add-field-row";
 
@@ -392,7 +503,7 @@ function render() {
         labelInp.placeholder = "Field label…";
 
         const typeSelect = document.createElement("select");
-        ["text","number","textarea","checkbox"].forEach(t => {
+        ["text","textarea","number","checkbox","section"].forEach(t => {
 
             const opt = document.createElement("option");
             opt.value = t; opt.textContent = t;
@@ -400,6 +511,7 @@ function render() {
         
         });
 
+    
         const addBtn = document.createElement("button");
         addBtn.innerHTML = `<i class="ti ti-plus" aria-hidden="true"></i>`;
         addBtn.addEventListener("click", () => {
@@ -407,17 +519,23 @@ function render() {
             const label = labelInp.value.trim();
             if (!label) 
                 return;
-            sec.fields.push({
-                id: genId(), 
-                label, 
-                type: typeSelect.value, 
-                value: "" 
-            });
+
+            // Update HTML: remove empty message
+            const em = secEl.querySelector(":scope > .field-list > .empty-msg");
+            if (em != null) {
+                em.remove();
+            }
+
+            if(typeSelect.value !== "section") {
+                // Update HTML
+                makeField(label,typeSelect.value,data,fieldList);
+            } else {
+                // Update HTML
+                makeSection(label,data,fieldList);
+            }
+
             labelInp.value = "";
-
-            // TODO: Update HTML instead of re-render
-
-            render(); updatePreview();
+            updatePreview();
             
         });
         labelInp.addEventListener("keydown", e => {
@@ -428,31 +546,39 @@ function render() {
         addRow.appendChild(typeSelect);
         addRow.appendChild(addBtn);
 
-        secEl.appendChild(hdr);
-        secEl.appendChild(fieldList);
         secEl.appendChild(addRow);
-        list.appendChild(secEl);
-        
+    }
+    
+    container.appendChild(secEl);
+    container.appendChild(sepEl);
+    return secEl;
+}
+
+function render() {
+
+    const list = document.getElementById("section-list");
+    list.innerHTML = "";
+
+    sheet.content.forEach((sec, si) => {
+        makeContainer(sec,sec.type ?? "section",sheet,list)
     });
 
     updatePreview();
 
 }
 
-document.getElementById("btn-add-section").addEventListener("click", () => {
+const sectionLabelInp = document.getElementById("new-section-name");
+const sectionList = document.getElementById("section-list");
+const sectionAddBtn = document.getElementById("btn-add-section");
+sectionAddBtn.addEventListener("click", () => {
+    if(sectionLabelInp == null || sectionList == null) return;
 
-    const inp = document.getElementById("new-section-name");
-    const label = inp.value.trim() || "New section";
-    sheet.sections.push({
-        id: genId(), 
-        label, 
-        fields: [] 
-    });
+    const label = sectionLabelInp.value.trim() || "New section";
 
-    inp.value = ""; 
+    // Update HTML
+    makeSection(label,sheet,sectionList);
 
-    // TODO: update HTML instead of re-render
-    render();
+    sectionLabelInp.value = ""; 
 
 });
 
@@ -494,7 +620,7 @@ document.getElementById("file-input").addEventListener("change", e => {
         try {
 
             const parsed = JSON.parse(ev.target.result);
-            if (!parsed.sections) {
+            if (!parsed.content) {
                 alert("Invalid character sheet JSON."); return; 
             }
             registerIds(parsed); sheet = parsed; 
@@ -515,7 +641,11 @@ document.getElementById("btn-preview").addEventListener("click", () => {
     previewVisible = !previewVisible;
     const el = document.getElementById("json-preview");
     const btn = document.getElementById("btn-preview");
-    el.style.display = previewVisible ? "block" : "none";
+    if(previewVisible) {
+        el.classList.remove("hidden");
+    } else {
+        el.classList.add("hidden");
+    }
     btn.innerHTML = previewVisible
         ? `<i class="ti ti-code" aria-hidden="true"></i> Hide JSON`
         : `<i class="ti ti-code" aria-hidden="true"></i> Show JSON`;
@@ -526,10 +656,18 @@ document.getElementById("btn-preview").addEventListener("click", () => {
 let editMode = false;
 const modeBtn = document.getElementById("btn-mode");
 modeBtn.addEventListener("click", () => {
-editMode = !editMode;
-modeBtn.innerHTML = editMode
-    ? `<i class="ti ti-pencil-off"></i> Edit mode`
-    : `<i class="ti ti-pencil"></i> Edit mode`;
+    editMode = !editMode;
+    modeBtn.innerHTML = editMode
+        ? `<i class="ti ti-pencil-off"></i> Edit mode`
+        : `<i class="ti ti-pencil"></i> Edit mode`;
+    
+    if(editMode) {
+        sectionLabelInp.classList.add("hidden");
+        sectionAddBtn.classList.add("hidden");
+    } else {
+        sectionLabelInp.classList.remove("hidden");
+        sectionAddBtn.classList.remove("hidden");
+    }
     
     // Re-rendering is probably fine here
     render();
