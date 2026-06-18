@@ -88,9 +88,15 @@ let sheet = {
 
 };
 
+/** @type {Object} */
+let dragSrc = null;
+/** @type {{type:string,label:string,content:Array}} */
+let dragSrcParent = null;
 
-let dragSrc = null, dragType = null, dragSrcParent = null;
-let dragSrcElem = null, dragSrcSepElem = null;
+/**@type {HTMLElement|null} */
+let dragSrcElem = null;
+/**@type {HTMLElement|null} */
+let dragSrcSepElem = null;
 
 function makeEmptyMessage(container) {
     const em = document.createElement("div");
@@ -143,22 +149,36 @@ function makeFieldInput(fieldData) {
     return inp;
 }
 
-function makeContainer(label, type, parent, parentEl) {
+/**
+ * @param {string|Object} data Container label or object loaded from file
+ * @param {string} type 
+ * @param {{label:string,type:string,content:Array}} parent 
+ * @param {HTMLDivElement} container 
+ * @returns {HTMLDivElement}
+ */
+function makeContainer(data, type, parent, parentEl) {
     if(type === "section") {
-        makeSection(label,parent,parentEl);
+        makeSection(data,parent,parentEl);
     } else {
-        makeField(label,type,parent,parentEl);
+        makeField(data,type,parent,parentEl);
     }
 }
 
-function makeField(label, type, parent, container) {
+/**
+ * @param {string|{label:string,type:string,value:string|number|boolean}} fieldData Field label or field object loaded from file
+ * @param {string} type 
+ * @param {{label:string,type:string,content:Array}} parent 
+ * @param {HTMLDivElement} container 
+ * @returns {HTMLDivElement}
+ */
+function makeField(fieldData, type, parent, container) {
     const data = (() => {
         let fd = null;
-        if (label instanceof Object) {
-            fd = label;
-        } else if (typeof(label) === "string") {
+        if (fieldData instanceof Object) {
+            fd = fieldData;
+        } else if (typeof(fieldData) === "string") {
             fd = {
-                label,
+                label: fieldData,
                 type,
                 value:""
             }
@@ -209,8 +229,7 @@ function makeField(label, type, parent, container) {
         delF.addEventListener("click", e => {
 
             e.stopPropagation();
-            const fIdx = parent.content.findIndex(f => f === data);
-            releaseId(data.id);
+            const fIdx = parent.content.indexOf(data);
             parent.content.splice(fIdx, 1);
             
             // Update HTML
@@ -230,7 +249,7 @@ function makeField(label, type, parent, container) {
             if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") 
                 return;
 
-            dragType = "field"; dragSrc = data; dragSrcParent = parent;
+            dragSrc = data; dragSrcParent = parent;
             dragSrcElem = fEl; dragSrcSepElem = sepEl;
             
             setTimeout(() => fEl.classList.add("dragging"), 0);
@@ -260,8 +279,8 @@ function makeField(label, type, parent, container) {
             e.stopPropagation();
 
             if (dragSrcParent === parent && dragSrc !== data) {
-                const fromIdx = dragSrcParent.content.findIndex(f => f === dragSrc);
-                const toIdx = dragSrcParent.content.findIndex(f => f === data );
+                const fromIdx = dragSrcParent.content.indexOf(dragSrc);
+                const toIdx = dragSrcParent.content.indexOf(data);
                 const [moved] = dragSrcParent.content.splice(fromIdx, 1);
                 parent.content.splice(toIdx, 0, moved);
                 
@@ -277,7 +296,6 @@ function makeField(label, type, parent, container) {
             dragSrcElem = null;
             dragSrcSepElem = null;
             dragSrcParent = null;
-            dragType = null;
             dragSrc = null;
             fEl.classList.remove("drop-indicator");
         });
@@ -288,14 +306,20 @@ function makeField(label, type, parent, container) {
     return fEl;
 }
 
-function makeSection(label, parent, container) {
+/**
+ * @param {string|{label:string,type:string,content:Array}} secData Section label or section object loaded from file
+ * @param {{label:string,type:string,content:Array}} parent 
+ * @param {HTMLDivElement} container 
+ * @returns @returns {HTMLDivElement}
+ */
+function makeSection(secData, parent, container) {
     const data = (() => {
         let sd = null;
-        if (label instanceof Object) {
-            sd = label;
-        } else if (typeof(label) === "string") {
+        if (secData instanceof Object) {
+            sd = secData;
+        } else if (typeof(secData) === "string") {
             sd = {
-                label,
+                label: secData,
                 type:"section",
                 content:[]
             }
@@ -341,10 +365,8 @@ function makeSection(label, parent, container) {
         delBtn.innerHTML = `<i class="ti ti-x"></i>`;
         // delBtn.style.display = editMode ? "none" : "";
         delBtn.addEventListener("click", () => {
-            data.content.forEach(f => releaseId(f.id));
-            const secIdx = parent.content.findIndex(s => s === data);
+            const secIdx = parent.content.indexOf(data);
             parent.content.splice(secIdx, 1);
-            releaseId(data.id);
             // Update HTML
             secEl.remove();
             sepEl.remove();
@@ -358,7 +380,7 @@ function makeSection(label, parent, container) {
 
         hdr.addEventListener("dragstart", e => {
 
-            dragType = "section"; dragSrc = data; dragSrcParent = parent;
+            dragSrc = data; dragSrcParent = parent;
             dragSrcElem = secEl; dragSrcSepElem = sepEl;
             setTimeout(() => secEl.classList.add("dragging"), 0);
             e.dataTransfer.effectAllowed = "move";
@@ -383,8 +405,8 @@ function makeSection(label, parent, container) {
 
             e.preventDefault();
             if (dragSrcParent === parent && dragSrc !== data) {
-                const fromIdx = dragSrcParent.content.findIndex(s => s === dragSrc);
-                const toIdx = dragSrcParent.content.findIndex(s => s === data );
+                const fromIdx = dragSrcParent.content.indexOf(dragSrc);
+                const toIdx = dragSrcParent.content.indexOf(data);
                 const [moved] = dragSrcParent.content.splice(fromIdx, 1);
                 parent.content.splice(toIdx, 0, moved);
                 
@@ -400,7 +422,6 @@ function makeSection(label, parent, container) {
             dragSrcElem = null;
             dragSrcSepElem = null;
             dragSrcParent = null;
-            dragType = null;
             dragSrc = null;
             hdr.classList.remove("drop-indicator");
         });
