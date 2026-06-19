@@ -15,8 +15,9 @@
                     "min": 0,
                     "max": 20
                 },
-                "mod": "=floor(data('.score')/2)-5",
-                "save": "=data('.mod')"
+                "deep_data":{
+                    "key2":"world"
+                }
             },
             "Dexterity": {
                 "score": {
@@ -24,9 +25,7 @@
                     "value": 15,
                     "min": 0,
                     "max": 20
-                },
-                "mod": "=floor(data('.score')/2)-5",
-                "save": "=data('.mod')"
+                }
             },
             "Constitution": {
                 "score": {
@@ -34,9 +33,7 @@
                     "value": 13,
                     "min": 0,
                     "max": 20
-                },
-                "mod": "=floor(data('.score')/2)-5",
-                "save": "=data('.mod')"
+                }
             },
             "Intelligence": {
                 "score": {
@@ -44,9 +41,7 @@
                     "value": 18,
                     "min": 0,
                     "max": 20
-                },
-                "mod": "=floor(data('.score')/2)-5",
-                "save": "=data('.mod')"
+                }
             },
             "Wisdom": {
                 "score": {
@@ -54,9 +49,7 @@
                     "value": 11,
                     "min": 0,
                     "max": 20
-                },
-                "mod": "=floor(data('.score')/2)-5",
-                "save": "=data('.mod')"
+                }
             },
             "Charisma": {
                 "score": {
@@ -64,9 +57,7 @@
                     "value": 8,
                     "min": 0,
                     "max": 20
-                },
-                "mod": "=floor(data('.score')/2)-5",
-                "save": "=data('.mod')"
+                }
             }
         },
         "Some Data": {
@@ -148,5 +139,25 @@
                 "tier": "default"
             }
         }
+    },
+    "rules": {
+        "Ability Scores.*": {
+            "mod":"=floor(data('.score')/2)-5",
+            "save":"=data('.mod')",
+            "deep_data":{
+                "array1":[
+                    1,2,3
+                ],
+                "key2":"hello",
+                "key3":{
+                    "real_test":["=data('Ability Scores.Strength.score')","=data('Ability Scores.Strength.mod')","=data('Ability Scores.Strength.save')"]
+                }
+            }
+        },
+        "Equipment.items[*]": {
+            "__type":"requirement",
+            "equipped":false
+        }
+
     }
 }

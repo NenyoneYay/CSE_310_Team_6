@@ -117,10 +117,48 @@ function orderedObjectSerializer (obj, spaces = undefined, depth = 0) {
     return JSON.stringify(obj,undefined,spaces);
 }
 
+function deepCopy (obj) {
+    if(Array.isArray(obj)) {
+        if(Object.hasOwn(obj,Symbol.for("deepCopy_visited")))
+            return obj[Symbol.for("deepCopy_visited")];
+        const rval = [];
+        obj[Symbol.for("deepCopy_visited")] = rval;
+        for(const item of obj) {
+            rval.push(deepCopy(item));
+        }
+        for(const sym of Object.getOwnPropertySymbols(obj)) {
+            if(sym === Symbol.for("deepCopy_visited")) continue;
+            rval[sym] = deepCopy(obj[sym]);
+        }
+        delete obj[Symbol.for("deepCopy_visited")];
+        return rval;
+    } else if(obj instanceof Object) {
+        if(Object.hasOwn(obj,Symbol.for("deepCopy_visited")))
+            return obj[Symbol.for("deepCopy_visited")];
+        const rval = {};
+        obj[Symbol.for("deepCopy_visited")] = rval;
+        for(const key of Object.keys(obj)) {
+            rval[key] = deepCopy(obj[key]);
+        }
+        for(const sym of Object.getOwnPropertySymbols(obj)) {
+            if(sym === Symbol.for("deepCopy_visited")) continue;
+            rval[sym] = deepCopy(obj[sym]);
+        }
+        delete obj[Symbol.for("deepCopy_visited")];
+        return rval;
+    } else {
+        return obj;
+    }
+}
+
 class Character {
     constructor(fileData) {
+        /** @type {BaseNode[]} */
+        this.newNodes = [];
+        
         this.root = undefined;
-        this.parseFile(fileData)
+        this.parseFile(fileData);
+
         // // here is some prototype data for rules
         // this.fileData = {
         //     "rules":{
@@ -136,9 +174,152 @@ class Character {
 
     }
 
+    buildTree (rootData, parent = undefined, virtual = false) {
+        const makeNode = (newNode) => {
+            this.newNodes.push(newNode); 
+            return newNode; 
+        }
+
+        const buildData = (dataTree,parent = undefined,virtual = false) => {
+            const type = dataTree?.["__type"];
+            let nextParent = dataTree
+            if(dataTree instanceof Object) {
+                if(parent != null && dataTree[Symbol.for("parent")] == undefined) {
+                    dataTree[Symbol.for("parent")] = parent;
+                }
+            }
+
+            if (dataTree == null || dataTree instanceof BaseNode) {
+                return dataTree;
+            } else if (["string","number","boolean"].includes(typeof(dataTree))) {
+
+                return makeNode(new DataNode(virtual,parent,{value: dataTree}));
+
+            } else if (Array.isArray(dataTree)) {
+                for(const [idx,item] of dataTree.entries()) {
+                    if(type != undefined) {
+                        if(!Object.hasOwn(item, "__type")) item["__type"] = type;
+                    }
+                    dataTree[idx] = buildData(item,nextParent,virtual);
+                }
+                dataTree[Symbol.for("virtual")] = virtual;
+                return dataTree;
+            } else if (dataTree instanceof Object) {
+                if(type != undefined) {
+                    switch(type) {
+                        case "data":
+                            return makeNode(new DataNode(virtual,parent,dataTree));
+                            break;
+                        case "modifier":
+                            return makeNode(new ModifierNode(virtual,parent,dataTree));
+                            break;
+                        case "container":
+                            nextParent = parent;
+                            if(dataTree["content"] instanceof Object) {
+                                dataTree["content"][Symbol.for("parent")] = nextParent;
+                            }
+                            break;
+                        default:
+                            console.log(`Unknown node type: '${type}'`);
+                    }
+                } 
+
+                for(const key of Object.keys(dataTree)) {
+                    if(!key.startsWith("__")) 
+                        dataTree[key] = buildData(dataTree[key],nextParent,virtual);
+                }
+                dataTree[Symbol.for("virtual")] = virtual;
+                return dataTree;
+            }
+            return null;
+        }
+
+        return buildData(rootData, parent, virtual);
+    }
+
+    buildRules (ruleData, root = null) {
+
+        for(const [key,rawData] of Object.entries(ruleData)) {
+            if(key.startsWith("__")) continue;
+
+            const {__type:ruleType,...ruleObj} = rawData;
+            let virtual = true;
+            switch(ruleType) {
+                case "requirement":
+                    virtual = false;
+                    break;
+            }
+
+            const targetPath = new Path(key);
+            const targetObjs = targetPath.resolve(root ?? this.root,false);
+
+            const pathCrawler = (pathResult) => {
+                if (pathResult?.__type === "pathLeaf") {
+                    const targetObj = pathResult.result;
+                    if (targetObj instanceof BaseNode) {
+                        return; // don't replace existing nodes
+                    }
+
+                    const recursor = (_ruleobj, _targetobj) => {
+                        if (_targetobj == undefined) {
+                            // TODO: make buildFrom(Path) to build new structures from rule paths.
+                            // also should merge new structure with existing objects along path if they exist.
+
+                        } else if (Array.isArray(_ruleobj) && Array.isArray(_targetobj) && virtual) {
+                            for (const val of _ruleobj) {
+                                const clone = deepCopy(val);
+                                if(clone instanceof Object) {
+                                    clone[Symbol.for("parent")] = _targetobj;
+                                    _targetobj.push(this.buildTree(clone,_targetobj,virtual));
+                                }
+                            }
+                        } else if (_ruleobj instanceof Object && _targetobj instanceof Object) {
+                            for(const [objKey,objVal] of Object.entries(_ruleobj)) {
+                                if(!Object.hasOwn(_targetobj, objKey)) {
+                                    const clone = deepCopy(objVal);
+                                    if(clone instanceof Object) clone[Symbol.for("parent")] = _targetobj;
+                                    _targetobj[objKey] = this.buildTree(clone,_targetobj,virtual);
+                                    _targetobj[Symbol.for("okeys")].push(objKey);
+                                } else {
+                                    const idx = _targetobj[Symbol.for("okeys")].indexOf(objKey);
+                                    const [moved] = _targetobj[Symbol.for("okeys")].splice(idx,1);
+                                    _targetobj[Symbol.for("okeys")].push(moved);
+                                    recursor(objVal,_targetobj[objKey]);
+                                }
+                            }
+                        }
+                    }
+
+                    recursor(ruleObj,targetObj);
+                } if (pathResult?.__type === "pathLeaf_accessors") {
+                    return; // do nothing to existing nodes found
+                } else if (Array.isArray(pathResult)) {
+                    for(const result of pathResult) {
+                        pathCrawler(result);
+                    }
+                }
+            }
+
+            pathCrawler(targetObjs);
+        }
+    }
+
+    processNewNodes() {
+        this.newNodes.forEach((newNode) => {
+            // register dependencies
+            newNode.evaluateDependencies();
+        });
+        this.newNodes.forEach((newNode) => {
+            // evaluate node values
+            newNode.evaluate();
+        });
+
+        this.newNodes = [];
+    }
+
     parseFile(fileData){
         this.destroy();
-        let jsonData = JSON.parse(fileData,function (key,value) {
+        const jsonData = JSON.parse(fileData,function (key,value) {
             const sanatizedKey = sanatizeKey(key);
             const [baseKey,sigil] = sanatizedKey.split('#');
             let rval = value;
@@ -150,8 +331,6 @@ class Character {
                     this[Symbol.for("okeys")] = [baseKey];
                 }
             }
-            
-            if(rval instanceof Object && key !== "") { rval[Symbol.for("parent")] = this; }
             
             if (sanatizedKey != key && rval != undefined) {
                 this[baseKey] = rval; // sanatize object prototype keys
@@ -167,74 +346,23 @@ class Character {
 
             return rval;
         });
-        let contextData = jsonData.data;
-        /** @type {BaseNode[]} */
-        let newNodes = [];
-        const makeNode = (newNode) => {
-            newNodes.push(newNode); 
-            return newNode; 
-        }
-        const joinPath = (base,...ext) => {return base!=='' ? `${base}${ext.map(v => '.'+v).join('')}` : ext.join('.')}
 
-        const contextRecursor = (dataTree,parent = undefined) => {
-            const type = dataTree?.["__type"];
-            let nextParent = dataTree
+        // Make "data" into a root object
+        const contextData = jsonData.data ?? {};
+        if(Object.hasOwn(contextData,Symbol.for("parent")))
+            delete contextData[Symbol.for("parent")];
 
-            if (dataTree == null || dataTree instanceof BaseNode) {
-                return dataTree;
-            } else if (["string","number","boolean"].includes(typeof(dataTree))) {
+        // Make "rules" into a root object
+        const ruleData = jsonData?.rules ?? {};
+        if(Object.hasOwn(ruleData,Symbol.for("parent")))
+            delete ruleData[Symbol.for("parent")];
 
-                return makeNode(new DataNode(false,parent,{value: dataTree}));
+        this.root = this.buildTree(contextData);
 
-            } else if (Array.isArray(dataTree)) {
-                for(const [idx,item] of dataTree.entries()) {
-                    if(type != undefined) {
-                        if(!Object.hasOwn(item, "__type")) item["__type"] = type;
-                    }
-                    dataTree[idx] = contextRecursor(item,nextParent);
-                }
-                return dataTree;
-            } else if (dataTree instanceof Object) {
-                if(type != undefined) {
-                    switch(type) {
-                        case "data":
-                            return makeNode(new DataNode(false,parent,dataTree));
-                            break;
-                        case "modifier":
-                            return makeNode(new ModifierNode(false,parent,dataTree));
-                            break;
-                        case "container":
-                            nextParent = parent;
-                            if(dataTree["content"] instanceof Object) {
-                                dataTree["content"][Symbol.for("parent")] = nextParent;
-                            }
-                            break;
-                        default:
-                            console.log(`Unknown node type: '${type}'`);
-                    }
-                } 
+        this.rules = ruleData;
+        this.buildRules(this.rules);
 
-                for(const key of Object.keys(dataTree)) {
-                    if(!key.startsWith("__")) 
-                        dataTree[key] = contextRecursor(dataTree[key],nextParent);
-                }
-                return dataTree;
-            }
-            return null;
-        }
-        this.root = contextRecursor(contextData);
-        // contextRecursor(contextData);
-        // this.root = contextData;
-        // Make root node into root node
-        delete this.root[Symbol.for("parent")];
-        newNodes.forEach((newNode) => {
-            // register dependencies
-            newNode.evaluateDependencies();
-        });
-        newNodes.forEach((newNode) => {
-            // evaluate node values
-            newNode.evaluate();
-        });
+        this.processNewNodes();
         return jsonData;
     }
     
@@ -247,7 +375,7 @@ class Character {
             if(Array.isArray(obj)) {
                 const processedArr = obj
                     .filter((val) => {
-                        if(val instanceof BaseNode && val.virtual)
+                        if(val instanceof Object && val[Symbol.for("virtual")])
                             return false;
                         return true;
                     })
@@ -262,7 +390,7 @@ class Character {
                 }
                 const processedKeys = keys
                     .filter((key) => {
-                        if(obj[key] instanceof BaseNode && obj.virtual)
+                        if(obj[key] instanceof Object && obj[key][Symbol.for("virtual")])
                             return false;
                         return true;
                     })
@@ -272,7 +400,7 @@ class Character {
             }
             return JSON.stringify(obj,undefined,spaces).replaceAll("\n",spaceInsertA);
         }
-        return `{\n    "data":${objSerializer(this.root,4,1)}\n}`;
+        return `{\n    "data":${objSerializer(this.root,4,1)},\n    "rules":${objSerializer(this.rules,4,1)}\n}`;
     }
 
     renderHTML(container) {
@@ -600,11 +728,11 @@ class Path {
     /**
      * @param {Object} root
      * @param {Boolean} resolveAccessors
-     * @returns {(Object|BaseNode|undefined)}
+     * @returns {Array<Array|{__type:"pathLeaf",result:any}|{__type:"pathLeaf_accessors",node:BaseNode,accessors:Array<string>}|undefined>}
      */
-    resolve(root,resolveAccessors=true) {
+    resolve(root,resolveAccessors = true) {
         const recursor = (treeRoot,tokens = this.tokens, cursor=0) => {
-            if(cursor >= tokens.length) return treeRoot;
+            if(cursor >= tokens.length) return {__type:"pathLeaf",result:treeRoot};
             if(treeRoot == null) return undefined;
 
             if (treeRoot instanceof Object && treeRoot?.["__type"] === "container") {
@@ -617,8 +745,11 @@ class Path {
                     return recursor(tokens[cursor].value,tokens,cursor+1);
                     break;
                 case 'T_BACK':
-                    if(Object.hasOwn(treeRoot,Symbol.for("parent"))) {
-                        return recursor(treeRoot[Symbol.for("parent")],tokens,cursor+1);
+                    const parent = treeRoot?.[Symbol.for("parent")];
+                    if(parent != undefined) {
+                        return recursor(parent,tokens,cursor+1);
+                    } else {
+                        return recursor(treeRoot,tokens,cursor+1)
                     }
                     break;
                 case 'O_KEY':
@@ -698,11 +829,11 @@ class Path {
                 case 'N_ACCESSORS':
                     if(treeRoot instanceof BaseNode) {
                         if(!resolveAccessors) 
-                            return {__type:"pathLeaf",node:treeRoot,accessors:tokens[cursor].value};
+                            return {__type:"pathLeaf_accessors",node:treeRoot,accessors:tokens[cursor].value};
                         if (tokens[cursor].value.length === 1) 
-                            return treeRoot.accessors[tokens[cursor].value];
+                            return {__type:"pathLeaf",result:treeRoot.accessors[tokens[cursor].value]};
                         return this.tokens[cursor].value.map(accessor => {
-                            return treeRoot.accessors[accessor];
+                            return {__type:"pathLeaf",result:treeRoot.accessors[accessor]};
                         });
                     }
                     break;
@@ -725,7 +856,7 @@ class Path {
         });
         query_container.push(recursor(root,this.tokens,query_start_idx));
 
-        if (query_container.length === 1) return query_container[0];
+        //if (query_container.length === 1) return query_container[0];
         return query_container;
     }
 }
@@ -761,6 +892,7 @@ class ExprValue {
      * @returns {string|number|boolean|null} The final value of this expression
      */
     modify(newValue, origin=null) {
+        const oldPaths = new Map(this.precedentPaths);
         this.origin = origin ?? new Path("");
         this.value = newValue;
         if(typeof(newValue) === "string") {
@@ -770,7 +902,7 @@ class ExprValue {
             if(newValue.startsWith("r="))
                 this.value = newValue.slice(1);
         }
-        return this.value;
+        return oldPaths;
     }
 
     /**
@@ -856,7 +988,9 @@ class ExprValue {
         /** @param {Path} path */
         ExprValue.parser.functions.data = (path, fallback=NaN) => {
             const replaceVals = (val) => {
-                if (["string","boolean"].includes(typeof(val))) {
+                if (val?.__type === "pathLeaf") {
+                    return replaceVals(val.result);
+                } else if (["string","boolean"].includes(typeof(val))) {
                     return val;
                 } else if (typeof(val) === "number") {
                     return Number.isNaN(val) ? fallback : val;
@@ -869,6 +1003,8 @@ class ExprValue {
                 }
             }
             let result = path.resolve(root);
+            if(result.length === 1) result = result[0];
+
             if (result instanceof ExprValue) {
                 throw EvalError("This isn't supposed to happen!!")
             } else if (Array.isArray(result)) {
@@ -1019,13 +1155,14 @@ class BaseNode {
             ({ value: dataVal } = dataObj)
 
         this[Symbol.for("parent")] = parent;
+        this[Symbol.for("virtual")] = virtual;
 
         this.raw = dataObj;
         this.accessors = {
             value: dataVal
         };
-        this.virtual = virtual;
         this.passThrough = undefined;
+        this.root = null;
 
         // dependents and precedents are mapped directly to nodes after
         // the character data tree is constructed. Maps are used to 
@@ -1121,9 +1258,13 @@ class BaseNode {
             }
             this.renderedElement = newElement;
             this.updateRenderedElement(value);
-            this.renderedElement.addEventListener("focus", this.inputFocusHandler);
-            this.renderedElement.addEventListener("input",this.inputChangeHandler);
-            this.renderedElement.addEventListener("blur", this.inputBlurHandler);
+            if(this[Symbol.for("virtual")]) {
+                this.renderedElement.disabled = true;
+            } else {
+                this.renderedElement.addEventListener("focus", this.inputFocusHandler);
+                this.renderedElement.addEventListener("input",this.inputChangeHandler);
+                this.renderedElement.addEventListener("blur", this.inputBlurHandler);
+            }
         }
         return this.renderedElement;
     }
@@ -1199,9 +1340,6 @@ class BaseNode {
     }
 
     evaluate() {
-        if(document.activeElement !== this.renderedElement || this.inputType === "checkbox")
-            this.updateRenderedElement(this.accessors.value);
-        
         if (this.dirty) {
             this.dirty = false;
             
@@ -1220,18 +1358,21 @@ class BaseNode {
             this.error = null;
             this.warning = null;
         }
+
+        if(document.activeElement !== this.renderedElement || this.inputType === "checkbox")
+            this.updateRenderedElement(this.accessors.value);
         return this.accessors.value;
     }
 
     evaluateDependencies() {
-        const root = this.findRoot();
+        this.root = this.findRoot();
         this.dependencyModifications.forEach((mod) => {
             if(mod == null || mod.path == null || mod.type == null) return;
             //Update Path
-            const resolvedPaths = mod.path.resolve(root,false) ?? null;
+            const resolvedPaths = mod.path.resolve(this.root,false) ?? null;
             const pathCrawler = (pathResult) => {
                 if(pathResult == null) return;
-                else if (pathResult instanceof Object && pathResult.__type === "pathLeaf") {
+                else if (pathResult?.__type === "pathLeaf_accessors") {
                     switch (mod.type) {
                         case "add precedent":
                             this.registerPrecedent(pathResult.node,pathResult.accessors,mod.amount);
@@ -1247,8 +1388,10 @@ class BaseNode {
                             break;
                     }
                     return;
+                } else if (pathResult?.__type === "pathLeaf") {
+                    pathCrawler(pathResult.result);
                 } else if (pathResult instanceof BaseNode) {
-                    pathCrawler({__type:"pathLeaf",node:pathResult,accessors:["node"]});
+                    pathCrawler({__type:"pathLeaf_accessors",node:pathResult,accessors:["node"]});
                 } else if (Array.isArray(pathResult)) {
                     pathResult.forEach(item => pathCrawler(item));
                     return;
@@ -1421,8 +1564,8 @@ class BaseNode {
     }
 
     getSaveData() {
-        if (this.virtual) return null;
-        return this.raw;
+        if (this[Symbol.for("virtual")]) return undefined;
+        return null;
     }
 
     destroy() {
@@ -1498,17 +1641,50 @@ class DataNode extends BaseNode {
         }
     }
 
+    /**
+     * 
+     * @param {Map<string,Path>} oldPaths 
+     * @param {Map<string,Path>} newPaths 
+     * @param {"precedent"|"dependent"} type 
+     * @returns 
+     */
+    calculateDepMods(oldPaths,newPaths,type="precedent") {
+        if(!(["precedent","dependent"].includes(type))) return;
+
+        const dependencyMods = [];
+        newPaths.forEach((path, key) => {
+            if (oldPaths.has(key)) {
+                oldPaths.delete(key)
+            } else {
+                dependencyMods.push({type:`add ${type}`,path:path,amount:1})
+            }
+        });
+        oldPaths.forEach((path,key) => {
+            dependencyMods.push({type:`remove ${type}`,path:path,amount:1})
+        })
+        return dependencyMods;
+    }
+
     set({value=undefined,min=undefined,max=undefined}) {
-        let success = false;
-        if(value != undefined) if(this.value.set(value)) success = true;
-        if(min != undefined) if(this.min.set(min)) success = true;
-        if(max != undefined) if(this.max.set(max)) success = true;
-        if(success) {
-            this.setDirty();
+        if(!this[Symbol.for("virtual")]) {
+            let success = false;
+            if(value != undefined) if(this.value.set(value)) success = true;
+            if(min != undefined) if(this.min.set(min)) success = true;
+            if(max != undefined) if(this.max.set(max)) success = true;
+            if(success) {
+                this.setDirty();
+            }
         }
         this.evaluate();
     }
 
+    /**
+     * @param {{
+     *  value:(string|number|boolean|undefined),
+     *  min:(string|number|boolean|undefined),
+     *  max:(string|number|boolean|undefined)
+     * }}  
+     */
     modify({value=undefined,min=undefined,max=undefined}) {
         /**
          * @param {ExprValue} accessor 
@@ -1517,37 +1693,28 @@ class DataNode extends BaseNode {
          */
         const getDepMods = (accessor,newVal) => {
             const dependencyMods = [];
-            this.oldPaths = new Map(accessor.precedentPaths);
+            const oldPaths = accessor.modify(newVal,this);
             //Update Path
-            accessor.modify(newVal,this);
-            accessor.precedentPaths.forEach((path, key) => {
-                if (this.oldPaths.has(key)) {
-                    this.oldPaths.delete(key)
-                } else {
-                    dependencyMods.push({type:"add precedent",path:path,amount:1})
-                }
-            });
-            this.oldPaths.forEach((path,key) => {
-                dependencyMods.push({type:"remove precedent",path:path,amount:1})
-            })
-            return dependencyMods;
+            return this.calculateDepMods(oldPaths,accessor.precedentPaths);
         }
 
-        if(value != undefined && value !== this.value.value) {
-            try {value = JSON.parse(value)} catch (err) {}
-            this.dependencyModifications.push(...getDepMods(this.value,value));
-        }
-        if(min != undefined && min !== this.min.value) {
-            try {min = JSON.parse(min)} catch (err) {}
-            this.dependencyModifications.push(...getDepMods(this.min,min)); 
-        }
-        if(max != undefined && max !== this.max.value) {
-            try {max = JSON.parse(max)} catch (err) {}
-            this.dependencyModifications.push(...getDepMods(this.max,max)); 
-        }
+        if(!this[Symbol.for("virtual")]) {
+            if(value != undefined && value !== this.value.value) {
+                try {value = JSON.parse(value)} catch (err) {}
+                this.dependencyModifications.push(...getDepMods(this.value,value));
+            }
+            if(min != undefined && min !== this.min.value) {
+                try {min = JSON.parse(min)} catch (err) {}
+                this.dependencyModifications.push(...getDepMods(this.min,min)); 
+            }
+            if(max != undefined && max !== this.max.value) {
+                try {max = JSON.parse(max)} catch (err) {}
+                this.dependencyModifications.push(...getDepMods(this.max,max)); 
+            }
 
-        this.evaluateDependencies();
-        this.setDirty();
+            this.evaluateDependencies();
+            this.setDirty();
+        }
         this.evaluate();
     }
 
@@ -1555,24 +1722,33 @@ class DataNode extends BaseNode {
         if(this.dirty) {
             try {
 
-                const root = this.findRoot();
+                const clamp = (val, min, max) => {
+                    if (min != null) {
+                        val = Math.max(val,min);
+                    }
+
+                    if (max != null) {
+                        val = Math.min(val,max);
+                    }
+                    return val;
+                }
 
                 // Evaluate this node
                 // max
-                let result = this.max.evaluate(root);
+                let result = this.max.evaluate(this.root);
                 this.accessors.max = 
-                    (Number.isNaN() || result == null)
+                    (Number.isNaN(result) || result == null)
                     ? null 
                     : result;
 
                 // min
-                result = this.min.evaluate(root);
+                result = this.min.evaluate(this.root);
                 this.accessors.min = 
                     (Number.isNaN(result) || result == null)
                     ? null 
                     : result;
 
-                this.accessors.base = this.value.evaluate(root);
+                this.accessors.base = this.value.evaluate(this.root);
 
                 // calculate modifiers
                 const modOperations = {}
@@ -1635,7 +1811,11 @@ class DataNode extends BaseNode {
                 }
                 
                 // apply modifiers
-                //this.accessors.value = this.accessors.base;
+                this.accessors.base = clamp(
+                    this.accessors.base,
+                    this.accessors.min,
+                    this.accessors.max
+                );
 
                 const modProcessOrder = [];
                 const {base:modOperationsBase,...modOperationsRest} = modOperations;
@@ -1665,35 +1845,20 @@ class DataNode extends BaseNode {
                         }
                     }
                     if(accessor === "base") {
+                        this.accessors.base = clamp(
+                            this.accessors.base,
+                            this.accessors.min,
+                            this.accessors.max
+                        );
                         this.accessors.value = this.accessors.base;
                     }
                 }
 
-                // Clamp all values after the dust settles
-                if (this.accessors.min != null) {
-                    this.accessors.base = Math.max(
-                        this.accessors.base,
-                        this.accessors.min
-                    )
-
-                    this.accessors.value = Math.max(
-                        this.accessors.value,
-                        this.accessors.min
-                    )
-                    
-                }
-
-                if (this.accessors.max != null) {
-                    this.accessors.base = Math.min(
-                        this.accessors.base,
-                        this.accessors.max
-                    )
-
-                    this.accessors.value = Math.min(
-                        this.accessors.value,
-                        this.accessors.max
-                    )
-                }
+                this.accessors.value = clamp(
+                    this.accessors.value,
+                    this.accessors.min,
+                    this.accessors.max
+                );
 
             } catch (e) {
                 this.isErrorSrc = true;
@@ -1707,29 +1872,28 @@ class DataNode extends BaseNode {
     }
 
     getSaveData() {
-        this.raw = {
+        let rval = super.getSaveData();
+        if (rval === undefined) return rval;
+        
+        rval = {
             __type: "data",
             value: this.value.getSaveData(),
             min: this.min.getSaveData(),
             max: this.max.getSaveData()
         }
-        
-        if(this.raw.min == undefined && this.raw.max == undefined)
-            this.raw = this.raw.value;
-        return super.getSaveData();
-    }
+        if(rval.min == undefined && rval.max == undefined)
+            rval = rval.value;
 
-    destroy () {
-        super.destroy();
+        return rval;
     }
 }
 
-class ModifierNode extends BaseNode {
+class ModifierNode extends DataNode {
     static defaultDataObj = {
+        ...super.defaultDataObj,
         target: undefined,
         operation:"add",
         condition: true,
-        value:0,
         tier: "default",
     }
     /**
@@ -1739,11 +1903,13 @@ class ModifierNode extends BaseNode {
      *  target:string,
      *  operation:("add"|"multiply"|"replace"),
      *  value:(number|"string starting with '='"|boolean),
+     *  max:(number|"string starting with '='"|boolean),
+     *  min:(number|"string starting with '='"|boolean),
      *  tier: number
      * }} dataObj
      */
     constructor(virtual, parent, dataObj) {
-        const {target,operation,value,condition,tier=0} = {...ModifierNode.defaultDataObj, ...dataObj};
+        const {target,operation,value,max,min,condition,tier=0} = {...ModifierNode.defaultDataObj, ...dataObj};
         super(virtual, parent, {target,operation,value,condition,tier});
         //Update Path
         if(target != undefined)
@@ -1759,55 +1925,31 @@ class ModifierNode extends BaseNode {
         } else if (typeof(tier) === "number") {
             this.tier = tier;
         }
-        //Update Path here too
-        this.value = new ExprValue(value, this);
-        this.value.precedentPaths.forEach(depPath => {
-            this.dependencyModifications.push({type:"add precedent",path:depPath,amount:1});
-        })
 
         this.condition = new ExprValue(condition ?? true, this);
         this.condition.precedentPaths.forEach(depPath => {
             this.dependencyModifications.push({type:"add precedent",path:depPath,amount:1});
         })
 
-        this.accessors = {
-            value: value,
-            condition: condition ?? true
-        }
-
-        this.inputFocusHandler = (event) => {
-            if (this.value.isExpr && this.renderedElement.type !== "text") {
-                this.renderHTML(this.value.value);
-                this.renderedElement.focus();
-            }
-            this.updateRenderedElement(this.value.value);
-        }
-        this.inputBlurHandler = (event) => {
-            if (this.renderedElement?.type === "text"){
-                this.modify({value:this.renderedElement.value});
-            }
-            this.evaluate();
-            if(this.renderedElement?.type === "text")
-                this.renderHTML(this.accessors.value);
-        }
-        const baseInputChangeHandler = this.inputChangeHandler;
-        this.inputChangeHandler = (event) => {
-            if(!this.value.isExpr)
-                baseInputChangeHandler(event);
-        }
-
+        this.accessors.condition = condition ?? true;
     }
 
     evaluate() {
         if (this.dirty) {
-            const root = this.findRoot();
-            this.accessors.value = this.value.evaluate(root);
-            this.accessors.condition = this.condition.evaluate(root);
+            this.accessors.condition = this.condition.evaluate(this.root);
         }
         super.evaluate();
     }
 
-    modify({value = undefined, condition = undefined}) {
+        /**
+     * @param {{
+     *  condition:(string|boolean|undefined),
+     *  value:(string|number|boolean|undefined),
+     *  min:(string|number|boolean|undefined),
+     *  max:(string|number|boolean|undefined)
+     * }}  
+     */
+    modify({condition = undefined,...rest}) {
         /**
          * @param {ExprValue} accessor 
          * @param {string|boolean|number} newVal 
@@ -1815,55 +1957,41 @@ class ModifierNode extends BaseNode {
          */
         const getDepMods = (accessor,newVal) => {
             const dependencyMods = [];
-            this.oldPaths = new Map(accessor.precedentPaths);
+            const oldPaths = accessor.modify(newVal,this);
             //Update Path
-            accessor.modify(newVal,this);
-            accessor.precedentPaths.forEach((path, key) => {
-                if (this.oldPaths.has(key)) {
-                    this.oldPaths.delete(key)
-                } else {
-                    dependencyMods.push({type:"add precedent",path:path,amount:1})
-                }
-            });
-            this.oldPaths.forEach((path,key) => {
-                dependencyMods.push({type:"remove precedent",path:path,amount:1})
-            })
-            return dependencyMods;
+            return this.calculateDepMods(oldPaths,accessor.precedentPaths);
         }
 
-        if(value != undefined) {
-            try {value = JSON.parse(value)} catch (err) {}
-            this.dependencyModifications.push(...getDepMods(this.value,value));
+        if(!this[Symbol.for("virtual")]) {
+            if(condition != undefined) {
+                try {condition = JSON.parse(condition)} catch (err) {}
+                this.dependencyModifications.push(...getDepMods(this.condition,condition));
+            }
         }
 
-        if(condition != undefined) {
-            try {condition = JSON.parse(condition)} catch (err) {}
-            this.dependencyModifications.push(...getDepMods(this.condition,condition));
-        }
-
-        this.evaluateDependencies();
-        this.setDirty();
-        this.evaluate();
-    }
-
-    set({value = undefined}) {
-        let success = false;
-        if(value != undefined && this.value.set(value)) success = true;
-        if(success) this.setDirty();
-        this.evaluate();
+        super.modify(...rest);
     }
 
     getSaveData() {
-        this.raw = {
+        let rval = super.getSaveData();
+        if (rval === undefined) return rval;
+
+        const newData = {
             __type: "modifier",
             target: this.target.raw,
             operation: this.operation,
             condition: this.condition.getSaveData(),
-            value: this.value.getSaveData(),
             tier: this.tier
         }
 
-        return super.getSaveData();
+        if(rval instanceof Object) {
+            Object.assign(rval,newData);
+        } else {
+            newData.value = rval;
+            rval = newData;
+        }
+
+        return rval;
     }
 }
 
@@ -1954,3 +2082,5 @@ let testFileData = `{
 
 let testChar = new Character(testFileData);
 let testNode = new Path('Ability Scores.Strength.score').resolve(testChar.root);
+if(testNode.length >= 1) testNode = testNode[0];
+if(testNode?.__type === "pathLeaf") testNode = testNode.result;
