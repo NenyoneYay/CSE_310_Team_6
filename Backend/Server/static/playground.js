@@ -273,7 +273,7 @@ function makeFieldInput(fieldData) {
  * @returns {HTMLDivElement}
  */
 function makeContainer(data, type, parent, parentEl) {
-    if(type === "section") {
+    if(type == null || type === "section") {
         makeSection(data,parent,parentEl);
     } else {
         makeField(data,type,parent,parentEl);

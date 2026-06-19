@@ -1,97 +1,151 @@
 {
     "data":{
-        "HP#data":{"value":30,"max":110},
-        "Speed#data":{"value": 30, "max": 100},
-        "Ability Scores":{
-            "Strength":{
-                "score#data":{"value":10,"max":20,"min":0},
+        "HP": {
+            "__type": "data",
+            "value": 30,
+            "max": 110
+        },
+        "Speed": 30,
+        "Ability Scores": {
+            "__direction": "column",
+            "Strength": {
+                "score": {
+                    "__type": "data",
+                    "value": 10,
+                    "min": 0,
+                    "max": 20
+                },
                 "mod": "=floor(data('.score')/2)-5",
                 "save": "=data('.mod')"
             },
-            "Dexterity":{
-                "score#data":{"value":15,"max":20,"min":0},
+            "Dexterity": {
+                "score": {
+                    "__type": "data",
+                    "value": 15,
+                    "min": 0,
+                    "max": 20
+                },
                 "mod": "=floor(data('.score')/2)-5",
                 "save": "=data('.mod')"
             },
-            "Constitution":{
-                "score#data":{"value":13,"max":20,"min":0},
+            "Constitution": {
+                "score": {
+                    "__type": "data",
+                    "value": 13,
+                    "min": 0,
+                    "max": 20
+                },
                 "mod": "=floor(data('.score')/2)-5",
                 "save": "=data('.mod')"
             },
-            "Intelligence":{
-                "score#data":{"value":18,"max":20,"min":0},
+            "Intelligence": {
+                "score": {
+                    "__type": "data",
+                    "value": 18,
+                    "min": 0,
+                    "max": 20
+                },
                 "mod": "=floor(data('.score')/2)-5",
                 "save": "=data('.mod')"
             },
-            "Wisdom":{
-                "score#data":{"value":11,"max":20,"min":0},
+            "Wisdom": {
+                "score": {
+                    "__type": "data",
+                    "value": 11,
+                    "min": 0,
+                    "max": 20
+                },
                 "mod": "=floor(data('.score')/2)-5",
                 "save": "=data('.mod')"
             },
-            "Charisma":{
-                "score#data":{"value":8,"max":20,"min":0},
+            "Charisma": {
+                "score": {
+                    "__type": "data",
+                    "value": 8,
+                    "min": 0,
+                    "max": 20
+                },
                 "mod": "=floor(data('.score')/2)-5",
                 "save": "=data('.mod')"
             }
         },
-        "Some Data":{
-            "multiNode#data":[
-                {"value":10},
-                {"value":20},
-                {"value":30}
-            ],
-            "sideNode":"=data('.multiNode.1')",
-            "accessor":"=data('Ability Scores.Strength.score#max')"
+        "Some Data": {
+            "multiNode": {
+                "__type": "container",
+                "content": [
+                    10,
+                    20,
+                    30
+                ]
+            },
+            "sideNode": "=data('.multiNode.1')",
+            "accessor": "=data('Ability Scores.Strength.score#max')"
         },
-        "Equipment":{
-            "capacity":"=data('Ability Scores.Strength.score') * 15",
-            "items":[
+        "Equipment": {
+            "capacity": "=data('Ability Scores.Strength.score') * 15",
+            "items": [
                 {
-                    "name":"Shortsword",
-                    "desc":"blablabla",
-                    "equipped":true,
-                    "weight":5
+                    "name": "Shortsword",
+                    "desc": "blablabla",
+                    "equipped": true,
+                    "weight": 5
                 },
                 {
-                    "name":"Shield",
-                    "desc":"blablabla",
-                    "equipped":false,
-                    "weight":3
+                    "name": "Shield",
+                    "desc": "blablabla",
+                    "equipped": false,
+                    "weight": 3
                 },
                 {
-                    "desc":"no name",
-                    "weight":40
+                    "desc": "no name",
+                    "weight": 40
                 }
             ],
-            "carrying":"=sum(aprod(data('Equipment.items[*].weight'),data('Equipment.items[*].equipped',1)))"
+            "carrying": "=sum(aprod(data('Equipment.items[*].weight'),data('Equipment.items[*].equipped',1)))"
         },
-        "constructor":"malicious code",
-        "Modifiers":{
-            "Save Increase#modifier":{
-                "target":"Ability Scores.*.save",
-                "operation":"add",
-                "value":2
+        "~constructor": "malicious code",
+        "Modifiers": {
+            "Save Increase": {
+                "__type": "modifier",
+                "target": "Ability Scores.*.save",
+                "operation": "add",
+                "condition": true,
+                "value": 2,
+                "tier": "default"
             },
-            "beltEquipped":true,
-            "Strength Boost":{
-                "__type":"modifier",
-                "target":"Ability Scores.Strength.score",
-                "operation":"add",
-                "value":5
+            "beltEquipped": true,
+            "Strength Boost": {
+                "__type": "modifier",
+                "target": "Ability Scores.Strength.score",
+                "operation": "add",
+                "condition": true,
+                "value": 5,
+                "tier": "default"
             },
-            "Belt of Strength":{
-                "__type":"modifier",
-                "target":"Ability Scores.Strength.score#value,max",
-                "operation":"replace",
-                "tier":20000000,
-                "value":25,
-                "condition":"=data('.beltEquipped')"
+            "Belt of Strength": {
+                "__type": "modifier",
+                "target": "Ability Scores.Strength.score#value,max",
+                "operation": "replace",
+                "condition": "=data('.beltEquipped')",
+                "value": 25,
+                "tier": 20000000
             },
-            "Dexterity Boost":{
-                "__type":"modifier",
+            "Dexterity Boost": {
+                "__type": "modifier",
                 "target": "Ability Scores.Dexterity.score",
                 "operation": "add",
-                "value": 2
+                "condition": true,
+                "value": 2,
+                "tier": "default"
+            },
+            "Modified Checkbox": true,
+            "Checkbox Modifier": {
+                "__type": "modifier",
+                "target": ".Modified Checkbox",
+                "operation": "replace",
+                "condition": true,
+                "value": false,
+                "tier": "default"
             }
         }
     }

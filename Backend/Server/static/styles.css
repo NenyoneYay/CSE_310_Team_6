@@ -112,10 +112,6 @@ li{
 div details div details{
     border:1px solid black;
 }
-button{
-    margin-right: 10px;
-
-}
 
 /* Gallery */
 #gallery{
@@ -199,8 +195,8 @@ main{
 
     /*personal preference spaceing probably should change later*/
 main > *{
-        padding:1em;
-        }
+    padding:1em;
+}
     /*mobile conversions*/
 @media screen and (max-width: 750px){
 
@@ -231,3 +227,6 @@ main > *{
 
 }
 
+.hidden {
+    display: none !important;
+}
