@@ -568,19 +568,19 @@ class Path {
     /**
      * 
      * @param {string} path 
-     * @param {Path|Object} root
+     * @param {Path|Object} origin
      */
-    constructor(path = "", root=null) {
+    constructor(path = "", origin=null) {
         /** @type {string} */
         this.raw = path;
 
         // tokenize the path syntax from path
         /** @type {Array<{type:string,value:any}>} */
         this.tokens = [];
-        if(root instanceof Path)
-            this.tokens = this.tokenize(path, root);
-        else if (root instanceof Object && Object.hasOwn(root,Symbol.for("parent"))) {
-            this.tokens = this.tokenize(path, undefined, root);
+        if(origin instanceof Path)
+            this.tokens = this.tokenize(path, origin);
+        else if (origin instanceof Object && Object.hasOwn(origin,Symbol.for("parent"))) {
+            this.tokens = this.tokenize(path, undefined, origin);
         } else {
             this.tokens = this.tokenize(path);
         }
@@ -593,7 +593,7 @@ class Path {
      * @param {rootPath} Path
      * */
 
-    tokenize (str,rootPath=null,rootObj=null) {
+    tokenize (str,originPath=null,originObj=null) {
         if (str == undefined) return [];
 
         /** @type {Object[]} */
@@ -601,10 +601,10 @@ class Path {
 
         let tokens = [];
         if(str.length === 0 || ".#".includes(str[0])){
-            if (rootPath != null) {
-                tokens = new Array(...rootPath.tokens);
-            } else if (rootObj != null) {
-                tokens.push({type:"T_ROOT",value:rootObj});
+            if (originPath != null) {
+                tokens = new Array(...originPath.tokens);
+            } else if (originObj != null) {
+                tokens.push({type:"T_ORIGIN",value:originObj});
             }
         }
 
@@ -656,8 +656,8 @@ class Path {
                 
             else if (m[7] !== undefined) {
                 tokens.push({type:'CONCAT',value:';,'});
-                if (rootPath != null && ".#".includes(str[i+1]) && contextStack.length < 1) {
-                    tokens.push(...rootPath.tokens);
+                if (originPath != null && ".#".includes(str[i+1]) && contextStack.length < 1) {
+                    tokens.push(...originPath.tokens);
                 }
             }
 
@@ -690,7 +690,7 @@ class Path {
             let tokenStr = ''
             const startOfPath = pv === '' || (pv.length > 0 && ";,(.".includes(pv[pv.length-1]))
             switch (cv.type) {
-                case 'T_ROOT':
+                case 'T_ORIGIN':
                     tokenStr = Path.absolutePathStr(cv.value,root);
                     break;
                 case 'T_BACK':
@@ -731,6 +731,7 @@ class Path {
      * @returns {Array<Array|{__type:"pathLeaf",result:any}|{__type:"pathLeaf_accessors",node:BaseNode,accessors:Array<string>}|undefined>}
      */
     resolve(root,resolveAccessors = true) {
+
         const recursor = (treeRoot,tokens = this.tokens, cursor=0) => {
             if(cursor >= tokens.length) return {__type:"pathLeaf",result:treeRoot};
             if(treeRoot == null) return undefined;
@@ -741,7 +742,7 @@ class Path {
             }
 
             switch(tokens[cursor].type) {
-                case 'T_ROOT':
+                case 'T_ORIGIN':
                     return recursor(tokens[cursor].value,tokens,cursor+1);
                     break;
                 case 'T_BACK':
