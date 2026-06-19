@@ -117,39 +117,62 @@ function orderedObjectSerializer (obj, spaces = undefined, depth = 0) {
     return JSON.stringify(obj,undefined,spaces);
 }
 
-function deepCopy (obj) {
-    if(Array.isArray(obj)) {
-        if(Object.hasOwn(obj,Symbol.for("deepCopy_visited")))
-            return obj[Symbol.for("deepCopy_visited")];
-        const rval = [];
-        obj[Symbol.for("deepCopy_visited")] = rval;
-        for(const item of obj) {
-            rval.push(deepCopy(item));
+function deepCopy (obj, filterFunc = null, leaveFiltered = false) {
+    if(filterFunc == null) filterFunc = ((k,v) => true);
+
+    const recursor = (obj) => {
+        if(Array.isArray(obj)) {
+            if(Object.hasOwn(obj,Symbol.for("deepCopy_visited")))
+                return obj[Symbol.for("deepCopy_visited")];
+            const rval = [];
+            obj[Symbol.for("deepCopy_visited")] = rval;
+            for(const [idx,item] of obj.entries()) {
+                if(!filterFunc(idx,item)) {
+                    if (leaveFiltered) rval.push(item);
+                } else {
+                    rval.push(recursor(item));
+                }
+            }
+            for(const sym of Object.getOwnPropertySymbols(obj)) {
+                if(sym === Symbol.for("deepCopy_visited")) continue;
+                if(!filterFunc(sym,obj[sym])) {
+                    if (leaveFiltered) rval[sym] = obj[sym];
+                } else {
+                    rval[sym] = recursor(obj[sym]);
+                }
+            }
+            delete obj[Symbol.for("deepCopy_visited")];
+            return rval;
+        } else if(obj instanceof Object) {
+            if(Object.hasOwn(obj,Symbol.for("deepCopy_visited")))
+                return obj[Symbol.for("deepCopy_visited")];
+            const rval = {};
+            obj[Symbol.for("deepCopy_visited")] = rval;
+            for(const key of Object.keys(obj)) {
+                if(!filterFunc(key,obj[key])) {
+                    if (leaveFiltered) rval[key] = obj[key];
+                } else {
+                    rval[key] = recursor(obj[key]);
+                }
+            }
+            for(const sym of Object.getOwnPropertySymbols(obj)) {
+                if(sym === Symbol.for("deepCopy_visited")) continue;
+                if(!filterFunc(sym,obj[sym])) {
+                    if (leaveFiltered) rval[sym] = obj[sym];
+                } else {
+                    rval[sym] = recursor(obj[sym]);
+                }
+            }
+            delete obj[Symbol.for("deepCopy_visited")];
+            return rval;
+        } else {
+            return obj;
         }
-        for(const sym of Object.getOwnPropertySymbols(obj)) {
-            if(sym === Symbol.for("deepCopy_visited")) continue;
-            rval[sym] = deepCopy(obj[sym]);
-        }
-        delete obj[Symbol.for("deepCopy_visited")];
-        return rval;
-    } else if(obj instanceof Object) {
-        if(Object.hasOwn(obj,Symbol.for("deepCopy_visited")))
-            return obj[Symbol.for("deepCopy_visited")];
-        const rval = {};
-        obj[Symbol.for("deepCopy_visited")] = rval;
-        for(const key of Object.keys(obj)) {
-            rval[key] = deepCopy(obj[key]);
-        }
-        for(const sym of Object.getOwnPropertySymbols(obj)) {
-            if(sym === Symbol.for("deepCopy_visited")) continue;
-            rval[sym] = deepCopy(obj[sym]);
-        }
-        delete obj[Symbol.for("deepCopy_visited")];
-        return rval;
-    } else {
-        return obj;
     }
+
+    return recursor(obj);
 }
+
 
 class Character {
     constructor(fileData) {
@@ -533,7 +556,7 @@ class Path {
      * Group 6: "#" accessor sigils. Expressed: #accessor1,accessor2,... at the end of a query or on it's own
      * Group 7: ';' semicoln to separate full path queries
      */
-    static tokensRegex = /(?<=^|[;,\.])\s*(\.+)|(?:(?<=^|[\.;,\(])\s*(?:([\w~][\w: ~]*?|\*))\s*?(?=$|[\.\[;#,\)]))|(?<=[\w: ~\)\]])\[\s*(?:(-?\d+(?:\s*,\s*-?\d+)*)|(-?\d*\s*:\s*-?\d*)|(\*))\s*\]\s*(?=$|[\.\[#,;\)])|#(\w+(?:,\w+)*)\s*(?=$|[;\)])|(;|,)|\.|(\()|(\))/y;
+    static tokensRegex = /(?<=^|[;,\.])\s*(\.+)|(?:(?<=^|[\.;,\(])\s*(?:([\w~][\w: ~-]*?|\*))\s*?(?=$|[\.\[;#,\)]))|(?<=[\w: ~\)\]-])\[\s*(?:(-?\d+(?:\s*,\s*-?\d+)*)|(-?\d*\s*:\s*-?\d*)|(\*))\s*\]\s*(?=$|[\.\[#,;\)])|#(\w+(?:,\w+)*)\s*(?=$|[;\)])|(;|,)|\.|(\()|(\))/y;
     /* Test Syntax string:
         Key Value.(Key[47],Key,key)[5][5:][*].Key[5,789,-6]#accessor1,accessor2;Key:morekey.Key.Key[:-1].*#accessor1,accessor3,accessor4
         items[1,-4,5][*][1][-1][1:][:1][-2:3]
@@ -543,9 +566,11 @@ class Path {
         #accessor1,accessor2
     */
 
+    static tokenCopyFilter = (k,v) => !(k === Symbol.for("parent") || v instanceof BaseNode);
+
     static absolutePathStr(obj, root=null) {
         if(obj instanceof Path) 
-            return obj.getAbsolutePathStr(root);
+            return obj.getPathStr(false, root);
 
         if(root!=null && obj === root) return "";
         if(obj != null && obj instanceof Object) {
@@ -567,7 +592,7 @@ class Path {
 //Update path
     /**
      * 
-     * @param {string} path 
+     * @param {string|Path|Array<{type:string,value:any}>} path 
      * @param {Path|Object} origin
      */
     constructor(path = "", origin=null) {
@@ -577,12 +602,28 @@ class Path {
         // tokenize the path syntax from path
         /** @type {Array<{type:string,value:any}>} */
         this.tokens = [];
-        if(origin instanceof Path)
-            this.tokens = this.tokenize(path, origin);
-        else if (origin instanceof Object && Object.hasOwn(origin,Symbol.for("parent"))) {
-            this.tokens = this.tokenize(path, undefined, origin);
-        } else {
-            this.tokens = this.tokenize(path);
+
+        if(typeof(path) === "string") {
+            if(origin instanceof Path)
+                this.tokens = this.tokenize(path, origin);
+            else if (origin instanceof Object) {
+                this.tokens = this.tokenize(path, undefined, origin);
+            } else {
+                this.tokens = this.tokenize(path);
+            }
+        } else if (path instanceof Path) {
+            this.raw = path.raw;
+            this.tokens = deepCopy(path.tokens,Path.tokenCopyFilter,true);
+        } else if (Array.isArray(path)) {
+            let pathOrigin = undefined;
+
+            if (origin instanceof Path) {
+                this.tokens = this.tokenize("",origin);
+            } else if (origin instanceof Object) {
+                this.tokens = this.tokenize("",undefined,origin);
+            }
+            this.tokens.push(...deepCopy(path,Path.tokenCopyFilter,true));
+            this.raw = this.getPathStr(true);
         }
 
         Path.tokensRegex.lastIndex = 0;
@@ -602,7 +643,7 @@ class Path {
         let tokens = [];
         if(str.length === 0 || ".#".includes(str[0])){
             if (originPath != null) {
-                tokens = new Array(...originPath.tokens);
+                tokens = deepCopy(originPath.tokens,Path.tokenCopyFilter,true);
             } else if (originObj != null) {
                 tokens.push({type:"T_ORIGIN",value:originObj});
             }
@@ -680,7 +721,7 @@ class Path {
         return tokens;
     }
 
-    getAbsolutePathStr(root = null) {
+    getPathStr(relative = true, root = null) {
         /**
          * @param {{type:string,value:any}} pv 
          * @param {{type:string,value:any}} cv 
@@ -691,7 +732,8 @@ class Path {
             const startOfPath = pv === '' || (pv.length > 0 && ";,(.".includes(pv[pv.length-1]))
             switch (cv.type) {
                 case 'T_ORIGIN':
-                    tokenStr = Path.absolutePathStr(cv.value,root);
+                    if(relative) return '';
+                    else return Path.absolutePathStr(cv.value,root);
                     break;
                 case 'T_BACK':
                 case 'O_KEY':
@@ -734,7 +776,14 @@ class Path {
 
         const recursor = (treeRoot,tokens = this.tokens, cursor=0) => {
             if(cursor >= tokens.length) return {__type:"pathLeaf",result:treeRoot};
-            if(treeRoot == null) return undefined;
+            
+            if(tokens[cursor].type === "T_ORIGIN") {
+                return recursor(tokens[cursor].value,tokens,cursor+1);
+            }
+
+            if(treeRoot == null) {
+                return undefined;
+            }
 
             if (treeRoot instanceof Object && treeRoot?.["__type"] === "container") {
                 if(treeRoot?.["content"] == null) return undefined;
@@ -742,9 +791,6 @@ class Path {
             }
 
             switch(tokens[cursor].type) {
-                case 'T_ORIGIN':
-                    return recursor(tokens[cursor].value,tokens,cursor+1);
-                    break;
                 case 'T_BACK':
                     const parent = treeRoot?.[Symbol.for("parent")];
                     if(parent != undefined) {
@@ -764,7 +810,8 @@ class Path {
                                 return recursor(treeRoot[key],tokens,cursor+1);
                             });
                         } else {
-                            return recursor(treeRoot[tokens[cursor].value],tokens,cursor+1);
+                            const nextVal = treeRoot[tokens[cursor].value];
+                            return recursor(nextVal,tokens,cursor+1);
                         }
                     }
                     break;
