@@ -7,10 +7,71 @@
 
 {% block content %}
         <a href="index.html" id="back_link">Back</a>
-        <div class="style-category" id="font-category">
-            <div class="style-setting">
-                
+        <form id="style_settings_form">
+            <h2>Font</h2>
+            <hr>
+            <div class="style_category">
+                <div class="style_setting">
+                    <p>Header Font</p>
+                    <input type="text" id="header_font_field" name="header_font_field" placeholder="'Segoe UI'">
+                </div>
+                <div class="style_setting">
+                    <p>Text Font</p>
+                    <input type="text" id="text_font_field" name="text_font_field" placeholder="'Segoe UI'">
+                </div>
+                <div class="style_setting">
+                    <p>Font Scale</p>
+                    <input type="number" id="font_scale_field" name="font_scale_field" placeholder="1">
+                </div>
+                <div class="style_setting">
+                    <p>Primary Font Color</p>
+                    <div class="color_preview" id="primary_font_color_preview"></div>
+                    <input type="text" id="primary_font_color_field" name="primary_font_color_field" placeholder="#fff5eb">
+                </div>
+                <div class="style_setting">
+                    <p>Contrast Font Color</p>
+                    <div class="color_preview" id="contrast_font_color_preview"></div>
+                    <input type="text" id="contrast_font_color_field" name="contrast_font_color_field" placeholder="#000000">
+                </div>
             </div>
-        </div>
+            
+            <h2>Background</h2>
+            <hr>
+            <div class="style_category">
+                <div class="style_setting">
+                    <p>Primary BG Color</p>
+                    <div class="color_preview" id="primary_bg_color_preview"></div>
+                    <input type="text" id="primary_bg_color_field" name="primary_bg_color_field" placeholder="#4e1818">
+                </div>
+                <div class="style_setting">
+                    <p>Secondary BG Color</p>
+                    <div class="color_preview" id="secondary_bg_color_preview"></div>
+                    <input type="text" id="secondary_bg_color_field" name="secondary_bg_color_field" placeholder="#638165">
+                </div>
+                <div class="style_setting">
+                    <p>Container Color</p>
+                    <div class="color_preview" id="container_color_preview"></div>
+                    <input type="text" id="container_color_field" name="container_color_field" placeholder="#696969">
+                </div>
+                <div class="style_setting">
+                    <p>Contrast Container Color</p>
+                    <div class="color_preview" id="contrast_container_color_preview"></div>
+                    <input type="text" id="contrast_container_color_field" name="contrast_container_color_field" placeholder="#e2e2e2">
+                </div>
+            </div>
+
+            <div id="submit_buttons">
+                <button id="commit_button" type="submit">
+                    Commit
+                </button>
+                <button id="revert_button" type="submit">
+                    Revert
+                </button>
+                <button id="clear_button" type="submit">
+                    Clear
+                </button>
+            </div>
+            
+        </form>
         
 {% endblock %}
