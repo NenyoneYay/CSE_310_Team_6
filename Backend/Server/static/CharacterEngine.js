@@ -578,27 +578,32 @@ class Character {
 
 class Path {
     /* Tokens Regex Group Explination:
-     * Group 1: '.' or ',' for path separator logics
-     * Group 2: Group token. Expressed: (key1,key2,...)
-     * - Each key can have array accessors. These items are grouped and returned
-     *   as an array.
-     * - Tokens are recursively parsed inside.
-     * Group 2: Key token. Expressed: Key1.Key2
+     * Group 1: Path from root object
+     * Group 2: '.' or ',' for path separator logics
+     * Group 3: Key token. Expressed: Key1.Key2
      * - Each of these keys can have array accessors. These are singleton
      *   object paths.
-     * Group 3: Array index list accessor. Expressed: [1,2,3] or [2]
+     * Group 4: Array index list accessor. Expressed: [1,2,3] or [2]
      * - Can be negative numbers. Negatives are wrapped around to end of array.
      * - Comes after Key or Group tokens.
-     * Group 4: Array index slice accessor. Expressed: [:5](beginning -> 5), [3:] (3 -> end), [:] (Everything)
+     * Group 5: Array index slice accessor. Expressed: [:5](beginning -> 5), [3:] (3 -> end), [:] (Everything)
      * - Can be negative numbers. Also wrapped to end of array.
      * - Comes after Key or Group tokens.
-     * Group 5: "*" Wildcard array accessor. Expressed: [*]
+     * Group 6: "*" Wildcard array accessor. Expressed: [*]
      * - refers to entire array
      * - Comes after Key or Group tokens.
-     * Group 6: "#" accessor sigils. Expressed: #accessor1,accessor2,... at the end of a query or on it's own
-     * Group 7: ';' semicoln to separate full path queries
+     * Group 7: "#" accessor sigils. Expressed: #accessor1,accessor2,... at the end of a query or on it's own
+     * Group 8: ';,' semicoln or comma to separate full path queries. 
+     * - Commas cannot be used for this purpose after accessor sigils, 
+     *   but semicolns can.
+     * Group 9: '(' Start of Group token. 
+     * Group 10: ')' End of Group token.
+     * - Groups are expressed by: (key1,key2,...)
+     *   - Each key can have array accessors. These items are grouped and returned
+     *     as an array.
+     *   - Tokens are recursively parsed inside.
      */
-    static tokensRegex = /(?<=^|[;,\.])\s*(\.+)|(?:(?<=^|[\.;,\(])\s*(?:([\w~][\w: ~\-]*?|\*))\s*?(?=$|[\.\[;#,\)]))|(?<=[\w: ~\)\]\-\.])\[\s*(?:(-?\d+(?:\s*,\s*-?\d+)*)|(-?\d*\s*:\s*-?\d*)|(\*))\s*\]\s*(?=$|[\.\[#,;\)])|#(\w+(?:,\w+)*)\s*(?=$|[;\)])|(;|,)|\.|(\()|(\))/y;
+    static tokensRegex = /(?<=^|[;,])\s*(\$)\s*|(?<=^|[;,\.])\s*(\.+)|(?:(?<=^|[\.;,\($])\s*(?:([\w~][\w: ~\-]*?|\*))\s*(?=$|[\.\[;#,\)]))|(?<=^|[\w~][\w: ~\-]*?|\*|[\)\]]|(?<=\.)\.)\[\s*(?:(-?\d+(?:\s*,\s*-?\d+)*)|(-?\d*\s*:\s*-?\d*)|(\*))\s*\]\s*(?=$|[\.\[#,;\)])|#(\w+(?:,\w+)*)\s*(?=$|[;\)])|(;|,)|\.|(\()|(\))/y;
     /* 
     Test Syntax string:
     Key Value.(Key[47],Key,key)[5][5:][*].Key[5,789,-6]#accessor1,accessor2;Key:morekey.Key.Key[:-1].*#accessor1,accessor3,accessor4
@@ -633,7 +638,8 @@ class Path {
             if(from != null) {
                 let idx = rootChain.indexOf(obj);
                 if(idx >= 0) {
-                    const rval = [{type:"T_ORIGIN",value:from}]
+                    const isRoot = obj?.[Symbol.for("parent")] == undefined;
+                    const rval = [{type:(isRoot ? "T_ROOT" : "T_ORIGIN"),value:from}]
                     for(let i = idx;i > 0;i--) {
                         rval.push({type:"T_BACK",value:"."});
                     }
@@ -663,7 +669,7 @@ class Path {
                     }
                 } else {
                     // just return the full absolute path if all else fails.
-                    return [{type:"T_ORIGIN",value:obj}]; 
+                    return [{type:"T_ROOT",value:obj}]; 
                 }
             }
             return undefined;
@@ -696,7 +702,7 @@ class Path {
      * @param {Object} obj 
      * @returns {Object}
      */
-    static getRoot(obj) {
+    static findRoot(obj) {
         let parentObj = obj;
         while (parentObj[Symbol.for("parent")] != undefined) {
             parentObj = parentObj[Symbol.for("parent")];
@@ -709,35 +715,56 @@ class Path {
      * @returns {Array<{type:string,value:any}>}
      */
     static copyTokens(tokens) {
-        const recursor = (_tokens) => {
+        const _isValidToken = (token) => {
+            return (token instanceof Object)
+            && token?.type != undefined 
+            && token?.value != undefined 
+            && typeof(token.type) == "string";
+        }
+
+        const _copyTokens = (tokens) => {
             const tokenCopies = []
-            for(const token of _tokens) {
-                switch (token.type) {
-                    case 'A_LIST':
-                    case 'A_SLICE':
-                    case 'N_ACCESSORS':
-                        tokenCopies.push({type:token.type, value:[...token.value]});
-                        break;
-                    case 'T_GROUP':
-                        tokenCopies.push({type:token.type, value:recursor(token.value)});
-                        break;
-                    case 'T_ORIGIN':
-                    case 'T_BACK':
-                    case 'O_KEY':
-                    case 'A_WILDCARD':
-                    case 'CONCAT':
-                    default:
-                        tokenCopies.push({type:token.type, value:token.value});
-                        break;
-                }
+            for(const token of tokens) {
+                const tokenCopy = _copyToken(token);
+                if(tokenCopy == undefined) continue; // skip invalid tokens
+                tokenCopies.push(tokenCopy);
             }
             return tokenCopies;
         }
+
+        const _copyToken = (token) => {
+            if(!_isValidToken(token)) return undefined;
+
+            let tokenCopy = undefined;
+            switch (token.type) {
+                case 'A_LIST':
+                case 'A_SLICE':
+                case 'N_ACCESSORS':
+                    if(Array.isArray(token.value))
+                        tokenCopy = {type:token.type, value:[...token.value]};
+                    break;
+                case 'T_GROUP':
+                    tokenCopy = {type:token.type, value:_copyTokens(token.value)};
+                    break;
+                case 'T_ROOT':
+                case 'T_ORIGIN':
+                case 'T_BACK':
+                case 'O_KEY':
+                case 'A_WILDCARD':
+                case 'CONCAT':
+                default:
+                    tokenCopy = {type:token.type, value:token.value};
+                    break;
+            }
+            return tokenCopy;
+        }
         
         if(tokens instanceof Path) {
-            return recursor(tokens.tokens);
+            return _copyTokens(tokens.tokens);
         } else if (Array.isArray(tokens)){
-            return recursor(tokens);
+            return _copyTokens(tokens);
+        } else if (_isValidToken(tokens)){
+            return _copyToken(tokens);
         }
         return undefined;
     }
@@ -752,8 +779,6 @@ class Path {
         let tokens = [];
         let originTokens = [];
         if (path instanceof Path || Array.isArray(path)) {
-            
-            let tokensValid = true;
 
             if(origin != null) {
                 if (origin instanceof Path) {
@@ -765,37 +790,34 @@ class Path {
             }
 
             const pathTokens = (path instanceof Path) 
-                ? Path.copyTokens(path.tokens)
-                : Path.copyTokens(path);
+                ? path.tokens
+                : path;
             
             for(const [idx,token] of pathTokens.entries()) {
-                if(token?.type == undefined || token?.value == undefined 
-                    || typeof(token.type) != "string"
-                ){
-                    continue; // skip invalid tokens
-                }
-
-                if(tokensValid) {
-                    switch(token.type) {
-                        case "T_ORIGIN":
-                            // don't replace the original origin if it exists
-                            if(origin == null)
-                                tokens.push(token);
-                            break;
-                        case "T_BACK":
-                            // pop tokens off the stack if able to shorten/standardize paths
-                            if(tokens.length > 0 && !(["T_BACK","T_ORIGIN","CONCAT","T_GROUP"].includes(tokens.at(-1)?.type))) {
-                                tokens.pop();
-                            } else {
-                                tokens.push(token);
-                            }
-                            break;
-                        case "CONCAT":
-                            tokens.push(token);
-                            tokens.push(originTokens);
-                        default:
-                            tokens.push(token);
-                    }
+                const tokenCopy = Path.copyTokens(token);
+                if(tokenCopy == undefined) continue; // skip invalid tokens
+                switch(token.type) {
+                    case "T_ROOT":
+                        tokens = [tokenCopy]; // replace any origin pathing with root
+                        break;
+                    case "T_ORIGIN":
+                        // don't replace the original origin if it exists
+                        if(origin == null)
+                            tokens.push(tokenCopy);
+                        break;
+                    case "T_BACK":
+                        // pop tokens off the stack if able to shorten/standardize paths
+                        if(tokens.length > 0 && !(["T_BACK","T_ORIGIN","T_ROOT","CONCAT","T_GROUP"].includes(tokens.at(-1)?.type))) {
+                            tokens.pop();
+                        } else {
+                            tokens.push(tokenCopy);
+                        }
+                        break;
+                    case "CONCAT":
+                        tokens.push(tokenCopy);
+                        tokens.push(originTokens);
+                    default:
+                        tokens.push(tokenCopy);
                 }
             }
             return tokens;
@@ -806,13 +828,15 @@ class Path {
         /** @type {Object[]} */
         const contextStack = [];
 
-        
-        if((path.length === 0 || ".#".includes(path[0])) && origin != null){
+        let originObj = null;
+        if(path[0] != '~' && origin != null){
             if (origin instanceof Path) {
+                originObj = origin.getOrigin();
                 originTokens = Path.copyTokens(origin.tokens);
                 tokens.push(...originTokens);
             } else if (origin instanceof Object) {
-                tokens.push({type:"T_ORIGIN",value:origin});
+                originObj = origin;
+                tokens.push({type:"T_ORIGIN",value:originObj});
             }
         }
 
@@ -827,8 +851,12 @@ class Path {
             // console.log(m); // Cool Debug thing
 
             if (m[1] !== undefined) {
-                for (let i=0;i<m[1].length;i++) {
-                    if(tokens.length > 0 && !(["T_BACK","T_ORIGIN","CONCAT","T_GROUP"].includes(tokens.at(-1)?.type))) {
+                tokens.push({type:"T_ROOT",value:originObj})
+            }
+
+            if (m[2] !== undefined) {
+                for (let i=0;i<m[2].length;i++) {
+                    if(tokens.length > 0 && !(["T_BACK","T_ORIGIN","T_ROOT","CONCAT","T_GROUP"].includes(tokens.at(-1)?.type))) {
                         tokens.pop();
                     } else {
                         tokens.push({type:'T_BACK',value:'.'});
@@ -836,49 +864,49 @@ class Path {
                 }
             }
 
-            else if(m[2] !== undefined) {
-                tokens.push({type:'O_KEY',value:sanatizeKey(m[2])});
-            }
-
             else if(m[3] !== undefined) {
-                tokens.push({type:'A_LIST',value:m[3].split(',').map(x => parseInt(x))});
+                tokens.push({type:'O_KEY',value:sanatizeKey(m[3])});
             }
 
             else if(m[4] !== undefined) {
-                let [pmin,pmax] = m[4].split(':');
+                tokens.push({type:'A_LIST',value:m[4].split(',').map(x => parseInt(x))});
+            }
+
+            else if(m[5] !== undefined) {
+                let [pmin,pmax] = m[5].split(':');
                 if (pmin === '') pmin = 0;
                 else pmin = parseInt(pmin);
                 if (pmax === '') pmax = undefined;
                 else pmax = parseInt(pmax);
 
                 if(Number.isNaN(pmin) || Number.isNaN(pmax)) 
-                    throw SyntaxError(`Token ${m[4]} at ${i}: Array slice indexes must be numbers.`);
+                    throw SyntaxError(`Token ${m[5]} at ${i}: Array slice indexes must be numbers.`);
 
                 tokens.push({type:'A_SLICE',value:{min:pmin,max:pmax}});
             }
 
-            else if(m[5] !== undefined) {
+            else if(m[6] !== undefined) {
                 tokens.push({type:'A_WILDCARD',value:'*'});
             }
 
-            else if(m[6] !== undefined && m[6] !== '') {
-                tokens.push({type:'N_ACCESSORS',value:m[6].split(',').map(x => sanatizeKey(x))});
+            else if(m[7] !== undefined && m[7] !== '') {
+                tokens.push({type:'N_ACCESSORS',value:m[7].split(',').map(x => sanatizeKey(x))});
             }
                 
-            else if (m[7] !== undefined) { //;,
+            else if (m[8] !== undefined) { //;,
                 tokens.push({type:'CONCAT',value:';,'});
                 if (contextStack.length < 1) {
                     tokens.push(...originTokens);
                 }
             }
 
-            else if (m[8] !== undefined) { // (
+            else if (m[9] !== undefined) { // (
                 contextStack.push(tokens);// push token context into stack
                 tokens = []; // create new token context
             }
 
-            else if (m[9] !== undefined) { // )
-                if (contextStack.length <= 0) throw SyntaxError(`Token ${m[9]} at ${i}: Unbalanced Parentheses. Missing opening '('`);
+            else if (m[10] !== undefined) { // )
+                if (contextStack.length <= 0) throw SyntaxError(`Token ${m[10]} at ${i}: Unbalanced Parentheses. Missing opening '('`);
                 const group_token = {'type':'T_GROUP','value':tokens}; // store current token context into group token
                 tokens = contextStack.pop(); // pop previous context off the stack to continue where we left off
                 tokens.push(group_token);
@@ -912,7 +940,12 @@ class Path {
     getOrigin() {
         let rval = undefined;
         for(const token of this.tokens) {
-            if(token.type === "T_ORIGIN") rval = token.value;
+            switch (token.type) {
+                case "T_ORIGIN":
+                case "T_ROOT":
+                    rval = token.value ?? undefined;
+                    break;
+            }
         }
         return rval;
     }
@@ -926,8 +959,11 @@ class Path {
         /** @param {string} pv */
         const pathReducer = (pv,cv) => {
             let tokenStr = ''
-            const startOfPath = pv === '' || (pv.length > 0 && ";,(.".includes(pv.at(-1)))
+            const startOfPath = pv === '' || (pv.length > 0 && ";,(.$".includes(pv.at(-1)))
             switch (cv.type) {
+                case 'T_ROOT':
+                    return '$';
+                    break;
                 case 'T_ORIGIN':
                     return '';
                     break;
@@ -977,7 +1013,7 @@ class Path {
         return this.tokens.reduce(pathReducer,'');
     }
 
-    resolveStrs(root,relativeTo = null) {
+    resolveStrs(root = null,relativeTo = null) {
 
         const reducer = (obj) => {
             const rval = []
@@ -996,19 +1032,30 @@ class Path {
         return reducer(results)
     }
 
+
     /**
      * @callback ResolutionCallback
-     * @param {*} treeRoot
+     * @param {Object|Array|BaseNode} treeRoot
      * @param {{type:string, value:any}} currentToken
+     * @param {Path} resolvedPath
+     * @returns {ResolutionDecision} 
+     */
+
+    /**
+     * @typedef ResolutionDecision
+     * @property {"continue"|"collect"|"skip"|"stop"} action
+     * @property {Object|Array} overrideChild
      */
 
     /** 
      * @param {Object} root
-     * @param {(treeRoot:*, currentToken: {type:string, value:*}, metaData:*) => void} callback
+     * @param {(treeRoot:*, currentToken: {type:string, value:*}, resolvedPath:Path) => ResolutionDecision} callback
      * @returns {Array<Array|{__type:"pathResult",result:any,node:(BaseNode|undefined),accessors:(Array<string>|undefined)}|undefined>}
      */
-    resolve(root, callback = null) {
+    resolve(root = null, callback = null) {
 
+        let resolvedTokens = [];
+        let resolvedPath = null;
         const recursor = (treeRoot,tokens = this.tokens, cursor=0) => {
             const resultReplacer = (obj) => {
                 if(obj?.__type === "pathResult") {
@@ -1029,7 +1076,20 @@ class Path {
             }
 
             if(tokens[cursor].type === "T_ORIGIN") {
-                return recursor(tokens[cursor].value,tokens,cursor+1);
+                if(tokens[cursor].value != null)
+                    return recursor(tokens[cursor].value,tokens,cursor+1);
+                else
+                    return recursor(treeRoot,tokens,cursor+1);
+            }
+
+            if(tokens[cursor].type === "T_ROOT") {
+                if(tokens[cursor].value != null) {
+                    const newRoot = Path.findRoot(tokens[cursor].value)
+                    if(newRoot != null) {
+                        return recursor(newRoot,tokens,cursor+1);
+                    }
+                }
+                return recursor(treeRoot,tokens,cursor+1);
             }
 
             if(treeRoot == null) {
@@ -1043,6 +1103,12 @@ class Path {
             }
 
             let rval = undefined;
+            if(callback != null) {
+                resolvedPath = new Path(resolvedTokens);
+                callback(treeRoot, tokens[cursor], resolvedPath);
+            }
+
+            resolvedTokens.push(tokens[cursor]);
             switch(tokens[cursor].type) {
                 case 'T_BACK':
                     const parent = treeRoot?.[Symbol.for("parent")];
@@ -1079,20 +1145,20 @@ class Path {
                         //let nextVal = null;
                         tokens[cursor].value.forEach((token,idx) => {
                             if(token.type === 'CONCAT' || idx === tokens[cursor].value.length-1) {
-                                if(callback != null) callback(treeRoot, {type:tokens[cursor].type, value:"enter"});
+                                if(callback != null) callback(treeRoot, {type:tokens[cursor].type, value:"enter"},resolvedPath);
                                 const nextVal = recursor(treeRoot,tokens[cursor].value,start_idx);
-                                if(callback != null) callback(treeRoot, {type:tokens[cursor].type, value:"exit"});
+                                if(callback != null) callback(treeRoot, {type:tokens[cursor].type, value:"exit"},resolvedPath);
                                 concat_container.push(resultReplacer(nextVal));
-                                if(callback != null) callback(treeRoot, {type:tokens[cursor].type, value:"end"});
+                                if(callback != null) callback(treeRoot, {type:tokens[cursor].type, value:"end"},resolvedPath);
                                 start_idx = idx+1;
                             }
                         });
-                        if (concat_container.length === 1) return concat_container[0];
-                        else return concat_container;
+                        if (concat_container.length === 1) rval = concat_container[0];
+                        else rval = concat_container;
                     }
                     break;
                 case 'CONCAT':
-                    return treeRoot;
+                    rval = treeRoot;
                     break;
                 case 'A_LIST':
                     if(treeRoot instanceof BaseNode) 
@@ -1153,7 +1219,8 @@ class Path {
                     rval = recursor(treeRoot,tokens,cursor+1);
                     break;  
             }
-            if(callback != null) callback(treeRoot, tokens[cursor]);
+
+            resolvedTokens.pop();
             return rval;
         }
 
@@ -1291,7 +1358,7 @@ class ExprValue {
         return expr
     }
 
-    evaluate(root) {
+    evaluate(root = null) {
         //Update path
         /** @param {Path} path */
         ExprValue.parser.functions.data = (path, fallback=NaN) => {
@@ -1492,7 +1559,6 @@ class BaseNode {
             value: dataVal
         };
         this.passThrough = undefined;
-        this.root = null;
 
         // dependents and precedents are mapped directly to nodes after
         // the character data tree is constructed. Maps are used to 
@@ -1695,11 +1761,10 @@ class BaseNode {
     }
 
     evaluateDependencies() {
-        this.root = this.findRoot();
         this.dependencyModifications.forEach((mod) => {
             if(mod == null || mod.path == null || mod.type == null) return;
             //Update Path
-            const resolvedPaths = mod.path.resolve(this.root) ?? null;
+            const resolvedPaths = mod.path.resolve() ?? null;
             const pathCrawler = (pathResult) => {
                 if(pathResult == null) return;
                 else if (pathResult?.__type === "pathResult" && pathResult?.accessors != undefined) {
@@ -2065,20 +2130,20 @@ class DataNode extends BaseNode {
 
                 // Evaluate this node
                 // max
-                let result = this.max.evaluate(this.root);
+                let result = this.max.evaluate();
                 this.accessors.max = 
                     (Number.isNaN(result) || result == null)
                     ? null 
                     : result;
 
                 // min
-                result = this.min.evaluate(this.root);
+                result = this.min.evaluate();
                 this.accessors.min = 
                     (Number.isNaN(result) || result == null)
                     ? null 
                     : result;
 
-                this.accessors.base = this.value.evaluate(this.root);
+                this.accessors.base = this.value.evaluate();
 
                 // calculate modifiers
                 const modOperations = {}
@@ -2266,7 +2331,7 @@ class ModifierNode extends DataNode {
 
     evaluate() {
         if (this.dirty) {
-            this.accessors.condition = this.condition.evaluate(this.root);
+            this.accessors.condition = this.condition.evaluate();
         }
         super.evaluate();
     }
@@ -2365,12 +2430,12 @@ let testFileData = `{
                 {"__type":"data","value":10},
                 {"__type":"data","value":20},
                 {"__type":"data","value":30},
-                {"__type":"data","value":"=data('Equipment.items[1].name')=='Shield'"}
+                {"__type":"data","value":"=data('$Equipment.items[1].name')=='Shield'"}
             ],
             "sideNode":"=data('.multiNode[1]')"
         },
         "Equipment":{
-            "capacity":"=data('Ability Scores.Strength.score') * 15",
+            "capacity":"=data('$Ability Scores.Strength.score') * 15",
             "items":[
                 {
                     "name":"Shortsword",
