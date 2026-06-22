@@ -117,57 +117,72 @@ function orderedObjectSerializer (obj, spaces = undefined, depth = 0) {
     return JSON.stringify(obj,undefined,spaces);
 }
 
-function deepCopy (obj, filterFunc = null, leaveFiltered = false) {
-    if(filterFunc == null) filterFunc = ((k,v) => true);
+function deepCopy (obj, filterFunc = null) {
+    if(filterFunc == null) filterFunc = ((k,v) => "continue");
 
     const recursor = (obj) => {
+        let rval = undefined;
         if(Array.isArray(obj)) {
             if(Object.hasOwn(obj,Symbol.for("deepCopy_visited")))
                 return obj[Symbol.for("deepCopy_visited")];
-            const rval = [];
+            rval = [];
             obj[Symbol.for("deepCopy_visited")] = rval;
             for(const [idx,item] of obj.entries()) {
-                if(!filterFunc(idx,item)) {
-                    if (leaveFiltered) rval.push(item);
-                } else {
-                    rval.push(recursor(item));
+                switch(filterFunc(idx,item)) {
+                    case "collect":
+                        rval.push(item);
+                        break;
+                    case "skip":
+                    case false:
+                        break;
+                    case "continue":
+                    case true:
+                    default:
+                        rval.push(recursor(item));
+                        break;
                 }
             }
-            for(const sym of Object.getOwnPropertySymbols(obj)) {
-                if(sym === Symbol.for("deepCopy_visited")) continue;
-                if(!filterFunc(sym,obj[sym])) {
-                    if (leaveFiltered) rval[sym] = obj[sym];
-                } else {
-                    rval[sym] = recursor(obj[sym]);
-                }
-            }
-            delete obj[Symbol.for("deepCopy_visited")];
-            return rval;
         } else if(obj instanceof Object) {
             if(Object.hasOwn(obj,Symbol.for("deepCopy_visited")))
                 return obj[Symbol.for("deepCopy_visited")];
-            const rval = {};
+            rval = {};
             obj[Symbol.for("deepCopy_visited")] = rval;
             for(const key of Object.keys(obj)) {
-                if(!filterFunc(key,obj[key])) {
-                    if (leaveFiltered) rval[key] = obj[key];
-                } else {
-                    rval[key] = recursor(obj[key]);
+                switch(filterFunc(key,obj[key])) {
+                    case "collect":
+                        rval[key] = obj[key];
+                        break;
+                    case "skip":
+                    case false:
+                        break;
+                    case "continue":
+                    case true:
+                    default:
+                        rval[key] = recursor(obj[key]);
+                        break;
                 }
             }
-            for(const sym of Object.getOwnPropertySymbols(obj)) {
-                if(sym === Symbol.for("deepCopy_visited")) continue;
-                if(!filterFunc(sym,obj[sym])) {
-                    if (leaveFiltered) rval[sym] = obj[sym];
-                } else {
-                    rval[sym] = recursor(obj[sym]);
-                }
-            }
-            delete obj[Symbol.for("deepCopy_visited")];
-            return rval;
         } else {
             return obj;
         }
+        for(const sym of Object.getOwnPropertySymbols(obj)) {
+            if(sym === Symbol.for("deepCopy_visited")) continue;
+            switch(filterFunc(sym,obj[sym])) {
+                case "collect":
+                    rval[sym] = obj[sym];
+                    break;
+                case "skip":
+                case false:
+                    break;
+                case "continue":
+                case true:
+                default:
+                    rval[sym] = recursor(obj[sym]);
+                    break;
+            }
+        }
+        delete obj[Symbol.for("deepCopy_visited")];
+        return rval;
     }
 
     return recursor(obj);
@@ -1101,18 +1116,12 @@ class Path {
                 return replacedVal;
             }  
 
-            if(cursor >= tokens.length || collectEarly || stopResolution || tokens[cursor].type === "CONCAT") {
-                if(treeRoot == null) return undefined;
-                if(treeRoot?.__type === "pathResult") return llappend(treeRoot);
-                if(treeRoot instanceof BaseNode) return llappend(buildResult(treeRoot,treeRoot,["node"]));
-                return llappend(buildResult(treeRoot));
-            }
-
             let rval = undefined;
             collectEarly = false;
             skipToken = false;
-            if(callback != null) {
-                const callbackResult = callback(treeRoot, tokens[cursor]);
+            if(callback != null && cursor < tokens.length && tokens[cursor]?.type != "CONCAT") {
+                const token = tokens[cursor];
+                const callbackResult = callback(treeRoot, token);
                 
                 if(callbackResult?.overrideChild != undefined) {
                     treeRoot = overrideChild;
@@ -1127,12 +1136,19 @@ class Path {
                         break;
                     case "stop":
                         stopResolution = true;
+                        //return recursor(treeRoot,tokens,cursor);
                         break;
                     case "continue":
                     default:
                         // do nothing, continue as normal
                 }
+            }
 
+            if(cursor >= tokens.length || collectEarly || stopResolution || tokens[cursor].type === "CONCAT") {
+                if(treeRoot == null) return undefined;
+                if(treeRoot?.__type === "pathResult") return llappend(treeRoot);
+                if(treeRoot instanceof BaseNode) return llappend(buildResult(treeRoot,treeRoot));
+                return llappend(buildResult(treeRoot));
             }
 
             if(tokens[cursor].type === "T_ORIGIN") {
@@ -1200,19 +1216,26 @@ class Path {
                     if(treeRoot instanceof BaseNode) 
                         return recursor(treeRoot.passThrough,tokens,cursor);
                     else {
+                        
+                        const oldCollect = collectEarly;
                         const concat_container = [];
                         let start_idx = 0
-                        
                         //let nextVal = null;
                         tokens[cursor].value.forEach((token,idx) => {
+                            if(stopResolution) return;
                             if(token.type === 'CONCAT' || idx === tokens[cursor].value.length-1) {
+                                
+                                collectEarly = false;
                                 if(flat) {
                                     // save current LL (Linked List) state
                                     const oldHead = llhead, oldTail = lltail, oldTotal = totalsize;
+                                    
                                     // reset LL for grouped tokens
                                     llhead = null; lltail = null; totalsize = 0;
+                                    
                                     // run recursor on tokens. Results will be put into LL
                                     recursor(treeRoot,tokens[cursor].value,start_idx);
+                                    collectEarly = oldCollect;
                                     // build results into fixed size array
                                     const results = llbuildArray();
                                     // restore old LL state
@@ -1222,6 +1245,7 @@ class Path {
                                 } else {
                                     // run recursor on grouped tokens
                                     const nextVal = recursor(treeRoot,tokens[cursor].value,start_idx);
+                                    collectEarly = oldCollect;
                                     // run recursor on resulting nested array structure, 
                                     // but keep array structure intact using replacer function.
                                     concat_container.push(resultReplacer(nextVal));
@@ -1229,6 +1253,7 @@ class Path {
                                 start_idx = idx+1;
                             }
                         });
+
                         if(flat) rval = undefined;
                         else if (concat_container.length === 1) rval = concat_container[0];
                         else rval = concat_container;
@@ -1830,23 +1855,24 @@ class BaseNode {
             
             const pathCrawler = (pathResult) => {
                 if(pathResult == null) return;
-                else if (pathResult?.__type === "pathResult" 
-                    && pathResult?.node != null 
-                    && pathResult?.accessor != null
-                ) {
-                    switch (mod.type) {
-                        case "add precedent":
-                            this.registerPrecedent(pathResult.node,pathResult.accessor,mod.amount);
-                            break;
-                        case "add dependent":
-                            this.registerDependent(pathResult.node,pathResult.accessor,mod.amount);
-                            break;
-                        case "remove precedent":
-                            this.unregisterPrecedent(pathResult.node,pathResult.accessor,mod.amount);
-                            break;
-                        case "remove dependent":
-                            this.unregisterDependent(pathResult.node,pathResult.accessor,mod.amount);
-                            break;
+                else if (pathResult?.__type === "pathResult") {
+                    if(pathResult.result instanceof BaseNode && pathResult?.node == null) 
+                        pathResult.node = pathResult.result;
+                    if(pathResult?.node != null) {
+                        switch (mod.type) {
+                            case "add precedent":
+                                this.registerPrecedent(pathResult.node,pathResult.accessor,mod.amount);
+                                break;
+                            case "add dependent":
+                                this.registerDependent(pathResult.node,pathResult.accessor,mod.amount);
+                                break;
+                            case "remove precedent":
+                                this.unregisterPrecedent(pathResult.node,pathResult.accessor,mod.amount);
+                                break;
+                            case "remove dependent":
+                                this.unregisterDependent(pathResult.node,pathResult.accessor,mod.amount);
+                                break;
+                        }
                     }
                     return;
                 } else if (Array.isArray(pathResult)) {
