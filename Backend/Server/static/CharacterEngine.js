@@ -1011,8 +1011,8 @@ class Path {
 
         const results = this.resolve({root:root, flat:true});
         return results.map((result) => {
-            if (result?.__type === "pathResult" && result?.accessors != undefined) {
-                return `${Path.pathTo(result.node,relativeTo).str}#${result.accessors[0]}`;
+            if (result?.__type === "pathResult" && result?.accessor != undefined) {
+                return `${Path.pathTo(result.node,relativeTo).str}#${result.accessor}`;
             } else if (result?.__type === "pathResult"){
                 return Path.pathTo(result.result,relativeTo).str;
             } 
@@ -1080,8 +1080,8 @@ class Path {
             return rval;
         }
 
-        function buildResult(result = null,node = null,accessors = null) {
-            return {__type:"pathResult",result,node,accessors}
+        function buildResult(result = null,node = null,accessor = null) {
+            return {__type:"pathResult",result,node,accessor}
         }
 
         const recursor = (treeRoot,tokens = this.tokens, cursor=0) => {
@@ -1284,10 +1284,10 @@ class Path {
                 case 'N_ACCESSORS':
                     if(treeRoot instanceof BaseNode) {
                         if (tokens[cursor].value.length === 1) {
-                            rval = llappend(buildResult(treeRoot.accessors[tokens[cursor].value],treeRoot,tokens[cursor].value));
+                            rval = llappend(buildResult(treeRoot.accessors[tokens[cursor].value],treeRoot,tokens[cursor].value[0]));
                         } else {
                             rval = this.tokens[cursor].value.map(accessor => {
-                                return llappend(buildResult(treeRoot.accessors[accessor],treeRoot,[accessor]));
+                                return llappend(buildResult(treeRoot.accessors[accessor],treeRoot,accessor));
                             });
                         }
                     }
@@ -1832,20 +1832,20 @@ class BaseNode {
                 if(pathResult == null) return;
                 else if (pathResult?.__type === "pathResult" 
                     && pathResult?.node != null 
-                    && pathResult?.accessors != null
+                    && pathResult?.accessor != null
                 ) {
                     switch (mod.type) {
                         case "add precedent":
-                            this.registerPrecedent(pathResult.node,pathResult.accessors,mod.amount);
+                            this.registerPrecedent(pathResult.node,pathResult.accessor,mod.amount);
                             break;
                         case "add dependent":
-                            this.registerDependent(pathResult.node,pathResult.accessors,mod.amount);
+                            this.registerDependent(pathResult.node,pathResult.accessor,mod.amount);
                             break;
                         case "remove precedent":
-                            this.unregisterPrecedent(pathResult.node,pathResult.accessors,mod.amount);
+                            this.unregisterPrecedent(pathResult.node,pathResult.accessor,mod.amount);
                             break;
                         case "remove dependent":
-                            this.unregisterDependent(pathResult.node,pathResult.accessors,mod.amount);
+                            this.unregisterDependent(pathResult.node,pathResult.accessor,mod.amount);
                             break;
                     }
                     return;
@@ -1864,7 +1864,7 @@ class BaseNode {
 
     /**
      * @param {BaseNode} node 
-     * @param {string[]} accessors 
+     * @param {string|string[]} accessors 
      * @param {Number} amount 
      */
     registerPrecedent(node, accessors = null, amount = 1) {
@@ -1873,6 +1873,8 @@ class BaseNode {
             const newDependentVal = node.dependents.get(this) ?? {};
             if (accessors == null) {
                 accessors = ["value"];
+            } else if(!Array.isArray(accessors)) {
+                accessors = [accessors];
             }
 
             for (const accessor of accessors) {
@@ -1888,7 +1890,7 @@ class BaseNode {
 
     /**
      * @param {BaseNode} node 
-     * @param {string[]} accessors 
+     * @param {string|string[]} accessors 
      * @param {Number} amount 
      */
     registerDependent(node, accessors = null, amount = 1) {
@@ -1897,6 +1899,8 @@ class BaseNode {
             const newDependentVal = this.dependents.get(node) ?? {};
             if (accessors == null) {
                 accessors = ["value"];
+            } else if(!Array.isArray(accessors)) {
+                accessors = [accessors];
             }
             
             for (const accessor of accessors) {
@@ -1928,7 +1932,7 @@ class BaseNode {
     /**
      * 
      * @param {BaseNode} node 
-     * @param {string[]} accessors 
+     * @param {string|string[]} accessors 
      * @param {Number} amount 
      */
     unregisterPrecedent(node, accessors = null, amount = 1){
@@ -1937,6 +1941,8 @@ class BaseNode {
             const newDependentVal = node.dependents.get(this) ?? {};
             if (accessors == null) {
                 accessors = ["value"];
+            } else if(!Array.isArray(accessors)) {
+                accessors = [accessors];
             }
             
             for (const accessor of accessors) {
@@ -1972,7 +1978,7 @@ class BaseNode {
     /**
      * 
      * @param {BaseNode} node 
-     * @param {string[]} accessors 
+     * @param {string|string[]} accessors 
      * @param {Number} amount 
      */
     unregisterDependent(node, accessors = null, amount = 1) {
@@ -1981,6 +1987,8 @@ class BaseNode {
             const newDependentVal = this.dependents.get(node) ?? {};
             if (accessors == null) {
                 accessors = ["value"];
+            } else if(!Array.isArray(accessors)) {
+                accessors = [accessors];
             }
             
             for (const accessor of accessors) {
