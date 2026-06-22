@@ -598,27 +598,47 @@ class Path {
      * Group 6: "#" accessor sigils. Expressed: #accessor1,accessor2,... at the end of a query or on it's own
      * Group 7: ';' semicoln to separate full path queries
      */
-    static tokensRegex = /(?<=^|[;,\.])\s*(\.+)|(?:(?<=^|[\.;,\(])\s*(?:([\w~][\w: ~-]*?|\*))\s*?(?=$|[\.\[;#,\)]))|(?<=[\w: ~\)\]-])\[\s*(?:(-?\d+(?:\s*,\s*-?\d+)*)|(-?\d*\s*:\s*-?\d*)|(\*))\s*\]\s*(?=$|[\.\[#,;\)])|#(\w+(?:,\w+)*)\s*(?=$|[;\)])|(;|,)|\.|(\()|(\))/y;
-    /* Test Syntax string:
-        Key Value.(Key[47],Key,key)[5][5:][*].Key[5,789,-6]#accessor1,accessor2;Key:morekey.Key.Key[:-1].*#accessor1,accessor3,accessor4
-        items[1,-4,5][*][1][-1][1:][:1][-2:3]
-        Strength[3][5][6];Dexterity[7]
-        hello;world
-        (h,l,p,asdf,jlsadf)[5];asdf
-        #accessor1,accessor2
+    static tokensRegex = /(?<=^|[;,\.])\s*(\.+)|(?:(?<=^|[\.;,\(])\s*(?:([\w~][\w: ~\-]*?|\*))\s*?(?=$|[\.\[;#,\)]))|(?<=[\w: ~\)\]\-\.])\[\s*(?:(-?\d+(?:\s*,\s*-?\d+)*)|(-?\d*\s*:\s*-?\d*)|(\*))\s*\]\s*(?=$|[\.\[#,;\)])|#(\w+(?:,\w+)*)\s*(?=$|[;\)])|(;|,)|\.|(\()|(\))/y;
+    /* 
+    Test Syntax string:
+    Key Value.(Key[47],Key,key)[5][5:][*].Key[5,789,-6]#accessor1,accessor2;Key:morekey.Key.Key[:-1].*#accessor1,accessor3,accessor4
+    items[1,-4,5][*][1][-1][1:][:1][-2:3]
+    Strength[3][5][6];Dexterity[7]
+    hello;world
+    (h,l,p,asdf,jlsadf)[5];asdf
+    #accessor1,accessor2
     */
 
-    static tokenCopyFilter = (k,v) => !(k === Symbol.for("parent") || v instanceof BaseNode);
+    /**
+     * @param {Object|Path} obj 
+     * @param {Object} from 
+     * @returns 
+     */
+    static pathTo(obj,from = null) {
+        if(!(from == null || from instanceof Object)) return undefined;
+        const rootChain = [];
+        if (from != null) {
+            let cur = from;
+            while (cur?.[Symbol.for("parent")] != undefined) {
+                if(cur?.__type === "container" || cur instanceof Container)
+                    continue; // skip containers bc path resolution skips over them too
+                rootChain.push(cur);
+                cur = cur[Symbol.for("parent")];
+            }
+        }
 
-    static absolutePath(obj,root = null) {
         const recursor = (obj) => {
             if(obj == undefined) return undefined;
-            if(obj instanceof Path) {
-                return undefined;
-            }
 
-            if(root != null && obj === root) {
-                return [{type:"T_ORIGIN",value:root}];
+            if(from != null) {
+                let idx = rootChain.indexOf(obj);
+                if(idx >= 0) {
+                    const rval = [{type:"T_ORIGIN",value:from}]
+                    for(let i = idx;i > 0;i--) {
+                        rval.push({type:"T_BACK",value:"."});
+                    }
+                    return rval;
+                }
             }
 
             if(obj instanceof Object) {
@@ -642,55 +662,24 @@ class Path {
                         return parentPath;
                     }
                 } else {
-                    if(root == undefined) return [{type:"T_ORIGIN",value:obj}];
+                    // just return the full absolute path if all else fails.
+                    return [{type:"T_ORIGIN",value:obj}]; 
                 }
             }
             return undefined;
         }
 
+        if(obj instanceof Path) {
+            return new Path(obj,Path.pathTo(obj.getOrigin(),from));
+        }
         return new Path(recursor(obj));
     }
 
-    static absolutePathStr(obj, root=null) {
-        const recursor = (obj) => {
-            if(obj == undefined) return undefined;
-            if(obj instanceof Path) {
-                const origin = obj.getOrigin();
-                if(origin != undefined)
-                    return Path.absolutePathStr(origin, root) + '.' + obj.getPathStr();
-                else
-                    return obj.getPathStr();
-            }
-
-            if(root != null && obj === root) return "";
-            if(obj instanceof Object) {
-                const parentObj = obj[Symbol.for("parent")];
-                if(parentObj != undefined) {
-                    if(parentObj?.__type === "container" || parentObj instanceof Container) {
-                        return recursor(parentObj);
-                    }
-
-                    const parentPath = recursor(parentObj);
-                    if (parentPath != undefined) {
-                        if (Array.isArray(parentObj)) {
-                            return parentPath + `[${parentObj.indexOf(obj)}]`
-                        } else {
-                            return parentPath + `${parentPath === "" ? "" : "."}${Object.keys(parentObj).find((key) => parentObj[key] === obj) ?? "<Not found>"}`
-                        }
-                    } else {
-                        return undefined;
-                    }
-                } else {
-                    if(root == undefined) return "";
-                    return "";
-                }
-            }
-            return undefined;
-        }
-
-        return recursor(obj);
-    }
-
+    /**
+     * 
+     * @param {Object|Array|undefined} obj 
+     * @returns {string|number}
+     */
     static getName(obj) {
         if(obj == undefined) return undefined;
         if(obj?.[Symbol.for("parent")] == undefined) 
@@ -703,6 +692,10 @@ class Path {
             return undefined;
     }
 
+    /**
+     * @param {Object} obj 
+     * @returns {Object}
+     */
     static getRoot(obj) {
         let parentObj = obj;
         while (parentObj[Symbol.for("parent")] != undefined) {
@@ -712,85 +705,134 @@ class Path {
     }
 
     /**
-     * 
-     * @param {string|Path|Array<{type:string,value:any}>} path 
-     * @param {Path|Object} origin
+     * @param {Array<{type:string,value:any}>} tokens 
+     * @returns {Array<{type:string,value:any}>}
      */
-    constructor(path = "", origin=null) {
-        /** @type {string} */
-        this.raw = path;
-
-        // tokenize the path syntax from path
-        /** @type {Array<{type:string,value:any}>} */
-        this.tokens = [];
-
-        if(typeof(path) === "string") {
-            if(origin instanceof Path)
-                this.tokens = this.tokenize(path, origin);
-            else if (origin instanceof Object) {
-                this.tokens = this.tokenize(path, undefined, origin);
-            } else {
-                this.tokens = this.tokenize(path);
-            }
-        } else if (path instanceof Path) {
-            this.raw = path.raw;
-            this.tokens = deepCopy(path.tokens,Path.tokenCopyFilter,true);
-        } else if (Array.isArray(path)) {
-            let start_idx = -1;
-
-            path.forEach((token,idx) => {
-                if(token.type === "T_ORIGIN") start_idx = idx;
-            });
-
-            if(start_idx < 0) {
-                if (origin instanceof Path) {
-                    this.tokens = this.tokenize("",origin);
-                } else if (origin instanceof Object) {
-                    this.tokens = this.tokenize("",undefined,origin);
+    static copyTokens(tokens) {
+        const recursor = (_tokens) => {
+            const tokenCopies = []
+            for(const token of _tokens) {
+                switch (token.type) {
+                    case 'A_LIST':
+                    case 'A_SLICE':
+                    case 'N_ACCESSORS':
+                        tokenCopies.push({type:token.type, value:[...token.value]});
+                        break;
+                    case 'T_GROUP':
+                        tokenCopies.push({type:token.type, value:recursor(token.value)});
+                        break;
+                    case 'T_ORIGIN':
+                    case 'T_BACK':
+                    case 'O_KEY':
+                    case 'A_WILDCARD':
+                    case 'CONCAT':
+                    default:
+                        tokenCopies.push({type:token.type, value:token.value});
+                        break;
                 }
-                start_idx = 0;
             }
-            this.tokens.push(...path.slice(start_idx));
-            this.raw = this.getPathStr();
+            return tokenCopies;
         }
-
-        Path.tokensRegex.lastIndex = 0;
+        
+        if(tokens instanceof Path) {
+            return recursor(tokens.tokens);
+        } else if (Array.isArray(tokens)){
+            return recursor(tokens);
+        }
+        return undefined;
     }
 
     /** 
-     * @param {string} str 
-     * @param {rootPath} Path
+     * @param {string|Path|Array<{type:string,value:any}>} path 
+     * @param {Object|Path} origin
      * */
+    static tokenize (path,origin=null) {
+        if (path == undefined) return [];
+        
+        let tokens = [];
+        let originTokens = [];
+        if (path instanceof Path || Array.isArray(path)) {
+            
+            let tokensValid = true;
 
-    tokenize (str,originPath=null,originObj=null) {
-        if (str == undefined) return [];
+            if(origin != null) {
+                if (origin instanceof Path) {
+                    originTokens = Path.copyTokens(origin.tokens);
+                    tokens.push(...originTokens);
+                } else if (origin instanceof Object) {
+                    tokens = [{type:"T_ORIGIN",value:origin}];
+                }
+            }
+
+            const pathTokens = (path instanceof Path) 
+                ? Path.copyTokens(path.tokens)
+                : Path.copyTokens(path);
+            
+            for(const [idx,token] of pathTokens.entries()) {
+                if(token?.type == undefined || token?.value == undefined 
+                    || typeof(token.type) != "string"
+                ){
+                    continue; // skip invalid tokens
+                }
+
+                if(tokensValid) {
+                    switch(token.type) {
+                        case "T_ORIGIN":
+                            // don't replace the original origin if it exists
+                            if(origin == null)
+                                tokens.push(token);
+                            break;
+                        case "T_BACK":
+                            // pop tokens off the stack if able to shorten/standardize paths
+                            if(tokens.length > 0 && !(["T_BACK","T_ORIGIN","CONCAT","T_GROUP"].includes(tokens.at(-1)?.type))) {
+                                tokens.pop();
+                            } else {
+                                tokens.push(token);
+                            }
+                            break;
+                        case "CONCAT":
+                            tokens.push(token);
+                            tokens.push(originTokens);
+                        default:
+                            tokens.push(token);
+                    }
+                }
+            }
+            return tokens;
+        } else if (typeof(path) !== "string") {
+            path = ""; // process as empty path if path is invalid;
+        }
 
         /** @type {Object[]} */
         const contextStack = [];
 
-        let tokens = [];
-        if(str.length === 0 || ".#".includes(str[0])){
-            if (originPath != null) {
-                tokens = deepCopy(originPath.tokens,Path.tokenCopyFilter,true);
-            } else if (originObj != null) {
-                tokens.push({type:"T_ORIGIN",value:originObj});
+        
+        if((path.length === 0 || ".#".includes(path[0])) && origin != null){
+            if (origin instanceof Path) {
+                originTokens = Path.copyTokens(origin.tokens);
+                tokens.push(...originTokens);
+            } else if (origin instanceof Object) {
+                tokens.push({type:"T_ORIGIN",value:origin});
             }
         }
 
-        for(let i = 0;i < str.length;) {
+        for(let i = 0;i < path.length;) {
             // If for some reason the string is consumed already, quit now.
-            if (i >= str.length)
+            if (i >= path.length)
                 break;
 
             Path.tokensRegex.lastIndex = i;
-            const m = Path.tokensRegex.exec(str)
-            if (!m) throw SyntaxError(`Unexpected character '${str[i]}' at ${i} in '${str}'`);
+            const m = Path.tokensRegex.exec(path)
+            if (!m) throw SyntaxError(`Unexpected character '${path[i]}' at ${i} in '${path}'`);
             // console.log(m); // Cool Debug thing
 
             if (m[1] !== undefined) {
                 for (let i=0;i<m[1].length;i++) {
-                    // tokens.pop();
-                    tokens.push({type:'T_BACK',value:'.'});
+                    if(tokens.length > 0 && !(["T_BACK","T_ORIGIN","CONCAT","T_GROUP"].includes(tokens.at(-1)?.type))) {
+                        tokens.pop();
+                    } else {
+                        tokens.push({type:'T_BACK',value:'.'});
+                    }
                 }
             }
 
@@ -823,10 +865,10 @@ class Path {
                 tokens.push({type:'N_ACCESSORS',value:m[6].split(',').map(x => sanatizeKey(x))});
             }
                 
-            else if (m[7] !== undefined) {
+            else if (m[7] !== undefined) { //;,
                 tokens.push({type:'CONCAT',value:';,'});
-                if (originPath != null && ".#".includes(str[i+1]) && contextStack.length < 1) {
-                    tokens.push(...originPath.tokens);
+                if (contextStack.length < 1) {
+                    tokens.push(...originTokens);
                 }
             }
 
@@ -847,6 +889,24 @@ class Path {
         if(contextStack.length > 0) throw SyntaxError(`EOF: Unbalanced Parentheses. Missing closing ')'`);
         
         return tokens;
+    }
+
+    /**
+     * 
+     * @param {string|Path|Array<{type:string,value:any}>} path 
+     * @param {Path|Object} origin
+     */
+    constructor(path = "", origin=null) {
+        /** @type {string} */
+        this.str = null;
+
+        // tokenize the path syntax from path
+        /** @type {Array<{type:string,value:any}>} */
+        this.tokens = [];
+        this.tokens = Path.tokenize(path, origin);
+        this.str = this.getPathStr();
+
+        Path.tokensRegex.lastIndex = 0;
     }
 
     getOrigin() {
@@ -899,21 +959,22 @@ class Path {
             return pv + tokenStr;
         }
 
-        const pathTokens = this.tokens;
-        for (const token of this.tokens) {
-            switch(token.type) {
-                case "T_ORIGIN": 
-                    pathTokens.push(token);
-                    break;
-                case "T_BACK":
-                    pathTokens.pop();
-                    break;
-                default:
-                    pathTokens.push(token);
-            }
-        }
+        // const pathTokens = this.tokens;
+        // for (const token of this.tokens) {
+        //     switch(token.type) {
+        //         case "T_ORIGIN": 
+        //             pathTokens.push(token);
+        //             break;
+        //         case "T_BACK":
+        //             if(pathTokens.length > 0 && !(["T_BACK","T_ORIGIN"].includes(pathTokens.at(-1))))
+        //                 pathTokens.pop();
+        //             break;
+        //         default:
+        //             pathTokens.push(token);
+        //     }
+        // }
 
-        return pathTokens.reduce(pathReducer,'');
+        return this.tokens.reduce(pathReducer,'');
     }
 
     resolveStrs(root,relativeTo = null) {
@@ -924,9 +985,9 @@ class Path {
                 for(const item of obj)
                     rval.push(...reducer(item));
             } else if (obj?.__type === "pathResult" && obj?.accessors != undefined) {
-                rval.push(...obj.accessors.map(accessor => `${Path.absolutePathStr(obj.node,relativeTo)}#${accessor}`));
+                rval.push(...obj.accessors.map(accessor => `${Path.pathTo(obj.node,relativeTo).str}#${accessor}`));
             } else if (obj?.__type === "pathResult"){
-                rval.push(Path.absolutePathStr(obj.result,relativeTo));
+                rval.push(Path.pathTo(obj.result,relativeTo).str);
             } 
             return rval;
         }
@@ -1266,7 +1327,7 @@ class ExprValue {
             try {
                 return this.expr.evaluate();
             } catch (err) {
-                console.error(`Error evaluating expression at origin ${Path.absolutePathStr(this.origin)}: '${this.value}'\n${err.message}`);
+                console.error(`Error evaluating expression at origin ${Path.pathTo(this.origin).str}: '${this.value}'\n${err.message}`);
             }
         return this.value;
     }
@@ -1584,7 +1645,7 @@ class BaseNode {
         } else {
             this.visited = false;
             //Update path
-            this.error = `Node Source: '${Path.absolutePathStr(this)}' is part of a dependency loop.`;
+            this.error = `Node Source: '${Path.pathTo(this).str}' is part of a dependency loop.`;
             this.isErrorSrc = true;
             this.renderedElement.value = this.accessors.value;
             throw EvalError(this.error);
@@ -2133,7 +2194,7 @@ class DataNode extends BaseNode {
                 this.isErrorSrc = true;
                 this.error = e.message;
                 //Update Path
-                e.message = `Node Source: ${Path.absolutePathStr(this)} ${e.message}`
+                e.message = `Node Source: ${Path.pathTo(this).str} ${e.message}`
                 throw e;
             }
         }
