@@ -1043,36 +1043,42 @@ class Path {
     }
 
     /** @type {ResolutionForwardHandler} */
-    static buildHandler({obj, token, isLeaf}, options = null) {
-        const {default:defaultVal = null} = options;
+    static buildHandler({obj, token, isLeaf}, options = {}) {
+        const {factory:newFactory = () => null} = options;
         if(obj == null) return {action:"continue"};
 
         const objPath = Path.pathTo(obj)
-        console.log(objPath.str,"=>",`${token.type}:${token.value}`,"isLeaf?", isLeaf);
 
         const buildNew = (parent,type) => {
-            
-            let newobj = null;
+            let newobj = newFactory(parent,type);
             switch(type) {
                 case "object":
-                    newobj = {};
+                    if(!(newobj instanceof Object))
+                        newobj = {};
                     break;
                 case "array":
-                    newobj = [];
+                    if(!(Array.isArray(newobj)))
+                        newobj = [];
                     break;
                 case "node":
-                    newobj = {value:0,max:null,min:null};
+                    if(newobj == null) // TODO: change later
+                        newobj = {__type:"data",value:0,max:null,min:null};
+                    break;
                 default:
-                    newobj = defaultVal;
+                    newobj = null
             }
-            if(newobj instanceof Object && parent != null) 
+            if(
+                newobj instanceof Object 
+                && newobj[Symbol.for("parent")] == null 
+                && parent != null
+            ) 
                 newobj[Symbol.for("parent")] = parent;
             return newobj;
         }
 
         switch(token.type) {
             case "N_ACCESSORS":
-                return {action:"skip"};
+                return {action:"continue"};
 
             case "A_LIST":
                 if(!Array.isArray(obj)) {
@@ -1140,6 +1146,89 @@ class Path {
                     nextobj = buildNew(obj,token.containerType)
                 }
                 obj[token.value] = nextobj;
+                return {action:"continue"};
+        }
+    }
+
+    /** @type {ResolutionForwardHandler} */
+    static repairHandler({obj, token, isLeaf}, options = {}) {
+        const objPath = Path.pathTo(obj);
+        switch(token.type) {
+            case "N_ACCESSORS":
+                return {action:"continue"};
+
+            case "A_LIST":
+                if(!Array.isArray(obj)) {
+                    console.error("Expected Array but found other type")
+                    return {action:"skip"};
+                }
+                for(const idx of token.value)  {
+                    const j = idx < 0 ? idx + obj.length : idx;
+                    if(j < obj.length 
+                        && obj[j] instanceof Object
+                        && obj[j]?.[Symbol.for("parent")] == null
+                    ) {
+                        console.log(`Repairing ${objPath.str}[${j}]`);
+                        obj[j][Symbol.for("parent")] = obj;
+                    }
+                }
+                return {action:"continue"};
+            case "A_SLICE":
+                if(!Array.isArray(obj)) {
+                    console.error("Expected Array but found other type")
+                    return {action:"skip"};
+                }
+                const initLen = obj.length;
+                const bounds = token.value;
+                const max = bounds.max == undefined 
+                    ? bounds.min
+                    : ( bounds.max < 0 
+                        ? bounds.max + 1
+                        : bounds.max - 1 // because max is not included in slice
+                    )
+
+                for(let i = bounds.min;i <= max;i++) {
+                    let j = i < 0 ? i + obj.length : i;
+                    if(j < obj.length 
+                        && obj[j] instanceof Object
+                        && obj[j]?.[Symbol.for("parent")] == null
+                    ) {
+                        console.log(`Repairing ${objPath.str}[${j}]`);
+                        obj[j][Symbol.for("parent")] = obj;
+                    }
+                }
+                return {action:"continue"};
+            case "A_WILDCARD":
+                if(!Array.isArray(obj)) {
+                    console.error("Expected Array but found other type")
+                    return {action:"skip"};
+                }
+                obj.forEach((next,idx) => {
+                    if(next instanceof Object && next?.[Symbol.for("parent")] == null) {
+                        console.log(`Repairing ${objPath.str}[${idx}]`);
+                        next[Symbol.for("parent")] = obj;
+                    }
+                })
+                return {action:"continue"};
+            case "O_KEY":
+                if(!(obj instanceof Object)) {
+                    console.error("Expected Object but found other type")
+                    return {action:"skip"};
+                }
+                if(token.value === "*") {
+                    Object.values(obj).forEach(next => {
+                        if(next instanceof Object && next?.[Symbol.for("parent")] == null)
+                            console.log(`Repairing ${objPath.str}.${token.value}`); {
+                            next[Symbol.for("parent")] = obj;
+                        }
+                    });
+                    return {action:"continue"};
+                }
+                const next = obj[token.value];
+                if(next instanceof Object && next?.[Symbol.for("parent")] == null) {
+                    console.log(`Repairing ${objPath.str}.${token.value}`);
+                    next[Symbol.for("parent")] = obj;
+                }
                 return {action:"continue"};
         }
     }
@@ -1384,22 +1473,6 @@ class Path {
         const recursor = (treeRoot,tokens = this.tokens, cursor=0) => {
             if(stopResolution) return;
 
-            if(collectNext) {
-                llpush(buildResult(true,treeRoot));
-            }
-
-            if(cursor >= tokens.length || returnEarly || tokens[cursor].type === "CONCAT") {
-                if(treeRoot == null) {
-                    if(!flat) llpush(undefined);
-                    return;
-                }
-                if(treeRoot instanceof BaseNode) return llpush(buildResult(returnEarly,treeRoot,treeRoot));
-                return llpush(buildResult(returnEarly,treeRoot));
-            }
-
-            returnEarly = false;
-            let nextRoots = [treeRoot];
-            let skipToken = false; 
             const handlerParams = (forwardHandler != null || reverseHandler != null) 
                 ? {
                     obj:treeRoot, 
@@ -1407,6 +1480,27 @@ class Path {
                     isLeaf:cursor === tokens.length-1
                 }
                 :null;
+
+            if(collectNext) {
+                llpush(buildResult(true,treeRoot));
+            }
+
+            if(cursor >= tokens.length || returnEarly || tokens[cursor].type === "CONCAT") {
+                if(reverseHandler != null) {
+                    reverseHandler(handlerParams,handlerOptions);
+                }
+
+                if(treeRoot == null) {
+                    if(!flat) llpush(undefined);
+                    return;
+                }
+                if(treeRoot instanceof BaseNode) return llpush(buildResult(returnEarly||collectNext,treeRoot,treeRoot));
+                return llpush(buildResult(returnEarly||collectNext,treeRoot));
+            }
+
+            returnEarly = false;
+            let nextRoots = [treeRoot];
+            let skipToken = false; 
             
             if(forwardHandler != null) {
                 const decision = forwardHandler(handlerParams,handlerOptions);
@@ -1564,7 +1658,7 @@ class Path {
                         if(_treeRoot instanceof BaseNode) {
                             llpushOpen();
                             tokens[cursor].value.forEach(accessor => {
-                                llpush(buildResult(returnEarly,_treeRoot.accessors[accessor],_treeRoot,accessor));
+                                llpush(buildResult(returnEarly||collectNext,_treeRoot.accessors[accessor],_treeRoot,accessor));
                             });
                             llpushClose();
                         }
@@ -1602,12 +1696,12 @@ class Path {
                 llpushOpen();
                 if(skipToken) recursor(nextRoot,tokens,cursor+1);
                 else resolveToken(nextRoot,tokens,cursor);
+                if(reverseHandler != null) {
+                    reverseHandler({...handlerParams,obj:nextRoot},handlerOptions);
+                }
                 llpushClose();
             });
 
-            if(reverseHandler != null) {
-                reverseHandler(handlerParams,handlerOptions);
-            }
         }
 
         const query_container = [];
