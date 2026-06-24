@@ -1190,17 +1190,11 @@ class Path {
      * @returns {string} Returns string representation of this path including unresolved wildcards
      */
     getString() {
-        /**
-         * @param {{type:string,value:any}} pv 
-         * @param {{type:string,value:any}} cv 
-         * @returns 
-         */
+        let prevTType = null;
         /** 
          * @param {string} pv 
          * @param {Token} cv
          * */
-
-        let prevTType = null;
         const pathReducer = (pv,cv) => {
             let tokenStr = '';
             let postfix = cv.containerType == 'object' ? '.' : '';
