@@ -1,0 +1,234 @@
+
+<style>
+:root {
+    color-scheme: light dark;
+    --color-background-primary: light-dark(rgba(255, 255, 255, 1), rgba(48, 48, 46, 1));
+    --color-background-secondary: light-dark(rgb(245, 242, 234), rgba(38, 38, 36, 1));
+    --color-background-info: light-dark(rgba(214, 228, 246, 1), rgba(37, 62, 95, 1));
+    --color-background-danger: light-dark(rgba(247, 236, 236, 1), rgba(96, 42, 40, 1));
+    --color-background-success: light-dark(rgba(233, 241, 220, 1), rgba(27, 70, 20, 1));
+    --color-background-warning: light-dark(rgba(246, 238, 223, 1), rgba(72, 58, 15, 1));
+    --color-background-inactive: light-dark(rgba(228, 227, 224, 0.897), rgb(61, 61, 59));
+    --color-background-active: light-dark(rgba(255, 255, 255, 1), rgba(48, 48, 46, 1));
+    --color-text-primary: light-dark(rgba(20, 20, 19, 1), rgba(250, 249, 245, 1));
+    --color-text-secondary: light-dark(rgba(61, 61, 58, 1), rgba(194, 192, 182, 1));
+    --color-text-tertiary: light-dark(rgba(115, 114, 108, 1), rgba(156, 154, 146, 1));
+    --color-text-info: light-dark(rgba(50, 102, 173, 1), rgba(128, 170, 221, 1));
+    --color-text-danger: light-dark(rgba(127, 44, 40, 1), rgba(238, 136, 132, 1));
+    --color-text-success: light-dark(rgba(38, 91, 25, 1), rgba(122, 185, 72, 1));
+    --color-text-warning: light-dark(rgba(90, 72, 21, 1), rgba(209, 160, 65, 1));
+    --color-text-disabled: light-dark(rgba(20, 20, 19, 0.5), rgba(250, 249, 245, 0.5));
+    --color-text-ghost: light-dark(rgba(115, 114, 108, 0.5), rgba(156, 154, 146, 0.5));
+    --color-border-primary: light-dark(rgba(31, 30, 29, 0.4), rgba(222, 220, 209, 0.4));
+    --color-border-secondary: light-dark(rgba(31, 30, 29, 0.3), rgba(222, 220, 209, 0.3));
+    --color-border-tertiary: light-dark(rgba(31, 30, 29, 0.15), rgba(222, 220, 209, 0.15));
+    --color-border-inverse: light-dark(rgba(255, 255, 255, 0.3), rgba(20, 20, 19, 0.15));
+    --color-border-ghost: light-dark(rgba(31, 30, 29, 0), rgba(222, 220, 209, 0));
+    --color-border-info: light-dark(rgba(70, 130, 213, 1), rgba(70, 130, 213, 1));
+    --color-border-danger: light-dark(rgba(167, 61, 57, 1), rgba(205, 92, 88, 1));
+    --color-border-success: light-dark(rgba(67, 116, 38, 1), rgba(89, 145, 48, 1));
+    --color-border-warning: light-dark(rgba(128, 92, 31, 1), rgba(168, 120, 41, 1));
+    --color-border-disabled: light-dark(rgba(31, 30, 29, 0.1), rgba(222, 220, 209, 0.1));
+    --font-sans: Anthropic Sans, sans-serif;
+    --font-mono: ui-monospace, monospace;
+    --border-radius-xs: 4px;
+    --border-radius-sm: 6px;
+    --border-radius-md: 8px;
+    --border-radius-lg: 10px;
+    --border-radius-xl: 12px;
+    --border-radius-full: 9999px;
+}
+h2.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.stat-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:0.5px solid var(--color-border-tertiary)}
+.stat-row:last-child{border-bottom:none}
+.stat-name{font-size:13px;color:var(--color-text-secondary);min-width:110px}
+.val-display{display:flex;align-items:center;gap:6px;flex:1}
+.prog-wrap{flex:1;height:6px;background:var(--color-background-secondary);border-radius:100px;overflow:hidden;min-width:60px}
+.prog-fill{height:100%;background:var(--color-text-primary);border-radius:100px;transition:width 0.15s}
+.mode-pip{display:flex;gap:3px}
+.pip{width:16px;height:16px;border:0.5px solid var(--color-border-secondary);border-radius:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--color-text-tertiary)}
+.pip.on{background:var(--color-background-secondary);color:var(--color-text-primary);border-color:var(--color-border-primary)}
+.adj-btn{width:18px;height:18px;border:0.5px solid var(--color-border-secondary);border-radius:4px;background:transparent;color:var(--color-text-secondary);cursor:pointer;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center;padding:0}
+.num-input{width:48px;padding:2px 5px;font-size:13px;font-weight:500;border:0.5px solid var(--color-border-secondary);border-radius:4px;background:var(--color-background-secondary);color:var(--color-text-primary);text-align:center}
+.popup{display:none;position:absolute;z-index:10;background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:8px 10px;flex-direction:column;gap:8px;min-width:140px}
+.popup.open{display:flex}
+.popup-row{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--color-text-secondary)}
+.popup-row input{width:52px;padding:2px 5px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:4px;background:var(--color-background-secondary);color:var(--color-text-primary)}
+.popup-row label{min-width:28px}
+.popup-row button{flex:1;padding:3px 0;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:4px;background:transparent;color:var(--color-text-primary);cursor:pointer}
+.wrap{position:relative}
+input[type=range]{flex:1;min-width:60px}
+.edit-toggle{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--color-text-secondary);margin-bottom:10px;cursor:pointer;user-select:none}
+.controls{display:flex;gap:3px;align-items:center}
+</style>
+
+<h2 class="sr-only">Compact stat tracker with number inputs, progress bar editing, and an edit mode toggle.</h2>
+
+<label class="edit-toggle">
+  <input type="checkbox" id="edit-mode" onchange="setEditMode(this.checked)">
+  Edit mode
+</label>
+
+<div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:10px 14px">
+  <div id="stat-list"></div>
+</div>
+
+<script>
+const stats = [
+  {name:'Hit points',      cur:28, min:0, max:38, bounded:true,  mode:'progress'},
+  {name:'Spell slots (2nd)',cur:2,  min:0, max:3,  bounded:true,  mode:'number'},
+  {name:'Ki points',       cur:4,  min:0, max:6,  bounded:true,  mode:'slider'},
+  {name:'Strength',        cur:16, min:null, max:null, bounded:false, mode:'number'},
+  {name:'Dexterity',       cur:18, min:null, max:null, bounded:false, mode:'number'},
+  {name:'Passive perception',cur:14,min:null,max:null, bounded:false, mode:'number'},
+];
+
+let editMode = false;
+let openPopup = null;
+
+function pct(s){return Math.max(0,Math.min(100,Math.round(((s.cur-s.min)/(s.max-s.min))*100)));}
+function clamp(s){if(s.bounded){s.cur=Math.min(s.max,Math.max(s.min,s.cur));}}
+
+function setEditMode(v){editMode=v; renderAll();}
+
+function renderAll(){
+  document.getElementById('stat-list').innerHTML = stats.map((_,i)=>renderRow(i)).join('');
+}
+
+function renderRow(i){
+  const s = stats[i];
+  s.bounded = s.min != null && s.max != null;
+  const modes = s.bounded ? ['number','slider','progress'] : ['number'];
+  if (!modes.includes(s.mode)) s.mode = 'number';
+
+  const pips = editMode ? `<div class="mode-pip">${modes.map(m=>`<div class="pip${s.mode===m?' on':''}" onclick="setMode(${i},'${m}')" title="${m}">${m==='number'?'#':m==='slider'?'≡':'▪'}</div>`).join('')}</div>` : '';
+  const boundsBtn = (editMode) ? `
+    <div class="pip wrap" onclick="togglePopup('bounds-${i}',this)" id="bounds-btn-${i}" title="Edit bounds">
+      <i class="ti ti-dots" style="font-size:10px" aria-hidden="true">...</i>
+    </div>
+    <div class="popup" id="bounds-${i}" style="right:0;top:22px">
+      <div class="popup-row"><label>Min</label><input type="number" value="${s.min}" onchange="setBound(${i},'min',this.value)"></div>
+      <div class="popup-row"><label>Max</label><input type="number" value="${s.max}" onchange="setBound(${i},'max',this.value)"></div>
+      <div class="popup-row"><button onclick="reRenderRow(${i})">Apply</button></div>
+    </div>` : '';
+
+  return `<div class="stat-row wrap" id="row-${i}">
+    <span class="stat-name">${s.name}</span>
+    <div class="val-display" id="disp-${i}">${renderDisplay(s,i)}</div>
+    ${pips}
+    <div style="position:relative">${boundsBtn}</div>
+  </div>`;
+}
+
+function renderDisplay(s,i){
+  if(s.mode==='number'){
+    return `<input class="num-input" type="number" value="${s.cur}"
+      ${s.bounded?`min="${s.min}" max="${s.max}"`:''}
+      onchange="setCur(${i},+this.value)" oninput="setCur(${i},+this.value)">
+      ${s.bounded?`<span style="font-size:11px;color:var(--color-text-tertiary)">/ ${s.max}</span>`:''}`;
+  }
+  if(s.mode==='slider'){
+    return `<input type="range" min="${s.min}" max="${s.max}" value="${s.cur}" step="1"
+      oninput="setCur(${i},+this.value)">
+      <span style="font-size:13px;font-weight:500;min-width:24px;text-align:right">${s.cur}</span>`;
+  }
+  // progress
+  return `
+    <button class="adj-btn" onclick="adj(${i},-1)">-</button>
+    <div class="prog-wrap"><div class="prog-fill" id="fill-${i}" style="width:${pct(s)}%"></div></div>
+    <button class="adj-btn" onclick="adj(${i},1)">+</button>
+    <div style="position:relative">
+      <span style="font-size:12px;font-weight:500;min-width:38px;text-align:right;color:var(--color-text-secondary);cursor:pointer"
+        onclick="togglePopup('prog-${i}',this)" id="prog-lbl-${i}">${s.cur} / ${s.max}</span>
+      <div class="popup" id="prog-${i}" style="right:0;top:22px;min-width:160px">
+        <div class="popup-row"><label>Set to</label><input type="number" id="prog-inp-${i}" value="${s.cur}" min="${s.min}" max="${s.max}"></div>
+        <div class="popup-row">
+          <button onclick="applyProgInput(${i})">Apply</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function setCur(i,v){
+  stats[i].cur = isNaN(v)?stats[i].cur:v;
+  clamp(stats[i]);
+  refreshDisp(i);
+}
+
+function adj(i,d){setCur(i,stats[i].cur+d);}
+
+function applyProgInput(i){
+  const v = parseInt(document.getElementById(`prog-inp-${i}`).value);
+  if(!isNaN(v)) setCur(i,v);
+  closePopup();
+}
+
+function setMode(i,m){stats[i].mode=m; reRenderRow(i);}
+
+function setBound(i,key,val){
+  stats[i][key]=parseInt(val);
+  if(Number.isNaN(stats[i][key])) {
+    stats[i][key] = null;
+    return;
+  }
+
+  if(stats[i].max<=stats[i].min) stats[i].max=stats[i].min+1;
+  clamp(stats[i]);
+}
+
+function refreshDisp(i){
+  const s=stats[i];
+  const el=document.getElementById(`disp-${i}`);
+  if(!el) return;
+  if(s.mode==='number'){
+    const inp=el.querySelector('input');
+    if(inp && document.activeElement!==inp) inp.value=s.cur;
+    const lbl=el.querySelector('span');
+    if(lbl && s.bounded) lbl.textContent='/ '+s.max;
+  } else if(s.mode==='slider'){
+    const inp=el.querySelector('input[type=range]');
+    if(inp) inp.value=s.cur;
+    const span=el.querySelector('span');
+    if(span) span.textContent=s.cur;
+  } else {
+    const fill=document.getElementById(`fill-${i}`);
+    if(fill) fill.style.width=pct(s)+'%';
+    const lbl=document.getElementById(`prog-lbl-${i}`);
+    if(lbl) lbl.textContent=s.cur+' / '+s.max;
+    const inp=document.getElementById(`prog-inp-${i}`);
+    if(inp) inp.value=s.cur;
+  }
+}
+
+function reRenderRow(i){
+  closePopup();
+  const row=document.getElementById(`row-${i}`);
+  if(row) row.outerHTML=renderRow(i);
+}
+
+function togglePopup(id, trigger){
+  const popup=document.getElementById(id);
+  if(!popup) return;
+  if(openPopup && openPopup!==popup){openPopup.classList.remove('open');openPopup=null;}
+  const isOpen=popup.classList.toggle('open');
+  openPopup=isOpen?popup:null;
+  if(isOpen){
+    const inp=popup.querySelector('input');
+    if(inp) setTimeout(()=>inp.focus(),10);
+  }
+}
+
+function closePopup(){
+    if(openPopup){
+        openPopup.classList.remove('open');openPopup=null;
+    }
+}
+
+document.addEventListener('click',e=>{
+  if(openPopup&&!e.target.closest('.popup')&&!e.target.closest('[onclick*="togglePopup"]')&&!e.target.closest('[id*="bounds-btn"]')){
+    closePopup();
+  }
+});
+
+renderAll();
+</script>
