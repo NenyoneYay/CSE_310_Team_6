@@ -877,16 +877,17 @@ class Path {
         }
 
 
-        if (path instanceof Path || Array.isArray(path)) {
+        let originObj = null;
+        if (origin instanceof Path) {
+            originObj = origin.getOrigin();
+            originTokens = Path.copyTokens(origin.tokens);
+            tokens.push(...originTokens);
+        } else if (origin instanceof Object) {
+            originObj = origin;
+            tokens.push(token("T_ORIGIN",originObj));
+        }
 
-            if(origin != null) {
-                if (origin instanceof Path) {
-                    originTokens = Path.copyTokens(origin.tokens);
-                    tokens.push(...originTokens);
-                } else if (origin instanceof Object) {
-                    tokens = [{type:"T_ORIGIN",value:origin}];
-                }
-            }
+        if (path instanceof Path || Array.isArray(path)) {
 
             const pathTokens = (path instanceof Path) 
                 ? path.tokens
@@ -942,22 +943,7 @@ class Path {
             return {type, value, containerType}
         }
 
-        let originObj = null;
-
-        if (origin instanceof Path) {
-            originObj = origin.getOrigin();
-        } else if (origin instanceof Object) {
-            originObj = origin;
-        }
-        if(path[0] != '$' && origin != null){
-            if (origin instanceof Path) {
-                originTokens = Path.copyTokens(origin.tokens);
-                tokens.push(...originTokens);
-            } else if (origin instanceof Object) {
-                tokens.push(token("T_ORIGIN",originObj));
-            }
-        }
-
+        
 
         for(let i = 0;i < path.length;) {
             // If for some reason the string is consumed already, quit now.
