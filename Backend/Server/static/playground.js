@@ -462,7 +462,32 @@ function makeSection(secData, parent, container) {
         handle.className = "ti ti-grip-vertical drag-handle";
         handle.setAttribute("aria-hidden","true");
 
+        const directionBtn = document.createElement("button");
+        directionBtn.className = "direction";
+            if(data.direction === "column"){
+                directionBtn.innerHTML = '<i class="ti ti-layout-rows"></i>';
+            }else{
+                directionBtn.innerHTML = '<i class="ti ti-layout-columns"></i>';
+            }
+        
+        directionBtn.addEventListener("click", e =>{
+            e.stopPropagation();
+           if(data.direction === "column"){
+            data.direction = "row";
+            directionBtn.innerHTML = '<i/ class = "ti ti-layout-rows"></i>';
+
+           }else{
+            data.direction = "column";
+            directionBtn.innerHTML = '<i class="ti ti-layout-columns"></i>';
+           }
+
+        fieldList.style.flexDirection = data.direction;
+        updatePreview();
+
+        });
+
         hdr.appendChild(handle);
+        hdr.appendChild(directionBtn);
     }
 
     const expander = document.createElement("i");
