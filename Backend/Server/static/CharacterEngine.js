@@ -652,17 +652,17 @@ class Path {
 
     /**
      * @callback ResolutionForwardHandler
-     * @param {Object|Array|BaseNode} treeRoot
+     * @param {Object|Array} obj Can also be a BaseNode
      * @param {{type:string, value:any}} currentToken
-     * @param {Path} resolvedPath
+     * @param {boolean} isLeaf
      * @returns {ResolutionDecision} 
      */
 
     /**
      * @callback ResolutionReverseHandler
-     * @param {Object|Array|BaseNode} treeRoot
+     * @param {Object|Array} obj Can also be a BaseNode
      * @param {{type:string, value:any}} currentToken
-     * @param {Path} resolvedPath
+     * @param {boolean} isLeaf
      * @returns {void}
      */
 
@@ -1139,8 +1139,14 @@ class Path {
     }
 
     /** @type {ResolutionReverseHandler} */
-    static deleteHandler(obj,token,isLeaf,options = null) {
+    static deleteHandler(obj, token, isLeaf, options = null) {
 
+    }
+
+    /** @type {ResolutionForwardHandler} */
+    static debugHandler(obj, token, isLeaf, options = null) {
+        console.log(`${Path.pathTo(obj).str} => ${token?.type}:${token?.value} , ${isLeaf}`);
+        return {action:"continue"};
     }
 
     /**
