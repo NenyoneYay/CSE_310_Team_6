@@ -627,6 +627,48 @@ class Path {
     */
 
     /**
+     * @typedef ResolutionDecision
+     * @property {"continue"|"collect"|"skip"|"stop"} action
+     * @property {Object|Array} overrides
+     */
+
+    /**
+     * @typedef PathResult
+     * @property {"pathResult"} __type
+     * @property {any} result
+     * @property {BaseNode|null} node
+     * @property {string|null} accessor
+     * 
+     */
+
+    /** 
+     * @typedef Token
+     * @property {string} type The type of this token. Determines what to
+     * do with value
+     * @property {any} value Parsed value of token. Can be anything from obj 
+     * references to strings and preocessed arrays
+     * @property {string} containerType Expected container type based on next token
+     */
+
+    /**
+     * @callback ResolutionForwardHandler
+     * @param {Object|Array|BaseNode} treeRoot
+     * @param {{type:string, value:any}} currentToken
+     * @param {Path} resolvedPath
+     * @returns {ResolutionDecision} 
+     */
+
+    /**
+     * @callback ResolutionReverseHandler
+     * @param {Object|Array|BaseNode} treeRoot
+     * @param {{type:string, value:any}} currentToken
+     * @param {Path} resolvedPath
+     * @returns {void}
+     */
+
+    
+
+    /**
      * @param {Object|Path} obj 
      * @param {Object} from 
      * @returns 
@@ -786,16 +828,7 @@ class Path {
      * @param {Object|Path} origin
      * */
     static tokenize (path,origin=null) {
-        if (path == undefined) return [];
-        
-        /** 
-         * @typedef Token
-         * @property {string} type The type of this token. Determines what to
-         * do with value
-         * @property {any} value Parsed value of token. Can be anything from obj 
-         * references to strings and preocessed arrays
-         * @property {string} containerType Expected container type based on next token
-         */
+        if (path == undefined) path = "";
         
         /** @type {Token[]} */
         let tokens = [];
@@ -1015,6 +1048,8 @@ class Path {
 
     static buildHandler(obj, token, isLeaf, options = null) {
         const {default:defaultVal = null} = options;
+        if(obj == null) return {action:"continue"};
+
         const objPath = Path.pathTo(obj)
         console.log(objPath.str,"=>",`${token.type}:${token.value}`,"isLeaf?", isLeaf);
 
@@ -1129,11 +1164,15 @@ class Path {
         /** @type {Array<{type:string,value:any}>} */
         this.tokens = [];
         this.tokens = Path.tokenize(path, origin);
-        this.str = this.getPathStr();
+        this.str = this.getString();
 
         Path.tokensRegex.lastIndex = 0;
     }
 
+    /**
+     * 
+     * @returns Returns object that is the origin this path was created with
+     */
     getOrigin() {
         let rval = undefined;
         for(const token of this.tokens) {
@@ -1147,16 +1186,25 @@ class Path {
         return rval;
     }
 
-    getPathStr(relative = true) {
+    /**
+     * @returns {string} Returns string representation of this path including unresolved wildcards
+     */
+    getString() {
         /**
          * @param {{type:string,value:any}} pv 
          * @param {{type:string,value:any}} cv 
          * @returns 
          */
-        /** @param {string} pv */
+        /** 
+         * @param {string} pv 
+         * @param {Token} cv
+         * */
+
+        let prevTType = null;
         const pathReducer = (pv,cv) => {
-            let tokenStr = ''
-            const startOfPath = pv === '' || (pv.length > 0 && ";,(.$".includes(pv.at(-1)))
+            let tokenStr = '';
+            let postfix = cv.containerType == 'object' ? '.' : '';
+
             switch (cv.type) {
                 case 'T_ROOT':
                     return '$';
@@ -1166,7 +1214,7 @@ class Path {
                     break;
                 case 'T_BACK':
                 case 'O_KEY':
-                    tokenStr = (startOfPath ? '' : '.') + cv.value;
+                    tokenStr = cv.value;
                     break;
                 case 'A_LIST':
                     tokenStr = `[${cv.value.join(',')}]`;
@@ -1178,10 +1226,10 @@ class Path {
                     tokenStr = '[*]';
                     break;
                 case 'CONCAT':
-                    tokenStr = ',';
+                    tokenStr = prevTType === 'N_ACCESSORS' ? ';' : ',';
                     break;
                 case 'T_GROUP':
-                    tokenStr = (startOfPath ? '' : '.') + `(${cv.value.reduce(pathReducer,'')})`;
+                    tokenStr = `(${cv.value.reduce(pathReducer,'')})`;
                     break;
                 case 'N_ACCESSORS':
                     tokenStr = `#${cv.value.join(',')}`;
@@ -1189,58 +1237,42 @@ class Path {
                 default:
                     tokenStr = '';
             }
-            return pv + tokenStr;
+            prevTType = cv.type;
+            return pv + tokenStr + postfix;
         }
-
-        // const pathTokens = this.tokens;
-        // for (const token of this.tokens) {
-        //     switch(token.type) {
-        //         case "T_ORIGIN": 
-        //             pathTokens.push(token);
-        //             break;
-        //         case "T_BACK":
-        //             if(pathTokens.length > 0 && !(["T_BACK","T_ORIGIN"].includes(pathTokens.at(-1))))
-        //                 pathTokens.pop();
-        //             break;
-        //         default:
-        //             pathTokens.push(token);
-        //     }
-        // }
 
         return this.tokens.reduce(pathReducer,'');
     }
 
+    /**
+     * 
+     * @param {{
+     *      root: Object,
+     *      relativeTo: Object
+     *  }} options `root` is passed directly to `this.resolve({flat:true})`. `relativeTo` passed as `from` parameter to `Path.pathTo()`.
+     * @returns {string[]} Returns string paths to all objects resolved by this path relative to the `relativeTo` parameter. Relative to root object by default.
+     */
     resolveStrs(options = {}) {
         const {root = null,relativeTo = null} = options;
 
         const results = this.resolve({root:root, flat:true});
         return results.map((result) => {
             if (result?.__type === "pathResult" && result?.accessor != undefined) {
-                return `${Path.pathTo(result.node,relativeTo).str}#${result.accessor}`;
+                return `${Path.pathTo(result.node,relativeTo ?? root).str}#${result.accessor}`;
             } else if (result?.__type === "pathResult"){
-                return Path.pathTo(result.result,relativeTo).str;
+                return Path.pathTo(result.result,relativeTo ?? root).str;
             } 
         });
-    }
-
-
-    /**
-     * @callback ResolutionCallback
-     * @param {Object|Array|BaseNode} treeRoot
-     * @param {{type:string, value:any}} currentToken
-     * @param {Path} resolvedPath
-     * @returns {ResolutionDecision} 
-     */
-
-    /**
-     * @typedef ResolutionDecision
-     * @property {"continue"|"collect"|"skip"|"stop"} action
-     * @property {Object|Array} overrides
-     */
+    }  
 
     /** 
-     * @param {{root:Object, forwardHandler: ((treeRoot:*, currentToken: {type:string, value:*, containerType:"object"|"array"|"node"|null}, isLeaf:boolean, options:Object) => ResolutionDecision), reverseHandler: ((treeRoot:*, currentToken: {type:string, value:*, containerType:"object"|"array"|"node"|null}, isLeaf:boolean, options:Object) => void), handlerOptions:Object}} options
-     * @returns {Array|{__type:"pathResult",result:any,node:(BaseNode|undefined),accessors:(Array<string>|undefined)}|undefined}
+     * @param {{
+     *  root:Object, 
+     *  forwardHandler: ResolutionForwardHandler, 
+     *  reverseHandler: ResolutionReverseHandler, 
+     *  handlerOptions: Object
+     * }} options All options are optional
+     * @returns {Array<PathResult|undefined|Array>|PathResult|undefined} Always returns an array if 'flat' option is true
      */
     resolve(options = {}) {
         const {
@@ -1256,7 +1288,7 @@ class Path {
         let stopResolution = false, returnEarly = false, collectNext = false;
 
         // super basic linked list state variables
-        let llhead = null, lltail = null, totalsize = 0;
+        let llhead = null, lltail = null;
         const ctxStack = [];
         // called on every path leaf to append result to list
         // only appends and returns undefined if `flat` is true, 
@@ -1275,11 +1307,6 @@ class Path {
             if(ctxStack.length > 0) 
                 ctxStack.at(-1).count++;
             return newNode;
-        }
-        
-        function llpushResult (value) {
-            llpush(value)
-            totalsize++;
         }
 
         function llpushOpen() {
@@ -1307,7 +1334,7 @@ class Path {
         }
 
         function llbuildArray() {
-            const llIncCursor = (cur) => {
+            const incCur = (cur) => {
                 const prev = cur;
                 cur = cur.next;
                 prev.next = null; // help gc collect garbage
@@ -1321,7 +1348,7 @@ class Path {
                 if(cur == null) return undefined;
                 let rval = new Array(cur.count);
                 if(cur.value === "ctxOPEN")
-                    cur = llIncCursor(cur);
+                    cur = incCur(cur);
                 let idx = 0;
                 while(cur != null) {
                     if(cur.value === "ctxOPEN") {
@@ -1330,7 +1357,7 @@ class Path {
                         } else
                             console.error("idx got to big building array from LL")
                     } else if (cur.value === "ctxCLOSE") {
-                        if(rval.length === 1 && cur.count <= 0) {
+                        if(rval.length === 1 && cur.count <= 0 && !flat) {
                             rval = rval[0];
                         }
                         break;
@@ -1344,7 +1371,7 @@ class Path {
                     if(cur.next == null && rval.length === 1 && !flat) 
                         rval = rval[0];
 
-                    cur = llIncCursor(cur);
+                    cur = incCur(cur);
                 }
                 return rval;
             }
@@ -1360,16 +1387,16 @@ class Path {
             if(stopResolution) return;
 
             if(collectNext) {
-                llpushResult(buildResult(true,treeRoot));
+                llpush(buildResult(true,treeRoot));
             }
 
             if(cursor >= tokens.length || returnEarly || tokens[cursor].type === "CONCAT") {
                 if(treeRoot == null) {
-                    if(!flat) llpushResult(undefined);
+                    if(!flat) llpush(undefined);
                     return;
                 }
-                if(treeRoot instanceof BaseNode) return llpushResult(buildResult(returnEarly,treeRoot,treeRoot));
-                return llpushResult(buildResult(returnEarly,treeRoot));
+                if(treeRoot instanceof BaseNode) return llpush(buildResult(returnEarly,treeRoot,treeRoot));
+                return llpush(buildResult(returnEarly,treeRoot));
             }
 
             returnEarly = false;
@@ -1396,7 +1423,7 @@ class Path {
                         break;
                     case "collect":
                     case "collect_this":
-                        llpushResult(buildResult(true,treeRoot))
+                        llpush(buildResult(true,treeRoot))
                         break;
 
                     case "skip_token":
@@ -1449,7 +1476,7 @@ class Path {
                 // `undefined` if it doesn't exist
                 if(!["T_ORIGIN","T_ROOT"].includes(tokens[cursor].type) 
                     && _treeRoot == null) {
-                    if(!flat) llpushResult(undefined);
+                    if(!flat) llpush(undefined);
                     return;
                 }
 
@@ -1531,7 +1558,7 @@ class Path {
                         if(_treeRoot instanceof BaseNode) {
                             llpushOpen();
                             tokens[cursor].value.forEach(accessor => {
-                                llpushResult(buildResult(returnEarly,_treeRoot.accessors[accessor],_treeRoot,accessor));
+                                llpush(buildResult(returnEarly,_treeRoot.accessors[accessor],_treeRoot,accessor));
                             });
                             llpushClose();
                         }
