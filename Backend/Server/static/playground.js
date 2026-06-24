@@ -288,7 +288,7 @@ function makeContainer(data, type, parent, parentEl) {
  * @returns {HTMLDivElement}
  */
 function makeField(fieldData, type, parent, container) {
-    const data = (() => {
+    const fancyFieldData = (() => {
         let fd = null;
         if (fieldData instanceof Object) {
             fd = fieldData;
@@ -302,13 +302,13 @@ function makeField(fieldData, type, parent, container) {
         }
         return fd;
     })();
-    if (data == null) return;
+    if (fancyFieldData == null) return;
 
     const sepEl = document.createElement("div");
     sepEl.classList.add("seperator");
 
     const fEl = document.createElement("div");
-    fEl.className = "field"; fEl.dataset.fid = data.id;
+    fEl.className = "field"; fEl.dataset.fid = fancyFieldData.id;
 
     if(!previewMode) {
         const handle = document.createElement("i");
@@ -321,20 +321,20 @@ function makeField(fieldData, type, parent, container) {
 
     const inner = document.createElement("div");
     inner.className = "field-inner";
-    if(data.type === "textarea") inner.style.flexDirection="column";
+    if(fancyFieldData.type === "textarea") inner.style.flexDirection="column";
 
     const lbl = document.createElement("span");
     lbl.className = "field-label";
-    lbl.textContent = data.label;
+    lbl.textContent = fancyFieldData.label;
 
-    const inputEl = makeFieldInput(data);
+    const inputEl = makeFieldInput(fancyFieldData);
 
     inner.appendChild(lbl);
     inner.appendChild(inputEl);
 
     const badge = document.createElement("span");
     badge.className = "field-type-badge";
-    badge.textContent = data.type;
+    badge.textContent = fancyFieldData.type;
 
     fEl.appendChild(inner);
     fEl.appendChild(badge);
@@ -346,7 +346,7 @@ function makeField(fieldData, type, parent, container) {
         delF.addEventListener("click", e => {
 
             e.stopPropagation();
-            const fIdx = parent.content.indexOf(data);
+            const fIdx = parent.content.indexOf(fancyFieldData);
             parent.content.splice(fIdx, 1);
             
             // Update HTML
@@ -366,7 +366,7 @@ function makeField(fieldData, type, parent, container) {
             if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") 
                 return;
 
-            dragSrc = data; dragSrcParent = parent;
+            dragSrc = fancyFieldData; dragSrcParent = parent;
             dragSrcElem = fEl; dragSrcSepElem = sepEl;
             
             setTimeout(() => fEl.classList.add("dragging"), 0);
@@ -379,7 +379,7 @@ function makeField(fieldData, type, parent, container) {
         });
         fEl.addEventListener("dragover", e => {
 
-            if (dragSrcParent === parent && dragSrc !== data) {
+            if (dragSrcParent === parent && dragSrc !== fancyFieldData) {
 
                 e.preventDefault(); 
                 e.stopPropagation(); 
@@ -395,9 +395,9 @@ function makeField(fieldData, type, parent, container) {
             e.preventDefault(); 
             e.stopPropagation();
 
-            if (dragSrcParent === parent && dragSrc !== data) {
+            if (dragSrcParent === parent && dragSrc !== fancyFieldData) {
                 const fromIdx = dragSrcParent.content.indexOf(dragSrc);
-                const toIdx = dragSrcParent.content.indexOf(data);
+                const toIdx = dragSrcParent.content.indexOf(fancyFieldData);
                 const [moved] = dragSrcParent.content.splice(fromIdx, 1);
                 parent.content.splice(toIdx, 0, moved);
                 
@@ -462,7 +462,32 @@ function makeSection(secData, parent, container) {
         handle.className = "ti ti-grip-vertical drag-handle";
         handle.setAttribute("aria-hidden","true");
 
+        const directionBtn = document.createElement("button");
+        directionBtn.className = "direction";
+            if(data.direction === "column"){
+                directionBtn.innerHTML = '<i class="ti ti-layout-rows"></i>';
+            }else{
+                directionBtn.innerHTML = '<i class="ti ti-layout-columns"></i>';
+            }
+        
+        directionBtn.addEventListener("click", e =>{
+            e.stopPropagation();
+           if(data.direction === "column"){
+            data.direction = "row";
+            directionBtn.innerHTML = '<i/ class = "ti ti-layout-rows"></i>';
+
+           }else{
+            data.direction = "column";
+            directionBtn.innerHTML = '<i class="ti ti-layout-columns"></i>';
+           }
+
+        fieldList.style.flexDirection = data.direction;
+        updatePreview();
+
+        });
+
         hdr.appendChild(handle);
+        hdr.appendChild(directionBtn);
     }
 
     const expander = document.createElement("i");
