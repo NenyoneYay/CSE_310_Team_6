@@ -652,17 +652,23 @@ class Path {
 
     /**
      * @callback ResolutionForwardHandler
-     * @param {Object|Array} obj Can also be a BaseNode
-     * @param {{type:string, value:any}} currentToken
-     * @param {boolean} isLeaf
+     * @param {{
+     *  obj:(Object|Array),
+     *  token: Token,
+     *  isLeaf: boolean
+     * }} handlerParams
+     * @param {Object} options
      * @returns {ResolutionDecision} 
      */
 
     /**
      * @callback ResolutionReverseHandler
-     * @param {Object|Array} obj Can also be a BaseNode
-     * @param {{type:string, value:any}} currentToken
-     * @param {boolean} isLeaf
+     * @param {{
+     *  obj:(Object|Array),
+     *  token: Token,
+     *  isLeaf: boolean
+     * }} handlerParams
+     * @param {Object} options
      * @returns {void}
      */
 
@@ -1037,7 +1043,7 @@ class Path {
     }
 
     /** @type {ResolutionForwardHandler} */
-    static buildHandler(obj, token, isLeaf, options = null) {
+    static buildHandler({obj, token, isLeaf}, options = null) {
         const {default:defaultVal = null} = options;
         if(obj == null) return {action:"continue"};
 
@@ -1139,13 +1145,13 @@ class Path {
     }
 
     /** @type {ResolutionReverseHandler} */
-    static deleteHandler(obj, token, isLeaf, options = null) {
+    static deleteHandler({obj, token, isLeaf}, options = null) {
 
     }
 
     /** @type {ResolutionForwardHandler} */
-    static debugHandler(obj, token, isLeaf, options = null) {
-        console.log(`${Path.pathTo(obj).str} => ${token?.type}:${token?.value} , ${isLeaf}`);
+    static debugHandler({obj, token, isLeaf}, options = null) {
+        console.log(`${Path.pathTo(obj).str} => ${token?.type}:`,token?.value,`, ${isLeaf}`);
         return {action:"continue"};
     }
 
@@ -1393,9 +1399,17 @@ class Path {
 
             returnEarly = false;
             let nextRoots = [treeRoot];
-            let skipToken = false;
+            let skipToken = false; 
+            const handlerParams = (forwardHandler != null || reverseHandler != null) 
+                ? {
+                    obj:treeRoot, 
+                    token:tokens[cursor], 
+                    isLeaf:cursor === tokens.length-1
+                }
+                :null;
+            
             if(forwardHandler != null) {
-                const decision = forwardHandler(treeRoot, tokens[cursor], cursor === tokens.length-1,handlerOptions);
+                const decision = forwardHandler(handlerParams,handlerOptions);
                 
                 if(decision?.overrides != undefined) {
                     nextRoots = decision.overrides;
@@ -1592,7 +1606,7 @@ class Path {
             });
 
             if(reverseHandler != null) {
-                reverseHandler(treeRoot, tokens[cursor], cursor === tokens.length-1,handlerOptions);
+                reverseHandler(handlerParams,handlerOptions);
             }
         }
 
