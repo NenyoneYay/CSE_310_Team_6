@@ -720,9 +720,9 @@ body{
 .field:not(:has(textarea.field-input)) + .seperator:has(+ .field textarea.field-input),
 .field:has(textarea.field-input) + .seperator:has(+ .field),
 /* If a field is immediately followed by a section... */
-.field + .seperator:has(+ .section),
+.field:not(:has(textarea)) + .seperator:has(+ .section),
 /* ...or if a section is immediately followed by a field */
-.section + .seperator:has(+ .field){
+.section + .seperator:has(+ .field input:not(textarea)){
     flex: 1 1 100%; /* split the row using the separator */
 } 
 
