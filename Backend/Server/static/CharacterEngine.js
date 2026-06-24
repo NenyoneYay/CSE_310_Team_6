@@ -1046,6 +1046,7 @@ class Path {
         return tokens;
     }
 
+    /** @type {ResolutionForwardHandler} */
     static buildHandler(obj, token, isLeaf, options = null) {
         const {default:defaultVal = null} = options;
         if(obj == null) return {action:"continue"};
@@ -1147,6 +1148,7 @@ class Path {
         }
     }
 
+    /** @type {ResolutionReverseHandler} */
     static deleteHandler(obj,token,isLeaf,options = null) {
 
     }
