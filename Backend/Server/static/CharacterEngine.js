@@ -943,13 +943,17 @@ class Path {
         }
 
         let originObj = null;
+
+        if (origin instanceof Path) {
+            originObj = origin.getOrigin();
+        } else if (origin instanceof Object) {
+            originObj = origin;
+        }
         if(path[0] != '$' && origin != null){
             if (origin instanceof Path) {
-                originObj = origin.getOrigin();
                 originTokens = Path.copyTokens(origin.tokens);
                 tokens.push(...originTokens);
             } else if (origin instanceof Object) {
-                originObj = origin;
                 tokens.push(token("T_ORIGIN",originObj));
             }
         }
