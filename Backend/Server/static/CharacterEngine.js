@@ -1370,20 +1370,20 @@ class Path {
             flat = false
         } = options;
         
-        // Some higher level variables to preserve callback state across
-        // recursive function calls.
+        // Some high scope variables to preserve forward handler control 
+        // across recursive function calls.
         let stopResolution = false, returnEarly = false, collectNext = false;
 
         // super basic linked list state variables
         let llhead = null, lltail = null;
         const ctxStack = [];
+
         // called on every path leaf to append result to list
-        // only appends and returns undefined if `flat` is true, 
-        // otherwise returns same value passed in
         function llpush (value) {
             const newNode = {value:value,next:null,count:0}
             if(llhead == null) {
-                llhead = {value:"ctxOPEN",next:null,count:0};
+                // push initial "ctxOPEN" node to track array size
+                llhead = {value:"ctxOPEN",next:null,count:0}; 
                 lltail = llhead;
                 ctxStack.push(llhead);
             }
@@ -1396,30 +1396,29 @@ class Path {
             return newNode;
         }
 
+        // pushes special "ctxOPEN" node to specify entry into a deeper 
+        // result context depth. Does nothing in 'flat' mode.
         function llpushOpen() {
             if(flat) return;
             const newNode = llpush("ctxOPEN");
             ctxStack.push(newNode);
         }
 
+        // pushes special "ctxCLOSE" node to specify exit from a deeper 
+        // result context depth. Does nothing in 'flat' mode.
         function llpushClose(keepArr = false) {
             if(flat) return;
             const newNode = llpush("ctxCLOSE");
+            // used to tell if resulting array can be discarded for 
+            // single element lists.
             if(keepArr) newNode.count = 1;
             if(ctxStack.length > 0) 
                 ctxStack.at(-1).count--; // subtract self from count
             ctxStack.pop()
         }
 
-        function llprint() {
-            if(llhead == null) console.log("<null>")
-            let cur = llhead;
-            while (cur != null) {
-                console.log(cur);
-                cur = cur.next;
-            }
-        }
-
+        // called to build final resolution output. Allocates Arrays of known
+        // size after all recursion is finished.
         function llbuildArray() {
             const incCur = (cur) => {
                 const prev = cur;
@@ -1446,6 +1445,8 @@ class Path {
                     } else if (cur.value === "ctxCLOSE") {
                         if(rval.length === 1 && cur.count <= 0 && !flat) {
                             rval = rval[0];
+                        } else if (rval.length <= 0 && !flat) {
+                            rval = undefined;
                         }
                         break;
                     } else {
@@ -1455,15 +1456,27 @@ class Path {
                             console.error("idx got to big building array from LL")
                     }
 
-                    if(cur.next == null && rval.length === 1 && !flat) 
+                    if(cur.next == null && rval.length === 1 && !flat) {
                         rval = rval[0];
-
+                    } else if (rval.length <= 0 && !flat) {
+                        rval = undefined;
+                    }
                     cur = incCur(cur);
                 }
                 return rval;
             }
 
             return builder();
+        }
+
+        // debug utility function
+        function llprint() {
+            if(llhead == null) console.log("<null>")
+            let cur = llhead;
+            while (cur != null) {
+                console.log(cur);
+                cur = cur.next;
+            }
         }
 
         function buildResult(collected = false, result = null,node = null,accessor = null) {
@@ -1479,12 +1492,9 @@ class Path {
                     token:tokens[cursor], 
                     isLeaf:cursor === tokens.length-1
                 }
-                :null;
+                : null;
 
-            if(collectNext) {
-                llpush(buildResult(true,treeRoot));
-            }
-
+            // end conditions
             if(cursor >= tokens.length || returnEarly || tokens[cursor].type === "CONCAT") {
                 if(reverseHandler != null) {
                     reverseHandler(handlerParams,handlerOptions);
@@ -1496,6 +1506,10 @@ class Path {
                 }
                 if(treeRoot instanceof BaseNode) return llpush(buildResult(returnEarly||collectNext,treeRoot,treeRoot));
                 return llpush(buildResult(returnEarly||collectNext,treeRoot));
+            }
+
+            if(collectNext) {
+                llpush(buildResult(true,treeRoot));
             }
 
             returnEarly = false;
@@ -1661,6 +1675,8 @@ class Path {
                                 llpush(buildResult(returnEarly||collectNext,_treeRoot.accessors[accessor],_treeRoot,accessor));
                             });
                             llpushClose();
+                        } else {
+                            llpush(undefined);
                         }
                         break;
                     
