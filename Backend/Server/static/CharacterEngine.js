@@ -794,6 +794,50 @@ class Path {
         /** @type {Token[]} */
         let tokens = [];
         let originTokens = [];
+
+
+        /**
+         * @param {Token|undefined} token 
+         * @param {string} currentTokenType 
+         */
+        const setTokenContainer = (token = undefined, currentTokenType = null) => {
+            if(token == undefined) return;
+
+            switch(token.type) {
+                case "CONCAT":
+                    if(contextStack.length > 0) {
+                        setTokenContainer(contextStack.at(-1).at(-1),currentTokenType);
+                    }
+                    break;
+                case "T_GROUP":
+                    for(let idx = 0;idx <= token.value.length;idx++) {
+                        const gtoken = /** @type {Token[]} */ (token.value).at(idx);
+                        const pgtoken = idx > 0 ? /** @type {Token[]} */ (token.value).at(idx - 1) : undefined;
+                        if(gtoken == null || gtoken.type == "CONCAT") {
+                            setTokenContainer(pgtoken,currentTokenType);
+                        }
+                    }
+                    break;
+                default:
+                    let containerType = null;
+                    switch(currentTokenType) {
+                        case "O_KEY":
+                            containerType = "object";
+                            break;
+                        case "A_LIST":
+                        case "A_SLICE":
+                        case "A_WILDCARD":
+                            containerType = "array";
+                            break;
+                        case "N_ACCESSORS":
+                            containerType = "node";
+                            break;
+                    }
+                    token.containerType = containerType;
+            }
+        }
+
+
         if (path instanceof Path || Array.isArray(path)) {
 
             if(origin != null) {
@@ -809,9 +853,10 @@ class Path {
                 ? path.tokens
                 : path;
             
-            for(const [idx,token] of pathTokens.entries()) {
+            for(const token of pathTokens) {
                 const tokenCopy = Path.copyTokens(token);
                 if(tokenCopy == undefined) continue; // skip invalid tokens
+                let prevToken = tokens.at(-1);
                 switch(token.type) {
                     case "T_ROOT":
                         tokens = [tokenCopy]; // replace any origin pathing with root
@@ -825,6 +870,7 @@ class Path {
                         // pop tokens off the stack if able to shorten/standardize paths
                         if(tokens.length > 0 && !(["T_BACK","T_ORIGIN","T_ROOT","CONCAT","T_GROUP"].includes(tokens.at(-1)?.type))) {
                             tokens.pop();
+                            prevToken = tokens.at(-1);
                         } else {
                             tokens.push(tokenCopy);
                         }
@@ -832,8 +878,10 @@ class Path {
                     case "CONCAT":
                         tokens.push(tokenCopy);
                         tokens.push(originTokens);
+                        break;
                     default:
                         tokens.push(tokenCopy);
+                        setTokenContainer(prevToken,tokenCopy.type);
                 }
             }
             return tokens;
@@ -856,7 +904,7 @@ class Path {
         }
 
         let originObj = null;
-        if(path[0] != '~' && origin != null){
+        if(path[0] != '$' && origin != null){
             if (origin instanceof Path) {
                 originObj = origin.getOrigin();
                 originTokens = Path.copyTokens(origin.tokens);
@@ -867,32 +915,6 @@ class Path {
             }
         }
 
-        /**
-         * @param {Token|undefined} token 
-         * @param {string} containerType 
-         */
-        const setTokenContainer = (token = undefined, containerType = "") => {
-            if(token == undefined) return;
-
-            switch(token.type) {
-                case "CONCAT":
-                    if(contextStack.length > 0) {
-                        setTokenContainer(contextStack.at(-1).at(-1),containerType);
-                    }
-                    break;
-                case "T_GROUP":
-                    for(let idx = 0;idx <= token.value.length;idx++) {
-                        const gtoken = /** @type {Token[]} */ (token.value).at(idx);
-                        const pgtoken = idx > 0 ? /** @type {Token[]} */ (token.value).at(idx - 1) : undefined;
-                        if(gtoken == null || gtoken.type == "CONCAT") {
-                            setTokenContainer(pgtoken,containerType);
-                        }
-                    }
-                    break;
-                default:
-                    token.containerType = containerType;
-            }
-        }
 
         for(let i = 0;i < path.length;) {
             // If for some reason the string is consumed already, quit now.
@@ -927,12 +949,12 @@ class Path {
 
             else if(m[3] !== undefined) {
                 tokens.push(token('O_KEY',sanatizeKey(m[3])));
-                setTokenContainer(prevToken,"object");
+                setTokenContainer(prevToken,'O_KEY');
             }
 
             else if(m[4] !== undefined) {
                 tokens.push(token('A_LIST',m[4].split(',').map(x => parseInt(x))));
-                setTokenContainer(prevToken,"array");
+                setTokenContainer(prevToken,'A_LIST');
             }
 
             else if(m[5] !== undefined) {
@@ -946,17 +968,17 @@ class Path {
                     throw SyntaxError(`Token ${m[5]} at ${i}: Array slice indexes must be numbers.`);
 
                 tokens.push(token('A_SLICE',{min:pmin,max:pmax}));
-                setTokenContainer(prevToken,"array");
+                setTokenContainer(prevToken,'A_SLICE');
             }
 
             else if(m[6] !== undefined) {
                 tokens.push(token('A_WILDCARD','*'));
-                setTokenContainer(prevToken,"array");
+                setTokenContainer(prevToken,'A_WILDCARD');
             }
 
             else if(m[7] !== undefined && m[7] !== '') {
                 tokens.push(token('N_ACCESSORS',m[7].split(',').map(x => sanatizeKey(x))));
-                setTokenContainer(prevToken,"node");
+                setTokenContainer(prevToken,'N_ACCESSORS');
             }
                 
             else if (m[8] !== undefined) { //;,
