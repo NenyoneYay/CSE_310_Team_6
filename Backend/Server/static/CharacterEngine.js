@@ -584,7 +584,7 @@ class Character {
 
 class Path {
     /* Tokens Regex Group Explination:
-     * Group 1: Path from root object
+     * Group 1: Path from root object. Path starts with '$'
      * Group 2: '.' or ',' for path separator logics
      * Group 3: Key token. Expressed: Key1.Key2
      * - Each of these keys can have array accessors. These are singleton
@@ -598,26 +598,32 @@ class Path {
      * Group 6: "*" Wildcard array accessor. Expressed: [*]
      * - refers to entire array
      * - Comes after Key or Group tokens.
-     * Group 7: "#" accessor sigils. Expressed: #accessor1,accessor2,... at the end of a query or on it's own
+     * Group 7: "#" accessor sigils. Expressed: #accessor1,accessor2,...
+     * - Access node accessors (i.e. value, min, or max)
      * Group 8: ';,' semicoln or comma to separate full path queries. 
      * - Commas cannot be used for this purpose after accessor sigils, 
      *   but semicolns can.
+     * - Can be used in groups to specify multiple sub paths.
      * Group 9: '(' Start of Group token. 
      * Group 10: ')' End of Group token.
-     * - Groups are expressed by: (key1,key2,...)
-     *   - Each key can have array accessors. These items are grouped and returned
-     *     as an array.
+     * - Groups are expressed by: (Subpath 1;subpath 2,...)
+     *   - Each subpath may be a full path to something from previous path 
+     *     endpoint, each separated by either a comma or semicolon. Must all 
+     *     start with same accessor type (i.e. all  start a key, array acceesor,
+     *     or accessor sigil).  Expected to return  same container type 
+     *     (i.e. object, arrray, node) as well.
      *   - Tokens are recursively parsed inside.
      */
     static tokensRegex = /(?<=^|[\(;,])\s*(\$)\s*|(?<=^|[\(;,\.])\s*(\.+)|(?:(?<=^|[\.;,\($])\s*(?:([\w~][\w: ~\-]*?|\*))\s*(?=$|[\.\[;#,\)]))|(?<!(?<!^|[\(;,\.])\.)\[\s*(?:(-?\d+(?:\s*,\s*-?\d+)*)|(-?\d*\s*:\s*-?\d*)|(\*))\s*\]\s*(?=$|[\.\[#,;\)])|(?<!(?<!^|[\(;,\.])\.)#(\w+(?:,\w+)*)\s*(?=$|[;\)])|(;|,)|\.|(\()|(\))/y;
     /* 
     Test Syntax string:
-    Key Value.(Key[47],Key,key)[5][5:][*].Key[5,789,-6]#accessor1,accessor2;Key:morekey.Key.Key[:-1].*#accessor1,accessor3,accessor4
+    $~Key Value.(Key[47],Key,key)[5][5:][*].Key[5,789,-6]#accessor1,accessor2;Key:morekey.Key.Key[:-1].*#accessor1,accessor3,accessor4
     items[1,-4,5][*][1][-1][1:][:1][-2:3]
     Strength[3][5][6];Dexterity[7]
     hello;world
     (h,l,p,asdf,jlsadf)[5];asdf
     #accessor1,accessor2
+    Key1.Key2.(.go back[7])[5]
     */
 
     /**
