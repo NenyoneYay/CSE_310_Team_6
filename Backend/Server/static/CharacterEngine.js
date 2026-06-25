@@ -88,7 +88,7 @@ function downloadSave() {
  */
 
 function sanatizeKey(key) {
-    if (key in Array.prototype) return '~'+key;
+    if (key in Object.prototype) return '~'+key;
     return key;
 }
 
@@ -692,6 +692,8 @@ class Path {
             }
         }
 
+        let originobj = null;
+
         const recursor = (obj) => {
             if(obj == undefined) return undefined;
 
@@ -699,7 +701,8 @@ class Path {
                 let idx = rootChain.indexOf(obj);
                 if(idx >= 0) {
                     const isRoot = obj?.[Symbol.for("parent")] == undefined;
-                    const rval = [{type:(isRoot ? "T_ROOT" : "T_ORIGIN"),value:from}]
+                    originobj = from;
+                    const rval = isRoot ? [{type:"T_ROOT",value:"$"}] : []
                     for(let i = idx;i > 0;i--) {
                         rval.push({type:"T_BACK",value:"."});
                     }
@@ -729,16 +732,18 @@ class Path {
                     }
                 } else {
                     // just return the full absolute path if all else fails.
-                    return [{type:"T_ROOT",value:obj}]; 
+                    originobj = obj;
+                    return [{type:"T_ROOT",value:"$"}]; 
                 }
             }
             return undefined;
         }
 
         if(obj instanceof Path) {
-            return new Path(obj,Path.pathTo(obj.getOrigin(),from));
+            //return new Path(obj,Path.pathTo(obj.getOrigin(),from));
+            return undefined;
         }
-        return new Path(recursor(obj));
+        return new Path(recursor(obj),originobj);
     }
 
     /**
@@ -771,8 +776,8 @@ class Path {
     }
 
     /**
-     * @param {Array<{type:string,value:any}>} tokens 
-     * @returns {Array<{type:string,value:any}>}
+     * @param {Token|Token[]|Token[][]} tokens 
+     * @returns {Token|Token[]|Token[][]}
      */
     static copyTokens(tokens) {
         const _isValidToken = (token) => {
@@ -785,7 +790,13 @@ class Path {
         const _copyTokens = (tokens) => {
             const tokenCopies = []
             for(const token of tokens) {
-                const tokenCopy = _copyToken(token);
+                let tokenCopy;
+                if(Array.isArray(token)) {
+                    tokenCopy = _copyTokens(token);
+                    if(tokenCopy.length < 1) continue; // skip arrays of invalid tokens
+                } else {
+                    tokenCopy = _copyToken(token);
+                }
                 if(tokenCopy == undefined) continue; // skip invalid tokens
                 tokenCopies.push(tokenCopy);
             }
@@ -807,11 +818,9 @@ class Path {
                     tokenCopy = {type:token.type, value:_copyTokens(token.value)};
                     break;
                 case 'T_ROOT':
-                case 'T_ORIGIN':
                 case 'T_BACK':
                 case 'O_KEY':
                 case 'A_WILDCARD':
-                case 'CONCAT':
                 default:
                     tokenCopy = {type:token.type, value:token.value};
                     break;
@@ -830,37 +839,35 @@ class Path {
     }
 
     /** 
-     * @param {string|Path|Array<{type:string,value:any}>} path 
-     * @param {Object|Path} origin
+     * @param {string|Path|Token[]} path 
+     * @param {Path} origin
      * */
     static tokenize (path,origin=null) {
         if (path == undefined) path = "";
-        
-        /** @type {Token[]} */
-        let tokens = [];
-        let originTokens = [];
 
+        if (origin instanceof Path) {
+            /** @type {Token[][]}*/
+            const allTokens = []
+            for(const _tokens of origin.tokens) {
+                // for each grouping of origin tokens, process new path
+                allTokens.push(..._processPath(path,_tokens));
+            }
+            return allTokens;
+        } else {
+            return _processPath(path);
+        }
 
         /**
          * @param {Token|undefined} token 
          * @param {string} currentTokenType 
          */
-        const setTokenContainer = (token = undefined, currentTokenType = null) => {
+        function setTokenContainer(token = undefined, currentTokenType = null) {
             if(token == undefined) return;
 
             switch(token.type) {
-                case "CONCAT":
-                    if(contextStack.length > 0) {
-                        setTokenContainer(contextStack.at(-1).at(-1),currentTokenType);
-                    }
-                    break;
                 case "T_GROUP":
-                    for(let idx = 0;idx <= token.value.length;idx++) {
-                        const gtoken = /** @type {Token[]} */ (token.value).at(idx);
-                        const pgtoken = idx > 0 ? /** @type {Token[]} */ (token.value).at(idx - 1) : undefined;
-                        if(gtoken == null || gtoken.type == "CONCAT") {
-                            setTokenContainer(pgtoken,currentTokenType);
-                        }
+                    for(const gtokens of token.value) {
+                        setTokenContainer(gtokens.at(-1),currentTokenType);
                     }
                     break;
                 default:
@@ -882,164 +889,167 @@ class Path {
             }
         }
 
+        function _processPath(path, originTokens = []) {
+            /** @type {Token[]} */
+            let tokens = [...originTokens];
+            /** @type {Token[][]} */
+            let allTokens = [tokens];
 
-        let originObj = null;
-        if (origin instanceof Path) {
-            originObj = origin.getOrigin();
-            originTokens = Path.copyTokens(origin.tokens);
-            tokens.push(...originTokens);
-        } else if (origin instanceof Object) {
-            originObj = origin;
-            tokens.push(token("T_ORIGIN",originObj));
-        }
+            if (path instanceof Path || Array.isArray(path)) {
+                
+                const _processTokens = (pathTokens) => {
+                    for(const token of pathTokens) {
+                        if(Array.isArray(token)) {
+                            _processTokens(token);
+                            tokens = []; // treat end of array as concatenate (;,)
+                            allTokens.push(tokens);
+                            tokens.push(...originTokens);
+                            continue;
+                        }
+                        const tokenCopy = Path.copyTokens(token);
+                        if(tokenCopy == undefined) continue; // skip invalid tokens
+                        let prevToken = tokens.at(-1);
+                        switch(token.type) {
+                            case "T_ROOT":
+                                allTokens.pop();
+                                tokens = [tokenCopy]; // replace any origin pathing with root
+                                allTokens.push(tokens) // replace all origins with root token
+                                break;
+                            case "T_BACK":
+                                // pop tokens off the stack if able to shorten/standardize paths
+                                if(tokens.length > 0 && !(["T_BACK","T_ROOT","T_GROUP"].includes(tokens.at(-1)?.type))) {
+                                    tokens.pop();
+                                    prevToken = tokens.at(-1);
+                                } else {
+                                    tokens.push(tokenCopy);
+                                }
+                                break;
+                            default:
+                                tokens.push(tokenCopy);
+                                setTokenContainer(prevToken,tokenCopy.type);
+                        }
+                    }
+                }
 
-        if (path instanceof Path || Array.isArray(path)) {
+                if(path instanceof Path) {
+                    _processTokens(path.tokens);
+                } else {
+                    _processTokens(path);
+                }
 
-            const pathTokens = (path instanceof Path) 
-                ? path.tokens
-                : path;
+                return allTokens;
+            } else if (typeof(path) !== "string") {
+                path = ""; // process as empty path if path is invalid;
+            }
+
+            /** @type {Token[][][]} */
+            const contextStack = [];
             
-            for(const token of pathTokens) {
-                const tokenCopy = Path.copyTokens(token);
-                if(tokenCopy == undefined) continue; // skip invalid tokens
+            /**
+             * 
+             * @param {string} type 
+             * @param {any} value 
+             * @param {string} containerType 
+             * @returns {Token}
+             */
+            function token(type, value, containerType = null) {
+                return {type, value, containerType};
+            }
+
+            for(let i = 0;i < path.length;) {
+                // If for some reason the string is consumed already, quit now.
+                if (i >= path.length)
+                    break;
+
+                Path.tokensRegex.lastIndex = i;
+                const m = Path.tokensRegex.exec(path)
+                if (!m) throw SyntaxError(`Unexpected character '${path[i]}' at ${i} in '${path}'`);
+                // console.log(m); // Cool Debug thing
+
                 let prevToken = tokens.at(-1);
-                switch(token.type) {
-                    case "T_ROOT":
-                        tokens = [tokenCopy]; // replace any origin pathing with root
-                        break;
-                    case "T_ORIGIN":
-                        // don't replace the original origin if it exists
-                        if(origin == null)
-                            tokens.push(tokenCopy);
-                        break;
-                    case "T_BACK":
-                        // pop tokens off the stack if able to shorten/standardize paths
-                        if(tokens.length > 0 && !(["T_BACK","T_ORIGIN","T_ROOT","CONCAT","T_GROUP"].includes(tokens.at(-1)?.type))) {
+                if(tokens.length < 1 && contextStack.length > 0) {
+                    prevToken = contextStack.at(-1).at(-1).at(-1);
+                }
+
+
+                if (m[1] !== undefined) {
+                    tokens = [token('T_ROOT','$')];
+                    allTokens.pop();
+                    allTokens.push(tokens) // replace all origins with root token
+                }
+
+                if (m[2] !== undefined) {
+                    for (let i=0;i<m[2].length;i++) {
+                        if(tokens.length > 0 && !(["T_BACK","T_ROOT","T_GROUP"].includes(tokens.at(-1)?.type))) {
                             tokens.pop();
                             prevToken = tokens.at(-1);
                         } else {
-                            tokens.push(tokenCopy);
+                            tokens.push(token('T_BACK','.'));
                         }
-                        break;
-                    case "CONCAT":
-                        tokens.push(tokenCopy);
-                        tokens.push(originTokens);
-                        break;
-                    default:
-                        tokens.push(tokenCopy);
-                        setTokenContainer(prevToken,tokenCopy.type);
-                }
-            }
-            return tokens;
-        } else if (typeof(path) !== "string") {
-            path = ""; // process as empty path if path is invalid;
-        }
-
-        /** @type {Token[][]} */
-        const contextStack = [];
-        
-        /**
-         * 
-         * @param {string} type 
-         * @param {any} value 
-         * @param {string} containerType 
-         * @returns {Token}
-         */
-        function token(type, value, containerType = null) {
-            return {type, value, containerType}
-        }
-
-        
-
-        for(let i = 0;i < path.length;) {
-            // If for some reason the string is consumed already, quit now.
-            if (i >= path.length)
-                break;
-
-            Path.tokensRegex.lastIndex = i;
-            const m = Path.tokensRegex.exec(path)
-            if (!m) throw SyntaxError(`Unexpected character '${path[i]}' at ${i} in '${path}'`);
-            // console.log(m); // Cool Debug thing
-
-            let prevToken = tokens.at(-1);
-            if(tokens.length < 1 && contextStack.length > 0) {
-                prevToken = contextStack.at(-1).at(-1);
-            }
-
-
-            if (m[1] !== undefined) {
-                tokens = [token("T_ROOT",originObj)] // replace all origins with root token
-            }
-
-            if (m[2] !== undefined) {
-                for (let i=0;i<m[2].length;i++) {
-                    if(tokens.length > 0 && !(["T_BACK","T_ORIGIN","T_ROOT","CONCAT","T_GROUP"].includes(tokens.at(-1)?.type))) {
-                        tokens.pop();
-                        prevToken = tokens.at(-1);
-                    } else {
-                        tokens.push(token('T_BACK','.'));
                     }
                 }
-            }
 
-            else if(m[3] !== undefined) {
-                tokens.push(token('O_KEY',sanatizeKey(m[3])));
-                setTokenContainer(prevToken,'O_KEY');
-            }
-
-            else if(m[4] !== undefined) {
-                tokens.push(token('A_LIST',m[4].split(',').map(x => parseInt(x))));
-                setTokenContainer(prevToken,'A_LIST');
-            }
-
-            else if(m[5] !== undefined) {
-                let [pmin,pmax] = m[5].split(':');
-                if (pmin === '') pmin = 0;
-                else pmin = parseInt(pmin);
-                if (pmax === '') pmax = undefined;
-                else pmax = parseInt(pmax);
-
-                if(Number.isNaN(pmin) || Number.isNaN(pmax)) 
-                    throw SyntaxError(`Token ${m[5]} at ${i}: Array slice indexes must be numbers.`);
-
-                tokens.push(token('A_SLICE',{min:pmin,max:pmax}));
-                setTokenContainer(prevToken,'A_SLICE');
-            }
-
-            else if(m[6] !== undefined) {
-                tokens.push(token('A_WILDCARD','*'));
-                setTokenContainer(prevToken,'A_WILDCARD');
-            }
-
-            else if(m[7] !== undefined && m[7] !== '') {
-                tokens.push(token('N_ACCESSORS',m[7].split(',').map(x => sanatizeKey(x))));
-                setTokenContainer(prevToken,'N_ACCESSORS');
-            }
-                
-            else if (m[8] !== undefined) { //;,
-                tokens.push(token('CONCAT',';,'));
-                if (contextStack.length < 1) {
-                    tokens.push(...originTokens);
+                else if(m[3] !== undefined) {
+                    tokens.push(token('O_KEY',sanatizeKey(m[3])));
+                    setTokenContainer(prevToken,'O_KEY');
                 }
-            }
 
-            else if (m[9] !== undefined) { // (
-                contextStack.push(tokens);// push token context into stack
-                tokens = []; // create new token context
-            }
+                else if(m[4] !== undefined) {
+                    tokens.push(token('A_LIST',m[4].split(',').map(x => parseInt(x))));
+                    setTokenContainer(prevToken,'A_LIST');
+                }
 
-            else if (m[10] !== undefined) { // )
-                if (contextStack.length <= 0) throw SyntaxError(`Token ${m[10]} at ${i}: Unbalanced Parentheses. Missing opening '('`);
-                const group_token = token('T_GROUP', tokens); // store current token context into group token
-                tokens = contextStack.pop(); // pop previous context off the stack to continue where we left off
-                tokens.push(group_token);
+                else if(m[5] !== undefined) {
+                    let [pmin,pmax] = m[5].split(':');
+                    if (pmin === '') pmin = 0;
+                    else pmin = parseInt(pmin);
+                    if (pmax === '') pmax = undefined;
+                    else pmax = parseInt(pmax);
+
+                    if(Number.isNaN(pmin) || Number.isNaN(pmax)) 
+                        throw SyntaxError(`Token ${m[5]} at ${i}: Array slice indexes must be numbers.`);
+
+                    tokens.push(token('A_SLICE',{min:pmin,max:pmax}));
+                    setTokenContainer(prevToken,'A_SLICE');
+                }
+
+                else if(m[6] !== undefined) {
+                    tokens.push(token('A_WILDCARD','*'));
+                    setTokenContainer(prevToken,'A_WILDCARD');
+                }
+
+                else if(m[7] !== undefined && m[7] !== '') {
+                    tokens.push(token('N_ACCESSORS',m[7].split(',').map(x => sanatizeKey(x))));
+                    setTokenContainer(prevToken,'N_ACCESSORS');
+                }
+                    
+                else if (m[8] !== undefined) { //;, (conatenate)
+                    tokens = [];
+                    allTokens.push(tokens); // make new tokens grouping
+                    if (contextStack.length < 1) {
+                        tokens.push(...originTokens);
+                    }
+                }
+
+                else if (m[9] !== undefined) { // (
+                    contextStack.push(allTokens);// push token context into stack
+                    tokens = []; // create new token context
+                    allTokens = [tokens];
+                }
+
+                else if (m[10] !== undefined) { // )
+                    if (contextStack.length <= 0) throw SyntaxError(`Token ${m[10]} at ${i}: Unbalanced Parentheses. Missing opening '('`);
+                    const group_token = token('T_GROUP', allTokens); // store current token context into group token
+                    allTokens = contextStack.pop(); // pop previous context off the stack to continue where we left off
+                    tokens = allTokens.at(-1);
+                    tokens.push(group_token);
+                }
+                
+                i = Path.tokensRegex.lastIndex;
             }
-            
-            i = Path.tokensRegex.lastIndex;
+            if(contextStack.length > 0) throw SyntaxError(`EOF: Unbalanced Parentheses. Missing closing ')'`);
+            return allTokens;
         }
-        if(contextStack.length > 0) throw SyntaxError(`EOF: Unbalanced Parentheses. Missing closing ')'`);
-        
-        return tokens;
     }
 
     /** @type {ResolutionForwardHandler} */
@@ -1253,78 +1263,71 @@ class Path {
         /** @type {string} */
         this.str = null;
 
+        /** @type {Object} */
+        this.origin = null;
+        if(origin instanceof Path) {
+            this.origin = origin.origin;
+        } else if (origin instanceof Object) {
+            this.origin = origin;
+        }
+
         // tokenize the path syntax from path
-        /** @type {Array<{type:string,value:any}>} */
-        this.tokens = [];
+        /** @type {Token[][]} */
         this.tokens = Path.tokenize(path, origin);
-        this.str = this.getString();
+        this.str = this.buildString();
 
         Path.tokensRegex.lastIndex = 0;
-    }
 
-    /**
-     * 
-     * @returns Returns object that is the origin this path was created with
-     */
-    getOrigin() {
-        let rval = undefined;
-        for(const token of this.tokens) {
-            switch (token.type) {
-                case "T_ORIGIN":
-                case "T_ROOT":
-                    rval = token.value ?? undefined;
-                    break;
-            }
-        }
-        return rval;
+        Object.freeze(this);
     }
 
     /**
      * @returns {string} Returns string representation of this path including unresolved wildcards
      */
-    getString() {
+    buildString() {
         let prevTType = null;
         /** 
          * @param {string} pv 
          * @param {Token} cv
          * */
-        const pathReducer = (pv,cv) => {
-            let tokenStr = '';
-            let postfix = cv.containerType == 'object' ? '.' : '';
+        const pathReducer = (pv,cv,idx,arr) => {
 
-            switch (cv.type) {
-                case 'T_ROOT':
-                    return '$';
-                    break;
-                case 'T_ORIGIN':
-                    return '';
-                    break;
-                case 'T_BACK':
-                case 'O_KEY':
-                    tokenStr = cv.value;
-                    break;
-                case 'A_LIST':
-                    tokenStr = `[${cv.value.join(',')}]`;
-                    break;
-                case 'A_SLICE':
-                    tokenStr = `[${cv.value.min === 0 ? '' : cv.value.min}:${cv.value.max ?? ''}]`;
-                    break;
-                case 'A_WILDCARD':
-                    tokenStr = '[*]';
-                    break;
-                case 'CONCAT':
-                    tokenStr = prevTType === 'N_ACCESSORS' ? ';' : ',';
-                    break;
-                case 'T_GROUP':
-                    tokenStr = `(${cv.value.reduce(pathReducer,'')})`;
-                    break;
-                case 'N_ACCESSORS':
-                    tokenStr = `#${cv.value.join(',')}`;
-                    break;
-                default:
-                    tokenStr = '';
+            let tokenStr = '';
+            let postfix = '';
+
+            if(Array.isArray(cv)) {
+                tokenStr =  cv.reduce(pathReducer,'');
+                if(idx < arr.length - 1) postfix = (prevTType === 'N_ACCESSORS' ? ';' : ',');
+            } else {
+                postfix = cv.containerType == 'object' ? '.' : '';
+                switch (cv.type) {
+                    case 'T_ROOT':
+                        return '$';
+                        break;
+                    case 'T_BACK':
+                    case 'O_KEY':
+                        tokenStr = cv.value;
+                        break;
+                    case 'A_LIST':
+                        tokenStr = `[${cv.value.join(',')}]`;
+                        break;
+                    case 'A_SLICE':
+                        tokenStr = `[${cv.value.min === 0 ? '' : cv.value.min}:${cv.value.max ?? ''}]`;
+                        break;
+                    case 'A_WILDCARD':
+                        tokenStr = '[*]';
+                        break;
+                    case 'T_GROUP':
+                        tokenStr = `(${cv.value.reduce(pathReducer,'')})`;
+                        break;
+                    case 'N_ACCESSORS':
+                        tokenStr = `#${cv.value.join(',')}`;
+                        break;
+                    default:
+                        tokenStr = '';
+                }
+                prevTType = cv.type;
             }
-            prevTType = cv.type;
             return pv + tokenStr + postfix;
         }
 
@@ -1357,7 +1360,8 @@ class Path {
      *  root:Object, 
      *  forwardHandler: ResolutionForwardHandler, 
      *  reverseHandler: ResolutionReverseHandler, 
-     *  handlerOptions: Object
+     *  handlerOptions: Object,
+     *  flat: boolean
      * }} options All options are optional
      * @returns {Array<PathResult|undefined|Array>|PathResult|undefined} Always returns an array if 'flat' option is true
      */
@@ -1382,14 +1386,12 @@ class Path {
         function llpush (value) {
             const newNode = {value:value,next:null,count:0}
             if(llhead == null) {
-                // push initial "ctxOPEN" node to track array size
-                llhead = {value:"ctxOPEN",next:null,count:0}; 
+                llhead = newNode
                 lltail = llhead;
-                ctxStack.push(llhead);
+            } else {
+                lltail.next = newNode;
+                lltail = newNode;
             }
-
-            lltail.next = newNode;
-            lltail = newNode;
 
             if(ctxStack.length > 0) 
                 ctxStack.at(-1).count++;
@@ -1398,23 +1400,24 @@ class Path {
 
         // pushes special "ctxOPEN" node to specify entry into a deeper 
         // result context depth. Does nothing in 'flat' mode.
-        function llpushOpen() {
-            if(flat) return;
-            const newNode = llpush("ctxOPEN");
+        function llpushOpen(keepArr = false) {
+            if(flat && ctxStack.length > 0) return;
+            const newNode = llpush({[Symbol.for("ctxOPEN")]: keepArr || flat});
             ctxStack.push(newNode);
         }
 
         // pushes special "ctxCLOSE" node to specify exit from a deeper 
         // result context depth. Does nothing in 'flat' mode.
         function llpushClose(keepArr = false) {
-            if(flat) return;
-            const newNode = llpush("ctxCLOSE");
+            if(flat && ctxStack.length <= 1) return;
             // used to tell if resulting array can be discarded for 
             // single element lists.
-            if(keepArr) newNode.count = 1;
-            if(ctxStack.length > 0) 
-                ctxStack.at(-1).count--; // subtract self from count
-            ctxStack.pop()
+            if(ctxStack.length > 0) {
+                const openNode = ctxStack.at(-1);
+                if(openNode.value?.[Symbol.for("ctxOPEN")] != undefined) 
+                    openNode.value[Symbol.for("ctxOPEN")] = keepArr || flat;
+                ctxStack.pop()
+            }
         }
 
         // called to build final resolution output. Allocates Arrays of known
@@ -1423,45 +1426,39 @@ class Path {
             const incCur = (cur) => {
                 const prev = cur;
                 cur = cur.next;
-                prev.next = null; // help gc collect garbage
+                //prev.next = null; // help gc collect garbage
                 return cur;
             }
 
             let cur = llhead;
-            llhead = null;
+            //llhead = null;
 
             const builder = () => {
                 if(cur == null) return undefined;
-                let rval = new Array(cur.count);
-                if(cur.value === "ctxOPEN")
+                let isCtxOpen = cur.value?.[Symbol.for("ctxOPEN")] != undefined;
+                let rval = undefined;
+                if(isCtxOpen) {
+                    const keepArr = cur.value[Symbol.for("ctxOPEN")];
+                    rval = new Array(cur.count);
                     cur = incCur(cur);
-                let idx = 0;
-                while(cur != null) {
-                    if(cur.value === "ctxOPEN") {
-                        if(idx < rval.length){
+                    let idx = 0;
+                    while(cur != null && idx < rval.length) {
+                        isCtxOpen = cur.value?.[Symbol.for("ctxOPEN")] != undefined;
+                        if(isCtxOpen) {
                             rval[idx++] = builder();
-                        } else
-                            console.error("idx got to big building array from LL")
-                    } else if (cur.value === "ctxCLOSE") {
-                        if(rval.length === 1 && cur.count <= 0 && !flat) {
-                            rval = rval[0];
-                        } else if (rval.length <= 0 && !flat) {
-                            rval = undefined;
-                        }
-                        break;
-                    } else {
-                        if(idx < rval.length) {
+                        } else {
                             rval[idx++] = cur.value;
-                        } else
-                            console.error("idx got to big building array from LL")
+                            cur = incCur(cur);
+                        }
                     }
 
-                    if(cur.next == null && rval.length === 1 && !flat) {
+                    if(rval.length === 1 && !keepArr && !flat) {
                         rval = rval[0];
-                    } else if (rval.length <= 0 && !flat) {
+                    } else if (rval.length <= 0) {
                         rval = undefined;
                     }
-                    cur = incCur(cur);
+                } else {
+                    rval = cur.value;
                 }
                 return rval;
             }
@@ -1495,7 +1492,7 @@ class Path {
                 : null;
 
             // end conditions
-            if(cursor >= tokens.length || returnEarly || tokens[cursor].type === "CONCAT") {
+            if(cursor >= tokens.length || returnEarly) {
                 if(reverseHandler != null) {
                     reverseHandler(handlerParams,handlerOptions);
                 }
@@ -1560,7 +1557,7 @@ class Path {
                 }
             }
 
-            const resolveToken = (_treeRoot,tokens,cursor) => {
+            const _resolveToken = (_treeRoot) => {
                 // skip over containers and BaseNodes for tokens
                 // that access a child element
                 switch(tokens[cursor].type) {
@@ -1586,23 +1583,15 @@ class Path {
                         break;
                 }
 
-                // If the token is not changing the root object directly, return
-                // `undefined` if it doesn't exist
-                if(!["T_ORIGIN","T_ROOT"].includes(tokens[cursor].type) 
-                    && _treeRoot == null) {
+                if(_treeRoot == null) {
                     if(!flat) llpush(undefined);
                     return;
                 }
 
                 switch(tokens[cursor].type) {
-                    case 'T_ORIGIN':
-                        if(tokens[cursor].value != null)
-                            _treeRoot = tokens[cursor].value;
-                        recursor(_treeRoot,tokens,cursor+1);
-                        break;
                     case 'T_ROOT':
                         if(tokens[cursor].value != null) {
-                            const newRoot = Path.findRoot(tokens[cursor].value)
+                            const newRoot = Path.findRoot(_treeRoot)
                             if(newRoot != null) {
                                 _treeRoot = newRoot;
                             }
@@ -1625,15 +1614,18 @@ class Path {
                         }
                         break;
                     case 'O_KEY':
-                        if(_treeRoot instanceof Object) { 
+                        if(_treeRoot instanceof Object && !Array.isArray(_treeRoot)) {
+                            if(tokens[cursor.value] in Object.prototype) {
+                                return llpush(undefined); // stop prototype pollution attacks
+                            }
                             if (tokens[cursor].value === '*') {
-                                llpushOpen();
+                                llpushOpen(true);
                                 /** @type {Array<string>} */
                                 const keys = Object.keys(_treeRoot).filter((val) => !val.startsWith("__"));
                                 keys.forEach((key) => {
                                     recursor(_treeRoot[key],tokens,cursor+1);
                                 });
-                                llpushClose(true);
+                                llpushClose();
                             } else {
                                 const nextVal = _treeRoot[tokens[cursor].value];
                                 recursor(nextVal,tokens,cursor+1);
@@ -1683,24 +1675,16 @@ class Path {
                     case 'T_GROUP':
                         if (_treeRoot != null) {
                             const oldCtx = {returnEarly, collectNext}
-                            let start_idx = 0
                             const tokensRest = tokens.slice(cursor+1);
-                            let gtoken = null;
                             llpushOpen();
-                            for(let idx = 0;idx <= tokens[cursor].value.length;idx++) {
-                                if(idx < tokens[cursor].value.length) gtoken = tokens[cursor].value[idx];
-                                if(idx === tokens[cursor].value.length || gtoken?.type === 'CONCAT') {
-                                    const groupTokens = [...tokens[cursor].value.slice(start_idx,idx),...tokensRest];
-                                    recursor(_treeRoot,groupTokens,0);
-                                    if(stopResolution) break;
-                                    ({returnEarly,collectNext} = oldCtx);
-                                    start_idx = idx+1;
-                                }
-                            };
+
+                            for(const _tokens of tokens[cursor].value) {
+                                recursor(_treeRoot,[..._tokens,...tokensRest]);
+                                if(stopResolution) break;
+                                ({returnEarly,collectNext} = oldCtx);
+                            }
                             llpushClose();
                         }
-                        break;
-                    case 'CONCAT':               
                         break;
                     default:
                         recursor(_treeRoot,tokens,cursor+1); // skip token
@@ -1708,29 +1692,22 @@ class Path {
                 }
             }
 
+            if(nextRoots.length > 1) llpushOpen();
             nextRoots.forEach((nextRoot) => {
-                llpushOpen();
                 if(skipToken) recursor(nextRoot,tokens,cursor+1);
-                else resolveToken(nextRoot,tokens,cursor);
+                else _resolveToken(nextRoot);
                 if(reverseHandler != null) {
                     reverseHandler({...handlerParams,obj:nextRoot},handlerOptions);
                 }
-                llpushClose();
             });
-
+            if(nextRoots.length > 1) llpushClose();
         }
 
-        const query_container = [];
-        let query_start_idx = 0
-        for(let idx = 0;idx <= this.tokens.length;idx++) {
-            const token = idx === this.tokens.length 
-                ? null : this.tokens[idx];
-            if(token == null || token.type === 'CONCAT') {
-                const tokensList = this.tokens.slice(query_start_idx,idx);
-                recursor(root,this.tokens,query_start_idx);
-                query_start_idx = idx+1;
-            }
+        llpushOpen(false);
+        for(const _tokens of this.tokens) {
+            recursor(this.origin ?? root,_tokens);
         }
+        llpushClose();
 
         return llbuildArray();
     }
@@ -2874,7 +2851,11 @@ class ModifierNode extends DataNode {
     }
 }
 
+class EventBus {
+    constructor () {
 
+    }
+}
 
 
 
