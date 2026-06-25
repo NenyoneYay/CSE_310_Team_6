@@ -589,23 +589,24 @@ class Path {
      * Group 3: Key token. Expressed: Key1.Key2
      * - Each of these keys can have array accessors. These are singleton
      *   object paths.
-     * Group 4: Array index list accessor. Expressed: [1,2,3] or [2]
+     * Group 4: '*' Object key wildcard. Expressed .*
+     * Group 5: Array index list accessor. Expressed: [1,2,3] or [2]
      * - Can be negative numbers. Negatives are wrapped around to end of array.
      * - Comes after Key or Group tokens.
-     * Group 5: Array index slice accessor. Expressed: [:5](beginning -> 5), [3:] (3 -> end), [:] (Everything)
+     * Group 6: Array index slice accessor. Expressed: [:5](beginning -> 5), [3:] (3 -> end), [:] (Everything)
      * - Can be negative numbers. Also wrapped to end of array.
      * - Comes after Key or Group tokens.
-     * Group 6: "*" Wildcard array accessor. Expressed: [*]
+     * Group 7: '*' Wildcard array accessor. Expressed: [*]
      * - refers to entire array
      * - Comes after Key or Group tokens.
-     * Group 7: "#" accessor sigils. Expressed: #accessor1,accessor2,...
+     * Group 8: '#' accessor sigils. Expressed: #accessor1,accessor2,...
      * - Access node accessors (i.e. value, min, or max)
-     * Group 8: ';,' semicoln or comma to separate full path queries. 
+     * Group 9: ';,' semicoln or comma to separate full path queries. 
      * - Commas cannot be used for this purpose after accessor sigils, 
      *   but semicolns can.
      * - Can be used in groups to specify multiple sub paths.
-     * Group 9: '(' Start of Group token. 
-     * Group 10: ')' End of Group token.
+     * Group 10: '(' Start of Group token. 
+     * Group 11: ')' End of Group token.
      * - Groups are expressed by: (Subpath 1;subpath 2,...)
      *   - Each subpath may be a full path to something from previous path 
      *     endpoint, each separated by either a comma or semicolon. Must all 
@@ -614,7 +615,7 @@ class Path {
      *     (i.e. object, arrray, node) as well.
      *   - Tokens are recursively parsed inside.
      */
-    static tokensRegex = /(?<=^|[\(;,])\s*(\$)\s*|(?<=^|[\(;,\.])\s*(\.+)|(?:(?<=^|[\.;,\($])\s*(?:([\w~][\w: ~\-]*?|\*))\s*(?=$|[\.\[;#,\)]))|(?<!(?<!^|[\(;,\.])\.)\[\s*(?:(-?\d+(?:\s*,\s*-?\d+)*)|(-?\d*\s*:\s*-?\d*)|(\*))\s*\]\s*(?=$|[\.\[#,;\)])|(?<!(?<!^|[\(;,\.])\.)#(\w+(?:,\w+)*)\s*(?=$|[;\)])|(;|,)|\.|(\()|(\))/y;
+    static tokensRegex = /(?<=^|[\(;,])\s*(\$)\s*|(?<=^|[\(;,\.])\s*(\.+)|(?:(?<=^|[\.;,\($])\s*(?:((?:[\w~]|\*[\w: ~\-\*])[\w: ~\-\*]*?|\\\*)|(\*))\s*(?=$|[\.\[;#,\)]))|(?<!(?<!^|[\(;,\.])\.)\[\s*(?:(-?\d+(?:\s*,\s*-?\d+)*)|(-?\d*\s*:\s*-?\d*)|(\*))\s*\]\s*(?=$|[\.\[#,;\)])|(?<!(?<!^|[\(;,\.])\.)#(\w+(?:,\w+)*)\s*(?=$|[;\)])|(;|,)|\.|(\()|(\))/y;
     /* 
     Test Syntax string:
     $~Key Value.(Key[47],Key,key)[5][5:][*].Key[5,789,-6]#accessor1,accessor2;Key:morekey.Key.Key[:-1].*#accessor1,accessor3,accessor4
@@ -876,6 +877,7 @@ class Path {
                     let containerType = null;
                     switch(currentTokenType) {
                         case "O_KEY":
+                        case "O_WILDCARD":
                             containerType = "object";
                             break;
                         case "A_LIST":
@@ -899,10 +901,15 @@ class Path {
 
             if (path instanceof Path || Array.isArray(path)) {
                 
+                /**
+                 * @param {Token[]|Token[][]} pathTokens 
+                 */
                 const _processTokens = (pathTokens) => {
-                    for(const token of pathTokens) {
+                    for(let idx = 0;idx < pathTokens.length;idx++) {
+                        const token = pathTokens[idx];
                         if(Array.isArray(token)) {
                             _processTokens(token);
+                            if(idx >= pathTokens.length - 1) continue;
                             tokens = []; // treat end of array as concatenate (;,)
                             allTokens.push(tokens);
                             tokens.push(...originTokens);
@@ -980,7 +987,7 @@ class Path {
                     allTokens.push(tokens) // replace all origins with root token
                 }
 
-                if (m[2] !== undefined) {
+                else if (m[2] !== undefined) {
                     for (let i=0;i<m[2].length;i++) {
                         if(tokens.length > 0 && !(["T_BACK","T_ROOT","T_GROUP"].includes(tokens.at(-1)?.type))) {
                             tokens.pop();
@@ -992,40 +999,47 @@ class Path {
                 }
 
                 else if(m[3] !== undefined) {
-                    tokens.push(token('O_KEY',sanatizeKey(m[3])));
+                    let key = m[3];
+                    if(key === '\\*') key = '*'; // replace escaped \* with *
+                    tokens.push(token('O_KEY',sanatizeKey(key)));
                     setTokenContainer(prevToken,'O_KEY');
                 }
 
                 else if(m[4] !== undefined) {
-                    tokens.push(token('A_LIST',m[4].split(',').map(x => parseInt(x))));
-                    setTokenContainer(prevToken,'A_LIST');
+                    tokens.push(token('O_WILDCARD','*'));
+                    setTokenContainer(prevToken,'O_WILDCARD');
                 }
 
                 else if(m[5] !== undefined) {
-                    let [pmin,pmax] = m[5].split(':');
+                    tokens.push(token('A_LIST',m[5].split(',').map(x => parseInt(x))));
+                    setTokenContainer(prevToken,'A_LIST');
+                }
+
+                else if(m[6] !== undefined) {
+                    let [pmin,pmax] = m[6].split(':');
                     if (pmin === '') pmin = 0;
                     else pmin = parseInt(pmin);
                     if (pmax === '') pmax = undefined;
                     else pmax = parseInt(pmax);
 
                     if(Number.isNaN(pmin) || Number.isNaN(pmax)) 
-                        throw SyntaxError(`Token ${m[5]} at ${i}: Array slice indexes must be numbers.`);
+                        throw SyntaxError(`Token ${m[6]} at ${i}: Array slice indexes must be numbers.`);
 
                     tokens.push(token('A_SLICE',{min:pmin,max:pmax}));
                     setTokenContainer(prevToken,'A_SLICE');
                 }
 
-                else if(m[6] !== undefined) {
+                else if(m[7] !== undefined) {
                     tokens.push(token('A_WILDCARD','*'));
                     setTokenContainer(prevToken,'A_WILDCARD');
                 }
 
-                else if(m[7] !== undefined && m[7] !== '') {
-                    tokens.push(token('N_ACCESSORS',m[7].split(',').map(x => sanatizeKey(x))));
+                else if(m[8] !== undefined && m[8] !== '') {
+                    tokens.push(token('N_ACCESSORS',m[8].split(',').map(x => sanatizeKey(x))));
                     setTokenContainer(prevToken,'N_ACCESSORS');
                 }
                     
-                else if (m[8] !== undefined) { //;, (conatenate)
+                else if (m[9] !== undefined) { //;, (conatenate)
                     tokens = [];
                     allTokens.push(tokens); // make new tokens grouping
                     if (contextStack.length < 1) {
@@ -1033,14 +1047,14 @@ class Path {
                     }
                 }
 
-                else if (m[9] !== undefined) { // (
+                else if (m[10] !== undefined) { // (
                     contextStack.push(allTokens);// push token context into stack
                     tokens = []; // create new token context
                     allTokens = [tokens];
                 }
 
-                else if (m[10] !== undefined) { // )
-                    if (contextStack.length <= 0) throw SyntaxError(`Token ${m[10]} at ${i}: Unbalanced Parentheses. Missing opening '('`);
+                else if (m[11] !== undefined) { // )
+                    if (contextStack.length <= 0) throw SyntaxError(`Token ${m[11]} at ${i}: Unbalanced Parentheses. Missing opening '('`);
                     const group_token = token('T_GROUP', allTokens); // store current token context into group token
                     allTokens = contextStack.pop(); // pop previous context off the stack to continue where we left off
                     tokens = allTokens.at(-1);
@@ -1140,6 +1154,7 @@ class Path {
                 }
 
                 return {action:"continue"};
+            case "O_WILDCARD":
             case "A_WILDCARD":
                 console.warn("'*' accessor will not create any new paths");
                 return {action:"continue"};
@@ -1147,10 +1162,6 @@ class Path {
                 if(!(obj instanceof Object)) {
                     console.error("Expected Object but found other type")
                     return {action:"skip"};
-                }
-                if(token.value === "*") {
-                    console.warn("'*' accessor will not create any new paths");
-                    return {action:"continue"};
                 }
                 let nextobj = obj[token.value];
                 if(nextobj == undefined) {
@@ -1167,13 +1178,26 @@ class Path {
         const objPath = Path.pathTo(obj);
         switch(token.type) {
             case "N_ACCESSORS":
-                return {action:"continue"};
-
+                break;
             case "A_LIST":
+            case "A_SLICE":
+            case "A_WILDCARD":
                 if(!Array.isArray(obj)) {
                     console.error("Expected Array but found other type")
                     return {action:"skip"};
                 }
+                break;
+            case "O_WILDCARD":
+            case "O_KEY":
+                if(!(obj instanceof Object) || Array.isArray(obj)) {
+                    console.error("Expected Object but found other type")
+                    return {action:"skip"};
+                }
+                break;
+        }
+
+        switch(token.type) {
+            case "A_LIST":
                 for(const idx of token.value)  {
                     const j = idx < 0 ? idx + obj.length : idx;
                     if(j < obj.length 
@@ -1184,12 +1208,8 @@ class Path {
                         obj[j][Symbol.for("parent")] = obj;
                     }
                 }
-                return {action:"continue"};
+                break;
             case "A_SLICE":
-                if(!Array.isArray(obj)) {
-                    console.error("Expected Array but found other type")
-                    return {action:"skip"};
-                }
                 const initLen = obj.length;
                 const bounds = token.value;
                 const max = bounds.max == undefined 
@@ -1209,40 +1229,32 @@ class Path {
                         obj[j][Symbol.for("parent")] = obj;
                     }
                 }
-                return {action:"continue"};
+                break;
             case "A_WILDCARD":
-                if(!Array.isArray(obj)) {
-                    console.error("Expected Array but found other type")
-                    return {action:"skip"};
-                }
                 obj.forEach((next,idx) => {
                     if(next instanceof Object && next?.[Symbol.for("parent")] == null) {
                         console.log(`Repairing ${objPath.str}[${idx}]`);
                         next[Symbol.for("parent")] = obj;
                     }
                 })
-                return {action:"continue"};
+                break;
+            case "O_WILDCARD":
+                Object.values(obj).forEach(next => {
+                    if(next instanceof Object && next?.[Symbol.for("parent")] == null)
+                        console.log(`Repairing ${objPath.str}.${token.value}`); {
+                        next[Symbol.for("parent")] = obj;
+                    }
+                });
+                break;
             case "O_KEY":
-                if(!(obj instanceof Object)) {
-                    console.error("Expected Object but found other type")
-                    return {action:"skip"};
-                }
-                if(token.value === "*") {
-                    Object.values(obj).forEach(next => {
-                        if(next instanceof Object && next?.[Symbol.for("parent")] == null)
-                            console.log(`Repairing ${objPath.str}.${token.value}`); {
-                            next[Symbol.for("parent")] = obj;
-                        }
-                    });
-                    return {action:"continue"};
-                }
                 const next = obj[token.value];
                 if(next instanceof Object && next?.[Symbol.for("parent")] == null) {
                     console.log(`Repairing ${objPath.str}.${token.value}`);
                     next[Symbol.for("parent")] = obj;
                 }
-                return {action:"continue"};
+                break;
         }
+        return {action:"continue"};
     }
 
     /** @type {ResolutionReverseHandler} */
@@ -1306,6 +1318,8 @@ class Path {
                     case 'T_ROOT':
                         return '$';
                         break;
+                    case 'O_WILDCARD':
+                        tokenStr = '*';
                     case 'T_BACK':
                     case 'O_KEY':
                         tokenStr = cv.value;
@@ -1386,6 +1400,7 @@ class Path {
 
         // called on every path leaf to append result to list
         function llpush (value) {
+            if(flat && value == undefined) return;
             const newNode = {value:value,next:null,count:0}
             if(llhead == null) {
                 llhead = newNode
@@ -1499,10 +1514,7 @@ class Path {
                     reverseHandler(handlerParams,handlerOptions);
                 }
 
-                if(treeRoot == null) {
-                    if(!flat) llpush(undefined);
-                    return;
-                }
+                if(treeRoot == null) return llpush(undefined);
                 if(treeRoot instanceof BaseNode) return llpush(buildResult(returnEarly||collectNext,treeRoot,treeRoot));
                 return llpush(buildResult(returnEarly||collectNext,treeRoot));
             }
@@ -1513,6 +1525,7 @@ class Path {
 
             returnEarly = false;
             let nextRoots = [treeRoot];
+            let nextTokens = [tokens[cursor]];
             let skipToken = false; 
             
             if(forwardHandler != null) {
@@ -1520,6 +1533,10 @@ class Path {
                 
                 if(decision?.overrides != undefined) {
                     nextRoots = decision.overrides;
+                }
+
+                if(decision?.override_tokens != undefined) {
+                    nextTokens = decision.override_tokens;
                 }
 
                 switch (decision?.action) {
@@ -1559,11 +1576,12 @@ class Path {
                 }
             }
 
-            const _resolveToken = (_treeRoot) => {
+            const _resolveToken = (_treeRoot,token) => {
                 // skip over containers and BaseNodes for tokens
                 // that access a child element
-                switch(tokens[cursor].type) {
+                switch(token.type) {
                     case "O_KEY":
+                    case "O_WILDCARD":
                     case "A_LIST":
                     case "A_SLICE":
                     case "A_WILDCARD":
@@ -1586,13 +1604,12 @@ class Path {
                 }
 
                 if(_treeRoot == null) {
-                    if(!flat) llpush(undefined);
-                    return;
+                    return llpush(undefined);
                 }
 
-                switch(tokens[cursor].type) {
+                switch(token.type) {
                     case 'T_ROOT':
-                        if(tokens[cursor].value != null) {
+                        if(token.value != null) {
                             const newRoot = Path.findRoot(_treeRoot)
                             if(newRoot != null) {
                                 _treeRoot = newRoot;
@@ -1620,24 +1637,24 @@ class Path {
                             if(tokens[cursor.value] in Object.prototype) {
                                 return llpush(undefined); // stop prototype pollution attacks
                             }
-                            if (tokens[cursor].value === '*') {
-                                llpushOpen(true);
-                                /** @type {Array<string>} */
-                                const keys = Object.keys(_treeRoot).filter((val) => !val.startsWith("__"));
-                                keys.forEach((key) => {
-                                    recursor(_treeRoot[key],tokens,cursor+1);
-                                });
-                                llpushClose();
-                            } else {
-                                const nextVal = _treeRoot[tokens[cursor].value];
-                                recursor(nextVal,tokens,cursor+1);
-                            }
+                            recursor(_treeRoot[token.value],tokens,cursor+1);
+                        }
+                        break;
+                    case "O_WILDCARD":
+                        if(_treeRoot instanceof Object && !Array.isArray(_treeRoot)) {
+                            llpushOpen(true);
+                            /** @type {Array<string>} */
+                            const keys = Object.keys(_treeRoot).filter((val) => !val.startsWith("__"));
+                            keys.forEach((key) => {
+                                recursor(_treeRoot[key],tokens,cursor+1);
+                            });
+                            llpushClose();
                         }
                         break;
                     case 'A_LIST':
                         if(Array.isArray(_treeRoot)) {
                             llpushOpen();
-                            tokens[cursor].value.forEach(idx => {
+                            token.value.forEach(idx => {
                                 recursor(_treeRoot.at(idx),tokens,cursor+1);
                             });
                             llpushClose();
@@ -1646,7 +1663,7 @@ class Path {
                     case 'A_SLICE':
                         if(Array.isArray(_treeRoot)) {
                             llpushOpen();
-                            const bounds = tokens[cursor].value;
+                            const bounds = token.value;
                             _treeRoot.slice(bounds.min,bounds.max).forEach((item,idx) => {
                                 recursor(item,tokens,cursor+1);
                             });
@@ -1655,17 +1672,17 @@ class Path {
                         break;
                     case 'A_WILDCARD':
                         if(Array.isArray(_treeRoot)) {
-                            llpushOpen();
+                            llpushOpen(true);
                             _treeRoot.forEach((item,idx) => {
                                 recursor(item,tokens,cursor+1);
                             })
-                            llpushClose(true);
+                            llpushClose();
                         }
                         break;
                     case 'N_ACCESSORS':
                         if(_treeRoot instanceof BaseNode) {
                             llpushOpen();
-                            tokens[cursor].value.forEach(accessor => {
+                            token.value.forEach(accessor => {
                                 llpush(buildResult(returnEarly||collectNext,_treeRoot.accessors[accessor],_treeRoot,accessor));
                             });
                             llpushClose();
@@ -1680,7 +1697,7 @@ class Path {
                             const tokensRest = tokens.slice(cursor+1);
                             llpushOpen();
 
-                            for(const _tokens of tokens[cursor].value) {
+                            for(const _tokens of token.value) {
                                 recursor(_treeRoot,[..._tokens,...tokensRest]);
                                 if(stopResolution) break;
                                 ({returnEarly,collectNext} = oldCtx);
@@ -1695,13 +1712,17 @@ class Path {
             }
 
             if(nextRoots.length > 1) llpushOpen();
-            nextRoots.forEach((nextRoot) => {
+            for(const nextRoot of nextRoots) {
                 if(skipToken) recursor(nextRoot,tokens,cursor+1);
-                else _resolveToken(nextRoot);
+                else {
+                    for(const token of nextTokens) {
+                        _resolveToken(nextRoot,token);
+                    }
+                }
                 if(reverseHandler != null) {
                     reverseHandler({...handlerParams,obj:nextRoot},handlerOptions);
                 }
-            });
+            }
             if(nextRoots.length > 1) llpushClose();
         }
 
@@ -2855,7 +2876,29 @@ class ModifierNode extends DataNode {
 
 class EventBus {
     constructor () {
+        
+    }
+}
 
+const testEvBus = {
+    'Ability Scores': {
+        'Strength': {
+            'score':{
+                [Symbol.for("eventListeners")]:{
+                    "update":["node1"]
+                }
+            }
+        },
+        '*': {
+            'score':{
+                [Symbol.for("eventListeners")]: {
+                    "update":["node2"]
+                }
+            },
+            [Symbol.for("eventListeners")]: {
+                "structure":["rule1"]
+            }
+        }
     }
 }
 
