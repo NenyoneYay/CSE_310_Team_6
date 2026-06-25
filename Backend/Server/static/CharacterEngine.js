@@ -809,10 +809,12 @@ class Path {
             let tokenCopy = undefined;
             switch (token.type) {
                 case 'A_LIST':
-                case 'A_SLICE':
                 case 'N_ACCESSORS':
-                    if(Array.isArray(token.value))
-                        tokenCopy = {type:token.type, value:[...token.value]};
+                if(Array.isArray(token.value))
+                    tokenCopy = {type:token.type, value:[...token.value]};
+                break;
+                case 'A_SLICE':
+                    tokenCopy = {type:token.type, value:{min: token.value.min, max: token.value.max}}
                     break;
                 case 'T_GROUP':
                     tokenCopy = {type:token.type, value:_copyTokens(token.value)};
