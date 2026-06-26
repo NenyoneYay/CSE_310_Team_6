@@ -1,0 +1,96 @@
+{
+    "data":{
+        "main":{
+            "name":"?",
+            "level":666,
+            "race":"Duck",
+            "class":"Warlock"
+        },
+        "stats":{
+            "hp": {
+                "__type":"data",
+                "value":2,
+                "min":0,
+                "max":2
+            },
+            "armor":0,
+            "walk_speed":100,
+            "scores": {
+                "dexterity":{
+                    "score":15
+                }
+            }
+        },
+        "inventory":{
+            "weapons":[
+                {
+                    "name":"Murasama",
+                    "hit":"15 + 1d20",
+                    "damage":"1200 + 10d100",
+                    "area_shape":"circle",
+                    "dimensions":"10"
+                }
+            ],
+            "consumables":[
+                {
+                    "name":"Flask of Ichor",
+                    "effect":"Heal",
+                    "effect_amount":"9999",
+                    "quantity":"1"
+                }
+            ],
+            "equipment":[
+                {
+                    "name":"Scarlet Amulet",
+                    "equipped":true,
+                    "modifiers":[
+                        {
+                            "__type":"modifier",
+                            "operation":"add",
+                            "target":"stats.armor",
+                            "value":5,
+                            "condition":"=data('..equipped')"
+                        },
+                        {
+                            "__type":"modifier",
+                            "operation":"add",
+                            "target":"stats.hp#value,max",
+                            "value":10000,
+                            "condition":"=data('..equipped')"
+                        }
+                    ]
+                }
+            ]
+        },
+        "spells":{
+            "attack":[
+                {
+                    "name":"Hellfire",
+                    "hit":"dex20",
+                    "damage":"500",
+                    "area_shape":"cone",
+                    "dimensions":"90, 10"
+                }
+            ],
+            "ability":[
+                {
+                    "name":"Profaned Shield",
+                    "effect":"modify",
+                    "active":true,
+                    "modifiers":[
+                        {
+                            "__type":"modifier",
+                            "operation":"add",
+                            "target":"stats.armor",
+                            "value":20,
+                            "active":"=data('..active')"
+                        }
+                    ],
+                    "duration":10
+
+                }
+            ]
+        }
+
+    }
+}
