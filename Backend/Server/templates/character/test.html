@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% block head %}
 {{ super() }}
-<script type="module">
+<!-- <script type="module">
     import {parse, evaluate, jsep} from "https://esm.sh/jse-eval";
     window.jseEval = {parse: parse, evaluate: evaluate, jsep: jsep};
-</script>
+</script> -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/expr-eval/2.0.2/bundle.min.js" integrity="sha512-TNliDPFdpL1W1sP7v9WzHUxTAY+PN7wRiHqJzntb4HpaJ0HlreSm0tzbA8MU7EBEoPTYgEtB+ZpbBB2yQQu49g==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script type="module" src="{{ url_for('static',filename='CharacterEngine/test.js') }}"></script>
 {% endblock %}

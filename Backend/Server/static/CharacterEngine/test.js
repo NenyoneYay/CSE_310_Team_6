@@ -2,6 +2,9 @@ import {Character} from "./CharacterEngine.js";
 import {EventBus} from "./EventBus.js";
 import {Path} from "./Path.js";
 
+//Bind useful classes to the Window for development
+window.Path = Path;
+
 /** @type {(Character|null)} */
 var loadedChar = null;
 var saveFileName = null;
@@ -11,7 +14,7 @@ var saveFileName = null;
  * @param {InputEvent} ev 
  * @returns 
  */
-async function readSingleFile(ev) {
+window.readSingleFile = async function readSingleFile(ev) {
     const errElement = document.getElementById('error-content');
     errElement.textContent = '';
 
@@ -29,7 +32,7 @@ async function readSingleFile(ev) {
     reader.readAsText(file);
 }  
 
-function clearFile(ev) {
+window.clearFile = function clearFile(ev) {
     const errElement = document.getElementById('error-content');
     const fileElement = document.getElementById('file-input');
     const contentElement = document.getElementById('html-content')
@@ -42,7 +45,7 @@ function clearFile(ev) {
     contentElement.innerHTML = '';
 }
 
-function displayContents(contents) {
+window.displayContents = function displayContents(contents) {
     try {
         if(loadedChar == null)
             loadedChar = new Character(contents);
@@ -58,7 +61,7 @@ function displayContents(contents) {
     }
 }
 
-function downloadSave() {
+window.downloadSave = function downloadSave() {
 
     const blob = new Blob([loadedChar.getSaveData()], {
         type: "application/json" 
