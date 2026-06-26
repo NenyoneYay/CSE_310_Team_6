@@ -6,7 +6,7 @@ import {Path} from "./Path.js";
 window.Path = Path;
 
 /** @type {(Character|null)} */
-var loadedChar = null;
+window.loadedChar = null;
 var saveFileName = null;
 
 /**
@@ -78,6 +78,7 @@ window.downloadSave = function downloadSave() {
 };
 
 
+// define events before character is created
 const testEvBus = new EventBus();
 testEvBus.addListener("change",new Path("Equipment.items[*].equipped"),() => {
     console.log("item equipped!")
@@ -90,6 +91,11 @@ testEvBus.addListener("change",new Path("Some Data.multiNode[-2]"),() => {
 testEvBus.addListener("change",new Path("Ability Scores.*.score"),() => {
     console.log("score changed!")
 });
+
+testEvBus.addListener("change",new Path("Multi_Array_Test.Array1[*][*]"),() => {
+    console.log("Array1 changed!")
+});
+window.testEvBus = testEvBus;
 
 
 
@@ -128,6 +134,26 @@ let testFileData = `{
             ],
             "sideNode":"=data('.multiNode[1]')"
         },
+        "Multi_Array_Test":{
+            "Array1":[
+                [1,2,3],
+                [4,5,6],
+                [7,8,9]
+            ],
+            "Array2":[
+                [3,1,4,1,5,9,2,6],
+                [5,3,5,8,9,7,9,3],
+                [2,3,8,4,6,2,6,4],
+                [3,3,8,3,2,7,9,5]
+            ],
+            "Array3":[
+                {"name": "Mike", "age":"10", "likes":"candy"},
+                {"name": "Oran", "age":"16", "likes":"football"},
+                {"name": "Bryce", "age":"14", "likes":"pizza"},
+                {"name": "Robert", "age":"17", "likes":"mangos"},
+                {"name": "Grace", "age":"9", "likes":"Bryce"}
+            ]
+        },
         "Equipment":{
             "capacity":"=data('$Ability Scores.Strength.score') * 15",
             "items":[
@@ -161,18 +187,20 @@ let testFileData = `{
     }
 }`
 
-let testChar = new Character(testFileData);
-let testNode = new Path('Ability Scores.Strength.score',testChar.root).resolve();
+window.testChar = new Character(testFileData);
+window.testNode = new Path('Ability Scores.Strength.score',testChar.root).resolve();
 if(testNode?.__type === "pathResult") testNode = testNode.result;
 
+// fire events after character creation
 testEvBus.emit("change",testNode);
 testEvBus.emit("change",testChar.root.Equipment.items[0].equipped);
 testEvBus.emit("change",testChar.root["Some Data"].multiNode[2]);
+testEvBus.emit("change",new Path("Multi_Array_Test.*[0][0]",testChar.root));
 
-let testPath1 = new Path("Ability Scores.Strength.score",testChar.root);
+window.testPath1 = new Path("Ability Scores.Strength.score",testChar.root);
 // console.log(testPath1.resolveStrs());
 
-let testPath2 = new Path("Ability Scores.(Strength.(score,mod,save),Constitution.(score,mod),Charisma.(score,mod,save))#value,max,min",testChar.root);
+window.testPath2 = new Path("Ability Scores.(Strength.(score,mod,save),Constitution.(score,mod),Charisma.(score,mod,save))#value,max,min",testChar.root);
 // console.log(testPath2.resolveStrs());
 
 let testPath3 = new Path("Ability Scores.Charisma.mod",testChar.root);
@@ -186,5 +214,3 @@ let testPath5 = new Path(".name",testPath4);
 
 let testPath6 = new Path(".mod",testNode);
 // console.log(testPath6.resolveStrs());
-
-let testPath7 = new Path(testPath1,testEvBus);

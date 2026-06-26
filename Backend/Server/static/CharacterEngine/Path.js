@@ -11,6 +11,33 @@ var  A_WILDCARD  = 'A_WILDCARD';
 var  T_GROUP     = 'T_GROUP';
 var  N_ACCESSORS = 'N_ACCESSORS';
 
+/* Helpful switch skeleton for comparing tokens
+
+switch(token.type) {
+    case 'T_ROOT'     :
+        break;
+    case 'O_WILDCARD' :
+        break;
+    case 'T_BACK'     :
+        break;
+    case 'O_KEY'      :
+        break;
+    case 'A_LIST'     :
+        break;
+    case 'A_SLICE'    :
+        break;
+    case 'A_WILDCARD' :
+        break;
+    case 'T_GROUP'    :
+        break;
+    case 'N_ACCESSORS':
+        break;
+    default:
+
+}
+
+*/
+
 export class Path {
     /* Tokens Regex Group Explination:
      * Group 1: Path from root object. Path starts with '$'
@@ -83,9 +110,11 @@ export class Path {
     /**
      * @callback ResolutionForwardHandler
      * @param {{
-     *  obj:(Object|Array),
-     *  token: Token,
-     *  isLeaf: boolean
+     *  obj:(Object|Array), 
+     *  token: Token, 
+     *  isLeaf: boolean,
+     *  context: (Object|Array),
+     *  accessor: Symbol|string|number
      * }} handlerParams
      * @param {Object} options
      * @returns {ResolutionDecision} 
@@ -94,10 +123,13 @@ export class Path {
     /**
      * @callback ResolutionReverseHandler
      * @param {{
-     *  obj:(Object|Array),
-     *  token: Token,
-     *  isLeaf: boolean
+     *  obj:(Object|Array), 
+     *  token: Token, 
+     *  isLeaf: boolean,
+     *  context: (Object|Array),
+     *  accessor: Symbol|string|number
      * }} handlerParams
+     * 
      * @param {Object} options
      * @returns {void}
      */
@@ -107,7 +139,7 @@ export class Path {
     /**
      * @param {Object|Path} obj 
      * @param {Object} from 
-     * @returns 
+     * @returns {Path|undefined}
      */
     static pathTo(obj,from = null) {
         if(!(from == null || from instanceof Object)) return undefined;
@@ -202,6 +234,10 @@ export class Path {
             parentObj = parentObj[Symbol.for("parent")];
         }
         return parentObj;
+    }
+
+    static isRoot(obj) {
+        return (obj instanceof Object && obj[Symbol.for("parent")] == undefined)
     }
 
     /**
@@ -819,7 +855,7 @@ export class Path {
         
         // Some high scope variables to preserve forward handler control 
         // across recursive function calls.
-        let stopResolution = false, returnEarly = false, collectNext = false;
+        let stopResolution = false;
 
         // super basic linked list state variables
         let llhead = null, lltail = null;
@@ -924,22 +960,23 @@ export class Path {
             return {__type:"pathResult",result,context,accessor,collected}
         }
 
-        const recursor = (treeRoot,tokens = this.tokens, cursor=0, prevRoot = null, accessor = null) => {
-            
+        const recursor = (currentRoot,tokens = this.tokens, cursor=0, prevRoot = null, accessor = null) => {
+            if(stopResolution) return;
 
             const handlerParams = (forwardHandler != null || reverseHandler != null) 
                 ? {
-                    obj:treeRoot, 
+                    obj:currentRoot, 
                     token:tokens[cursor] ?? {type:"END",value:null,containerType:null}, 
                     isLeaf:cursor >= tokens.length - 1,
-                    isBegin: cursor === 0 && prevRoot == null,
                     context: prevRoot,
                     accessor: accessor
                 }
                 : null;
+
             
-            returnEarly = false;
-            let nextRoots = [treeRoot];
+            
+            let returnEarly = false;
+            let nextRoots = [currentRoot];
             let nextTokens = [tokens[cursor]];
             let skipToken = false; 
             
@@ -955,21 +992,11 @@ export class Path {
                 }
 
                 switch (decision?.action) {
-                    case "return_next":
-                        returnEarly = true;
-                        break;
                     case "return":
-                    case "return_this":
                         returnEarly = true;
-                        //return recursor(treeRoot,tokens,cursor);
-                        break;
-                    
-                    case "collect_next":
-                        collectNext = true;
                         break;
                     case "collect":
-                    case "collect_this":
-                        llpush(buildResult(true,treeRoot))
+                        llpush(buildResult(true,currentRoot,prevRoot,accessor))
                         break;
 
                     case "skip_token":
@@ -978,14 +1005,10 @@ export class Path {
                     case "skip":
                     case "skip_branch":
                         return;
-
-                    case "stop_next":
-                        stopResolution = true;
-                        break;
+                    
                     case "stop":
                         stopResolution = true;
-                        //return recursor(treeRoot,tokens,cursor);
-                        break;
+                        return;
 
                     case "continue":
                     default:
@@ -993,7 +1016,7 @@ export class Path {
                 }
             }
 
-            if(stopResolution) return;
+            
 
             // end conditions
             if(cursor >= tokens.length || returnEarly) {
@@ -1002,18 +1025,14 @@ export class Path {
                 }
 
                 for(const rval of nextRoots) {
-                    llpush(buildResult(returnEarly||collectNext,rval,prevRoot,accessor));
+                    llpush(buildResult(returnEarly,rval,prevRoot,accessor));
                 }
                 return;
             }
 
-            if(collectNext) {
-                llpush(buildResult(true,treeRoot));
-            }
 
 
-
-            const _resolveToken = (_treeRoot,token) => {
+            const _resolveToken = (_currentRoot,token) => {
                 // skip over containers and BaseNodes for tokens
                 // that access a child element
                 switch(token.type) {
@@ -1023,16 +1042,16 @@ export class Path {
                     case A_SLICE:
                     case A_WILDCARD:
                         while (
-                            _treeRoot != undefined && (
-                                _treeRoot.__type === "container" 
-                                || _treeRoot instanceof Container
-                                || _treeRoot instanceof BaseNode
+                            _currentRoot != undefined && (
+                                _currentRoot.__type === "container" 
+                                || _currentRoot instanceof Container
+                                || _currentRoot instanceof BaseNode
                             )
                         ) {
-                            if(_treeRoot instanceof BaseNode) {
-                                _treeRoot = _treeRoot.passThrough;
+                            if(_currentRoot instanceof BaseNode) {
+                                _currentRoot = _currentRoot.passThrough;
                             } else {
-                                _treeRoot = _treeRoot.content;
+                                _currentRoot = _currentRoot.content;
                             }
                         }
                         break;
@@ -1040,22 +1059,23 @@ export class Path {
                         break;
                 }
 
-                if(_treeRoot == null) {
+                if(_currentRoot == null) {
                     return llpush(undefined);
                 }
 
                 switch(token.type) {
                     case T_ROOT:
+                        const _prevRoot = _currentRoot;
                         if(token.value != null) {
-                            const newRoot = Path.findRoot(_treeRoot)
+                            const newRoot = Path.findRoot(_currentRoot)
                             if(newRoot != null) {
-                                _treeRoot = newRoot;
+                                _currentRoot = newRoot;
                             }
                         }
-                        recursor(_treeRoot,tokens,cursor+1,null,"root");
+                        recursor(_currentRoot,tokens,cursor+1,_prevRoot,null);
                         break;
                     case T_BACK:
-                        let _parent = _treeRoot?.[Symbol.for("parent")];
+                        let _parent = _currentRoot?.[Symbol.for("parent")];
                         while (
                             _parent?.__type === "container" 
                             || _parent instanceof Container
@@ -1064,63 +1084,63 @@ export class Path {
                             _parent = _parent?.[Symbol.for("parent")]
                         }
                         if(_parent != undefined) {
-                            recursor(_parent,tokens,cursor+1,_treeRoot,Symbol.for("parent"));
+                            recursor(_parent,tokens,cursor+1,_currentRoot,Symbol.for("parent"));
                         } else {
-                            recursor(_treeRoot,tokens,cursor+1,_treeRoot,Symbol.for("parent"));
+                            recursor(_currentRoot,tokens,cursor+1,_currentRoot,Symbol.for("parent"));
                         }
                         break;
                     case O_KEY:
-                        if(_treeRoot instanceof Object && !Array.isArray(_treeRoot)) {
+                        if(_currentRoot instanceof Object && !Array.isArray(_currentRoot)) {
                             if(token.value in Object.prototype) {
                                 return llpush(undefined); // stop prototype pollution attacks
                             }
-                            recursor(_treeRoot[token.value],tokens,cursor+1,_treeRoot,token.value);
+                            recursor(_currentRoot[token.value],tokens,cursor+1,_currentRoot,token.value);
                         }
                         break;
                     case O_WILDCARD:
-                        if(_treeRoot instanceof Object && !Array.isArray(_treeRoot)) {
+                        if(_currentRoot instanceof Object && !Array.isArray(_currentRoot)) {
                             llpushOpen(true);
                             /** @type {Array<string>} */
-                            const keys = Object.keys(_treeRoot).filter((val) => !val.startsWith("__"));
+                            const keys = Object.keys(_currentRoot).filter((val) => !val.startsWith("__"));
                             keys.forEach((key) => {
-                                recursor(_treeRoot[key],tokens,cursor+1,_treeRoot,key);
+                                recursor(_currentRoot[key],tokens,cursor+1,_currentRoot,key);
                             });
                             llpushClose();
                         }
                         break;
                     case A_LIST:
-                        if(Array.isArray(_treeRoot)) {
+                        if(Array.isArray(_currentRoot)) {
                             llpushOpen();
                             token.value.forEach(idx => {
-                                recursor(_treeRoot.at(idx),tokens,cursor+1,_treeRoot,idx);
+                                recursor(_currentRoot.at(idx),tokens,cursor+1,_currentRoot,idx);
                             });
                             llpushClose();
                         }
                         break;
                     case A_SLICE:
-                        if(Array.isArray(_treeRoot)) {
+                        if(Array.isArray(_currentRoot)) {
                             llpushOpen();
                             const bounds = token.value;
-                            _treeRoot.slice(bounds.min,bounds.max).forEach((item,idx) => {
-                                recursor(item,tokens,cursor+1,_treeRoot,idx);
+                            _currentRoot.slice(bounds.min,bounds.max).forEach((item,idx) => {
+                                recursor(item,tokens,cursor+1,_currentRoot,idx);
                             });
                             llpushClose(true);
                         }
                         break;
                     case A_WILDCARD:
-                        if(Array.isArray(_treeRoot)) {
+                        if(Array.isArray(_currentRoot)) {
                             llpushOpen(true);
-                            _treeRoot.forEach((item,idx) => {
-                                recursor(item,tokens,cursor+1,_treeRoot,idx);
+                            _currentRoot.forEach((item,idx) => {
+                                recursor(item,tokens,cursor+1,_currentRoot,idx);
                             })
                             llpushClose();
                         }
                         break;
                     case N_ACCESSORS:
-                        if(_treeRoot instanceof BaseNode) {
+                        if(_currentRoot instanceof BaseNode) {
                             llpushOpen();
                             token.value.forEach(_accessor => {
-                                recursor(_treeRoot.accessors[_accessor],tokens,cursor+1,_treeRoot,_accessor);
+                                recursor(_currentRoot.accessors[_accessor],tokens,cursor+1,_currentRoot,_accessor);
                             });
                             llpushClose();
                         } else {
@@ -1129,28 +1149,26 @@ export class Path {
                         break;
                     
                     case T_GROUP:
-                        if (_treeRoot != null) {
-                            const oldCtx = {returnEarly, collectNext}
+                        if (_currentRoot != null) {
                             const tokensRest = tokens.slice(cursor+1);
                             llpushOpen();
 
                             for(const _tokens of token.value) {
-                                recursor(_treeRoot,[..._tokens,...tokensRest],0,prevRoot,accessor);
+                                recursor(_currentRoot,[..._tokens,...tokensRest],0,prevRoot,accessor);
                                 if(stopResolution) break;
-                                ({returnEarly,collectNext} = oldCtx);
                             }
                             llpushClose();
                         }
                         break;
                     default:
-                        recursor(_treeRoot,tokens,cursor+1,prevRoot,accessor); // skip token
+                        recursor(_currentRoot,tokens,cursor+1,prevRoot,accessor); // skip token
                         break;  
                 }
             }
 
             if(nextRoots.length > 1) llpushOpen();
             for(const nextRoot of nextRoots) {
-                if(skipToken) recursor(nextRoot,tokens,cursor+1,prevRoot,accessor);
+                if(skipToken) recursor(nextRoot,tokens,cursor+1,currentRoot,accessor);
                 else {
                     for(const token of nextTokens) {
                         _resolveToken(nextRoot,token);
