@@ -329,9 +329,7 @@ class Character {
             const targetObjs = targetPath.resolve({root:root ?? this.root, flat:true});
 
             for(const result of targetObjs) {
-                if (result?.__type === "pathResult" && result?.node != undefined) {
-                    return; // do nothing to existing nodes found
-                } else if (result?.__type === "pathResult") {
+                if (result?.__type === "pathResult") {
                     const targetObj = result.result;
                     if (targetObj instanceof BaseNode) {
                         return; // don't replace existing nodes
@@ -427,6 +425,7 @@ class Character {
             delete ruleData[Symbol.for("parent")];
 
         this.root = this.buildTree(contextData);
+        this.root[Symbol.for("EventBus")] = new EventBus();
 
         this.rules = ruleData;
         this.buildRules(this.rules);
@@ -741,8 +740,7 @@ class Path {
         }
 
         if(obj instanceof Path) {
-            //return new Path(obj,Path.pathTo(obj.getOrigin(),from));
-            return undefined;
+            return new Path(obj,Path.pathTo(obj.origin,from));
         }
         return new Path(recursor(obj),originobj);
     }
@@ -1291,8 +1289,6 @@ class Path {
         this.str = this.buildString();
 
         Path.tokensRegex.lastIndex = 0;
-
-        Object.freeze(this);
     }
 
     /**
@@ -1321,6 +1317,7 @@ class Path {
                     case 'O_WILDCARD':
                         tokenStr = '*';
                     case 'T_BACK':
+                        postfix = '';
                     case 'O_KEY':
                         tokenStr = cv.value;
                         break;
@@ -1363,8 +1360,8 @@ class Path {
 
         const results = this.resolve({root:root, flat:true});
         return results.map((result) => {
-            if (result?.__type === "pathResult" && result?.accessor != undefined) {
-                return `${Path.pathTo(result.node,relativeTo ?? root).str}#${result.accessor}`;
+            if (result?.__type === "pathResult" && result.context instanceof BaseNode) {
+                return `${Path.pathTo(result.context,relativeTo ?? root).str}#${result.accessor}`;
             } else if (result?.__type === "pathResult"){
                 return Path.pathTo(result.result,relativeTo ?? root).str;
             } 
@@ -1471,7 +1468,7 @@ class Path {
 
                     if(rval.length === 1 && !keepArr && !flat) {
                         rval = rval[0];
-                    } else if (rval.length <= 0) {
+                    } else if (rval.length <= 0 && !flat) {
                         rval = undefined;
                     }
                 } else {
@@ -1493,36 +1490,24 @@ class Path {
             }
         }
 
-        function buildResult(collected = false, result = null,node = null,accessor = null) {
-            return {__type:"pathResult",result,node,accessor,collected}
+        function buildResult(collected = false, result = null,context = null,accessor = null) {
+            return {__type:"pathResult",result,context,accessor,collected}
         }
 
-        const recursor = (treeRoot,tokens = this.tokens, cursor=0) => {
-            if(stopResolution) return;
+        const recursor = (treeRoot,tokens = this.tokens, cursor=0, prevRoot = null, accessor = null) => {
+            
 
             const handlerParams = (forwardHandler != null || reverseHandler != null) 
                 ? {
                     obj:treeRoot, 
-                    token:tokens[cursor], 
-                    isLeaf:cursor === tokens.length-1
+                    token:tokens[cursor] ?? {type:"END",value:null,containerType:null}, 
+                    isLeaf:cursor >= tokens.length - 1,
+                    isBegin: cursor === 0 && prevRoot == null,
+                    context: prevRoot,
+                    accessor: accessor
                 }
                 : null;
-
-            // end conditions
-            if(cursor >= tokens.length || returnEarly) {
-                if(reverseHandler != null) {
-                    reverseHandler(handlerParams,handlerOptions);
-                }
-
-                if(treeRoot == null) return llpush(undefined);
-                if(treeRoot instanceof BaseNode) return llpush(buildResult(returnEarly||collectNext,treeRoot,treeRoot));
-                return llpush(buildResult(returnEarly||collectNext,treeRoot));
-            }
-
-            if(collectNext) {
-                llpush(buildResult(true,treeRoot));
-            }
-
+            
             returnEarly = false;
             let nextRoots = [treeRoot];
             let nextTokens = [tokens[cursor]];
@@ -1546,7 +1531,8 @@ class Path {
                     case "return":
                     case "return_this":
                         returnEarly = true;
-                        return recursor(treeRoot,tokens,cursor);
+                        //return recursor(treeRoot,tokens,cursor);
+                        break;
                     
                     case "collect_next":
                         collectNext = true;
@@ -1568,13 +1554,34 @@ class Path {
                         break;
                     case "stop":
                         stopResolution = true;
-                        return recursor(treeRoot,tokens,cursor);
+                        //return recursor(treeRoot,tokens,cursor);
+                        break;
 
                     case "continue":
                     default:
                         // do nothing, continue as normal
                 }
             }
+
+            if(stopResolution) return;
+
+            // end conditions
+            if(cursor >= tokens.length || returnEarly) {
+                if(reverseHandler != null) {
+                    reverseHandler(handlerParams,handlerOptions);
+                }
+
+                for(const rval of nextRoots) {
+                    llpush(buildResult(returnEarly||collectNext,rval,prevRoot,accessor));
+                }
+                return;
+            }
+
+            if(collectNext) {
+                llpush(buildResult(true,treeRoot));
+            }
+
+
 
             const _resolveToken = (_treeRoot,token) => {
                 // skip over containers and BaseNodes for tokens
@@ -1615,29 +1622,29 @@ class Path {
                                 _treeRoot = newRoot;
                             }
                         }
-                        recursor(_treeRoot,tokens,cursor+1);
+                        recursor(_treeRoot,tokens,cursor+1,null,"root");
                         break;
                     case 'T_BACK':
-                        let parent = _treeRoot?.[Symbol.for("parent")];
+                        let _parent = _treeRoot?.[Symbol.for("parent")];
                         while (
-                            parent?.__type === "container" 
-                            || parent instanceof Container
-                            || parent instanceof BaseNode
+                            _parent?.__type === "container" 
+                            || _parent instanceof Container
+                            || _parent instanceof BaseNode
                         ) {
-                            parent = parent?.[Symbol.for("parent")]
+                            _parent = _parent?.[Symbol.for("parent")]
                         }
-                        if(parent != undefined) {
-                            recursor(parent,tokens,cursor+1);
+                        if(_parent != undefined) {
+                            recursor(_parent,tokens,cursor+1,_treeRoot,Symbol.for("parent"));
                         } else {
-                            recursor(_treeRoot,tokens,cursor+1)
+                            recursor(_treeRoot,tokens,cursor+1,_treeRoot,Symbol.for("parent"));
                         }
                         break;
                     case 'O_KEY':
                         if(_treeRoot instanceof Object && !Array.isArray(_treeRoot)) {
-                            if(tokens[cursor.value] in Object.prototype) {
+                            if(token.value in Object.prototype) {
                                 return llpush(undefined); // stop prototype pollution attacks
                             }
-                            recursor(_treeRoot[token.value],tokens,cursor+1);
+                            recursor(_treeRoot[token.value],tokens,cursor+1,_treeRoot,token.value);
                         }
                         break;
                     case "O_WILDCARD":
@@ -1646,7 +1653,7 @@ class Path {
                             /** @type {Array<string>} */
                             const keys = Object.keys(_treeRoot).filter((val) => !val.startsWith("__"));
                             keys.forEach((key) => {
-                                recursor(_treeRoot[key],tokens,cursor+1);
+                                recursor(_treeRoot[key],tokens,cursor+1,_treeRoot,key);
                             });
                             llpushClose();
                         }
@@ -1655,7 +1662,7 @@ class Path {
                         if(Array.isArray(_treeRoot)) {
                             llpushOpen();
                             token.value.forEach(idx => {
-                                recursor(_treeRoot.at(idx),tokens,cursor+1);
+                                recursor(_treeRoot.at(idx),tokens,cursor+1,_treeRoot,idx);
                             });
                             llpushClose();
                         }
@@ -1665,7 +1672,7 @@ class Path {
                             llpushOpen();
                             const bounds = token.value;
                             _treeRoot.slice(bounds.min,bounds.max).forEach((item,idx) => {
-                                recursor(item,tokens,cursor+1);
+                                recursor(item,tokens,cursor+1,_treeRoot,idx);
                             });
                             llpushClose(true);
                         }
@@ -1674,7 +1681,7 @@ class Path {
                         if(Array.isArray(_treeRoot)) {
                             llpushOpen(true);
                             _treeRoot.forEach((item,idx) => {
-                                recursor(item,tokens,cursor+1);
+                                recursor(item,tokens,cursor+1,_treeRoot,idx);
                             })
                             llpushClose();
                         }
@@ -1682,8 +1689,8 @@ class Path {
                     case 'N_ACCESSORS':
                         if(_treeRoot instanceof BaseNode) {
                             llpushOpen();
-                            token.value.forEach(accessor => {
-                                llpush(buildResult(returnEarly||collectNext,_treeRoot.accessors[accessor],_treeRoot,accessor));
+                            token.value.forEach(_accessor => {
+                                recursor(_treeRoot.accessors[_accessor],tokens,cursor+1,_treeRoot,_accessor);
                             });
                             llpushClose();
                         } else {
@@ -1698,7 +1705,7 @@ class Path {
                             llpushOpen();
 
                             for(const _tokens of token.value) {
-                                recursor(_treeRoot,[..._tokens,...tokensRest]);
+                                recursor(_treeRoot,[..._tokens,...tokensRest],0,prevRoot,accessor);
                                 if(stopResolution) break;
                                 ({returnEarly,collectNext} = oldCtx);
                             }
@@ -1706,14 +1713,14 @@ class Path {
                         }
                         break;
                     default:
-                        recursor(_treeRoot,tokens,cursor+1); // skip token
+                        recursor(_treeRoot,tokens,cursor+1,prevRoot,accessor); // skip token
                         break;  
                 }
             }
 
             if(nextRoots.length > 1) llpushOpen();
             for(const nextRoot of nextRoots) {
-                if(skipToken) recursor(nextRoot,tokens,cursor+1);
+                if(skipToken) recursor(nextRoot,tokens,cursor+1,prevRoot,accessor);
                 else {
                     for(const token of nextTokens) {
                         _resolveToken(nextRoot,token);
@@ -2251,21 +2258,28 @@ class BaseNode {
             const pathCrawler = (pathResult) => {
                 if(pathResult == null) return;
                 else if (pathResult?.__type === "pathResult") {
-                    if(pathResult.result instanceof BaseNode && pathResult?.node == null) 
-                        pathResult.node = pathResult.result;
-                    if(pathResult?.node != null) {
+                    let node = null, accessor = null;
+
+                    if(pathResult.result instanceof BaseNode) {
+                        node = pathResult.result;
+                    } else if (pathResult.context instanceof BaseNode) {
+                        node = pathResult.context;
+                        accessor = pathResult.accessor;
+                    }
+
+                    if(node != null) {
                         switch (mod.type) {
                             case "add precedent":
-                                this.registerPrecedent(pathResult.node,pathResult.accessor,mod.amount);
+                                this.registerPrecedent(node,accessor,mod.amount);
                                 break;
                             case "add dependent":
-                                this.registerDependent(pathResult.node,pathResult.accessor,mod.amount);
+                                this.registerDependent(node,accessor,mod.amount);
                                 break;
                             case "remove precedent":
-                                this.unregisterPrecedent(pathResult.node,pathResult.accessor,mod.amount);
+                                this.unregisterPrecedent(node,accessor,mod.amount);
                                 break;
                             case "remove dependent":
-                                this.unregisterDependent(pathResult.node,pathResult.accessor,mod.amount);
+                                this.unregisterDependent(node,accessor,mod.amount);
                                 break;
                         }
                     }
@@ -2493,8 +2507,8 @@ class DataNode extends BaseNode {
         this.accessors = {
             base: 0,
             value: value,
-            max: undefined, 
-            min: undefined
+            max: max, 
+            min: min
         }
 
         const baseInputFocusHandler = this.inputFocusHandler;
@@ -2875,37 +2889,350 @@ class ModifierNode extends DataNode {
 }
 
 class EventBus {
-    constructor () {
-        
-    }
-}
 
-const testEvBus = {
-    'Ability Scores': {
-        'Strength': {
-            'score':{
-                [Symbol.for("eventListeners")]:{
-                    "update":["node1"]
-                }
+    static triePathWalkHandler = function ({obj, token}, options) {
+        const type = options?.type;
+        if(obj instanceof EventBus.TrieNode) {
+            let next = [];
+            switch(token.type) {
+                case "T_ROOT":
+                    next.push(this.trie);
+                    break;
+                case "O_WILDCARD": 
+                case "A_WILDCARD":
+                    next.push(...Object.values(obj));
+                    if(obj.getWildcard() != null)
+                        next.push(obj.getWildcard());
+                    break;
+                case "O_KEY":
+                    next.push(...obj.getMatches(token.value));
+                    break;
+                case "A_LIST":
+                    for(const idx of token.value) {
+                        next.push(...obj.getMatches(token.value));
+                    }
+                    break;
+                case "A_SLICE":
+                    let {min,max} = token.value;
+                    if(max != undefined) {
+                        for(let i = min ?? 0;i < max;i++) {
+                            next.push(...obj.getMatches(i));
+                        }
+                    } else {
+                        next.push(...obj.getMatches(min ?? 0));
+                    }
+                    break;
+                case "N_ACCESSORS":
+                    for(const acc in token.value) {
+                        next.push(...obj.getMatches(acc));
+                    }
+                    break;
+                case "END": 
+                    if(type != null)
+                        return {overrides:obj.getListeners(type)};
+                default:
+                    return {action:"continue"};
             }
-        },
-        '*': {
-            'score':{
-                [Symbol.for("eventListeners")]: {
-                    "update":["node2"]
-                }
-            },
-            [Symbol.for("eventListeners")]: {
-                "structure":["rule1"]
-            }
+            return {action:"skip_token",overrides:next};
         }
     }
+
+    static TrieNode = class TrieNode {
+        constructor () {
+            this[Symbol.for("eventListeners")] = {};
+        }
+
+        destroy() {
+            for(const [key,value] of Object.entries(node)) {
+                value.destroy();
+                this[Symbol.for("parent")] = null;
+                this[Symbol.for("eventListeners")] = null;
+                delete this[key];
+            }
+        }
+
+        addKey(key) {
+            const newKey = sanatizeKey(key);
+            if(newKey in this) return this[newKey];
+
+            this[newKey] = new EventBus.TrieNode();
+            this[newKey][Symbol.for("parent")] = this;
+            return this[newKey]
+        }
+
+        getKey(key) {
+            const sKey = sanatizeKey(key);
+            if(!(sKey in this)) return undefined;
+
+            return this[sKey]
+        }
+
+        addWildcard() {
+            return this.addKey(Symbol.for("wildcard"));
+        }
+
+        addSlice(min = 0,max = null) {
+            const newItems = []
+            if(max != undefined) {
+                for(let idx = min;idx < max;idx++) {
+                    newItems.push(this.addKey(idx));
+                }
+            } else {
+                newItems.push(this.addKey(min + ':'));
+            }
+            return newItems;
+        }
+
+        getWildcard() {
+            return this[Symbol.for("wildcard")];
+        }
+
+        getMatches(key, arrlen = 0) {
+            const matches = [];
+            if(this[Symbol.for("wildcard")] != undefined)
+                matches.push(this[Symbol.for("wildcard")]);
+            if(key == undefined) return matches;
+
+            const sKey = sanatizeKey(key);
+            for(const _key of Object.keys(this)) {
+                if(_key == sKey) {
+                    matches.push(this[_key]);
+                } else if(!isNaN(sKey)) {
+                    if (_key.at(-1) === ":") {
+                        let min = parseInt(_key.slice(0,-1));
+                        if(isNaN(min)) continue;
+
+                        if(min < 0) min += arrlen;
+
+                        if(min <= parseInt(sKey))
+                            matches.push(this[_key]);
+                    } else if (parseInt(_key) < 0) {
+                        const idx = parseInt(_key) + arrlen;
+                        if(idx == parseInt(sKey))
+                            matches.push(this[_key]);
+                    }
+                }
+            }
+            return matches;
+        }
+
+        /**
+         * @param {"change"|"structure"} type 
+         * @param {() => void} callback 
+         */
+        addListener(type,callback) {
+            if(this[Symbol.for("eventListeners")][type] == undefined)
+                this[Symbol.for("eventListeners")][type] = [callback];
+            else
+                this[Symbol.for("eventListeners")][type].push(callback);
+            return this;
+        }
+
+        /**
+         * @param {"change"|"structure"} type 
+         * @param {() => void} callback 
+         */
+        removeListener(type,callback) {
+            if(this[Symbol.for("eventListeners")][type] == undefined)
+                return;
+
+            const idx = this[Symbol.for("eventListeners")][type].indexOf(callback);
+            if(idx > -1)
+                return this[Symbol.for("eventListeners")][type].splice(idx,1)[0];
+        }
+
+        getListeners(type) {
+            if(this[Symbol.for("eventListeners")][type] == undefined)
+                return [];
+            return this[Symbol.for("eventListeners")][type];
+        }
+    }
+
+    constructor () {
+        this.trie = new EventBus.TrieNode();
+    }
+
+    /**
+     * 
+     * @param {"change","structure"} type 
+     * @param {Path} path
+     * @param {() => void} callback
+     */
+    addListener(type,path,callback) {
+        const _path = new Path(Path.pathTo(path),this.trie);
+        _path.resolve({
+            forwardHandler: (params) => {
+                const {obj,token} = params;
+                if(obj instanceof EventBus.TrieNode) {
+                    let next = [];
+                    switch(token.type) {
+                        case "T_ROOT":
+                            next.push(this.trie);
+                            break;
+                        case "O_WILDCARD": 
+                        case "A_WILDCARD":
+                            next.push(obj.addWildcard());
+                            break;
+                        case "O_KEY":
+                            next.push(obj.addKey(token.value));
+                            break;
+                        case "A_LIST":
+                            for(const idx of token.value) {
+                                next.push(obj.addKey(idx));
+                            }
+                            break;
+                        case "A_SLICE":
+                            let {min,max} = token.value;
+                            next = obj.addSlice(min,max);
+                            break;
+                        case "N_ACCESSORS":
+                            for(const acc in token.value) {
+                                next.push(obj.addKey(acc));
+                            }
+                            break;
+                        case "END": 
+                            obj.addListener(type,callback);
+                            return {overrides:[obj?.[Symbol.for("eventListeners")]]}
+                        default:
+                            return {action:"continue"};
+                    }
+                    return {action:"skip_token",overrides:next};
+                }
+            }
+        })
+    }
+
+    /**
+     * 
+     * @param {"change","structure"} type 
+     * @param {Path} path
+     */
+    getListeners(type,path) {
+        const _path = new Path(Path.pathTo(path),this.trie); // re-origin path to this trie
+        return _path.resolve({
+            flat:true,
+            forwardHandler: (params) => {
+                if(params.token.type === "END")
+                    return {overrides:params.obj?.getListeners(type)};
+                return EventBus.triePathWalkHandler(params);
+            }
+        }).map(pathResult => pathResult.result);
+    }
+
+    /**
+     * 
+     * @param {"change","structure"} type 
+     * @param {Path} path
+     * @param {() => void} ogcallback original reference to callback registered
+     */
+    removeListener(type,path,ogcallback) {
+        const _path = new Path(Path.pathTo(path),this.trie); // re-origin path to this trie
+        return _path.resolve({
+            flat:true,
+            forwardHandler: (params) => {
+                const {obj,token} = params;
+                if(token.type === "END") {
+                    return {overrides:[obj.removeListener(type,ogcallback)]}
+                }
+                return EventBus.triePathWalkHandler(params);
+            }
+        }).map(pathResult => pathResult.result);
+    }
+
+    /**
+     * 
+     * @param {string} type 
+     * @param {Object} origin 
+     * @returns {any[]} Array of results of all callbacks called.
+     */
+    emit(type,origin) {
+        const path = Path.pathTo(origin);
+        if(path == undefined) return;
+        
+        const arraySizes = new Map();
+        path.resolve({
+            forwardHandler:(params) => {
+                const {obj,token} = params;
+                if(Array.isArray(obj)) {
+                    arraySizes.set(token,obj.length);
+                }
+            }
+        });
+
+        path.origin = this.trie;
+
+        return path.resolve({
+            flat:true,
+            forwardHandler: (params) => {
+                const {obj, token} = params;
+                const next = [];
+
+                /** @type {EventBus.TrieNode} */
+                let trieNode = obj;
+                if(!(obj instanceof EventBus.TrieNode)) {
+                    trieNode = this.trie;
+                }
+                switch (token.type) {
+                    case "T_ROOT":
+                        next.push(this.trie);
+                        break;
+                    case "A_WILDCARD":
+                    case "O_WILDCARD":
+                        next.push(...Object.values(trieNode));
+                        if(obj.getWildcard() != null)
+                            next.push(obj.getWildcard());
+                        break;
+
+                    case "O_KEY":
+                        next.push(...trieNode.getMatches(token.value));
+                        break;
+
+                    case "A_LIST":
+                        next.push(...trieNode.getMatches(token.value, arraySizes.get(token)));
+                        break;
+
+                    case "A_SLICE":
+                        const {min,max} = token.value;
+                        const arraySize = arraySizes.get(token) ?? 0;
+                        if(max != undefined){
+                            for(let i = min ?? 0;i < max ?? arraySize;i++) {
+                                next.push(...trieNode.getMatches(i))
+                            }
+                        }
+                        break;
+
+                    case "END":
+                        for(const func of trieNode.getListeners(type)) {
+                            next.push(func());
+                        }
+                        return {overrides:next};
+                        break;
+
+                    default:
+                        return {action:"continue"}
+                }
+                return {action:"skip_token",overrides:next};
+            }
+        });
+    }
+
+    destroy() {
+        this.trie.destroy();
+    }
 }
 
+const testEvBus = new EventBus();
+testEvBus.addListener("change",new Path("Equipment.items[*].equipped"),() => {
+    console.log("item equipped!")
+});
 
+testEvBus.addListener("change",new Path("Some Data.multiNode[-2]"),() => {
+    console.log("node changed!")
+});
 
-
-
+testEvBus.addListener("change",new Path("Ability Scores.*.score"),() => {
+    console.log("score changed!")
+});
 
 
 
@@ -2981,6 +3308,10 @@ let testChar = new Character(testFileData);
 let testNode = new Path('Ability Scores.Strength.score',testChar.root).resolve();
 if(testNode?.__type === "pathResult") testNode = testNode.result;
 
+testEvBus.emit("change",testNode);
+testEvBus.emit("change",testChar.root.Equipment.items[0].equipped);
+testEvBus.emit("change",testChar.root["Some Data"].multiNode[2]);
+
 testPath1 = new Path("Ability Scores.Strength.score",testChar.root);
 // console.log(testPath1.resolveStrs());
 
@@ -2996,5 +3327,7 @@ testPath4 = new Path("Equipment.items[*].equipped",testChar.root);
 testPath5 = new Path(".name",testPath4);
 // console.log(testPath5.resolveStrs());
 
-testPath6 = new Path(".mod",testNode)
+testPath6 = new Path(".mod",testNode);
 // console.log(testPath6.resolveStrs());
+
+testPath7 = new Path(testPath1,testEvBus);
