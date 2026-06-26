@@ -1,0 +1,1164 @@
+import {BaseNode, Container} from "./Nodes.js"
+import {sanatizeKey} from "./helpers.js"
+
+export class Path {
+    /* Tokens Regex Group Explination:
+     * Group 1: Path from root object. Path starts with '$'
+     * Group 2: '.' or ',' for path separator logics
+     * Group 3: Key token. Expressed: Key1.Key2
+     * - Each of these keys can have array accessors. These are singleton
+     *   object paths.
+     * Group 4: '*' Object key wildcard. Expressed .*
+     * Group 5: Array index list accessor. Expressed: [1,2,3] or [2]
+     * - Can be negative numbers. Negatives are wrapped around to end of array.
+     * - Comes after Key or Group tokens.
+     * Group 6: Array index slice accessor. Expressed: [:5](beginning -> 5), [3:] (3 -> end), [:] (Everything)
+     * - Can be negative numbers. Also wrapped to end of array.
+     * - Comes after Key or Group tokens.
+     * Group 7: '*' Wildcard array accessor. Expressed: [*]
+     * - refers to entire array
+     * - Comes after Key or Group tokens.
+     * Group 8: '#' accessor sigils. Expressed: #accessor1,accessor2,...
+     * - Access node accessors (i.e. value, min, or max)
+     * Group 9: ';,' semicoln or comma to separate full path queries. 
+     * - Commas cannot be used for this purpose after accessor sigils, 
+     *   but semicolns can.
+     * - Can be used in groups to specify multiple sub paths.
+     * Group 10: '(' Start of Group token. 
+     * Group 11: ')' End of Group token.
+     * - Groups are expressed by: (Subpath 1;subpath 2,...)
+     *   - Each subpath may be a full path to something from previous path 
+     *     endpoint, each separated by either a comma or semicolon. Must all 
+     *     start with same accessor type (i.e. all  start a key, array acceesor,
+     *     or accessor sigil).  Expected to return  same container type 
+     *     (i.e. object, arrray, node) as well.
+     *   - Tokens are recursively parsed inside.
+     */
+    static tokensRegex = /(?<=^|[\(;,])\s*(\$)\s*|(?<=^|[\(;,\.])\s*(\.+)|(?:(?<=^|[\.;,\($])\s*(?:((?:[\w~]|\*[\w: ~\-\*])[\w: ~\-\*]*?|\\\*)|(\*))\s*(?=$|[\.\[;#,\)]))|(?<!(?<!^|[\(;,\.])\.)\[\s*(?:(-?\d+(?:\s*,\s*-?\d+)*)|(-?\d*\s*:\s*-?\d*)|(\*))\s*\]\s*(?=$|[\.\[#,;\)])|(?<!(?<!^|[\(;,\.])\.)#(\w+(?:,\w+)*)\s*(?=$|[;\)])|(;|,)|\.|(\()|(\))/y;
+    /* 
+    Test Syntax string:
+    $~Key Value.(Key[47],Key,key)[5][5:][*].Key[5,789,-6]#accessor1,accessor2;Key:morekey.Key.Key[:-1].*#accessor1,accessor3,accessor4
+    items[1,-4,5][*][1][-1][1:][:1][-2:3]
+    Strength[3][5][6];Dexterity[7]
+    hello;world
+    (h,l,p,asdf,jlsadf)[5];asdf
+    #accessor1,accessor2
+    Key1.Key2.(.go back[7])[5]
+    */
+
+    /**
+     * @typedef ResolutionDecision
+     * @property {"continue"|"collect"|"skip"|"stop"} action
+     * @property {Object|Array} overrides
+     */
+
+    /**
+     * @typedef PathResult
+     * @property {"pathResult"} __type
+     * @property {any} result
+     * @property {BaseNode|null} node
+     * @property {string|null} accessor
+     * 
+     */
+
+    /** 
+     * @typedef Token
+     * @property {string} type The type of this token. Determines what to
+     * do with value
+     * @property {any} value Parsed value of token. Can be anything from obj 
+     * references to strings and preocessed arrays
+     * @property {string} containerType Expected container type based on next token
+     */
+
+    /**
+     * @callback ResolutionForwardHandler
+     * @param {{
+     *  obj:(Object|Array),
+     *  token: Token,
+     *  isLeaf: boolean
+     * }} handlerParams
+     * @param {Object} options
+     * @returns {ResolutionDecision} 
+     */
+
+    /**
+     * @callback ResolutionReverseHandler
+     * @param {{
+     *  obj:(Object|Array),
+     *  token: Token,
+     *  isLeaf: boolean
+     * }} handlerParams
+     * @param {Object} options
+     * @returns {void}
+     */
+
+    
+
+    /**
+     * @param {Object|Path} obj 
+     * @param {Object} from 
+     * @returns 
+     */
+    static pathTo(obj,from = null) {
+        if(!(from == null || from instanceof Object)) return undefined;
+        const rootChain = [];
+        if (from != null) {
+            let cur = from;
+            while (cur?.[Symbol.for("parent")] != undefined) {
+                if(cur?.__type === "container" || cur instanceof Container)
+                    continue; // skip containers bc path resolution skips over them too
+                rootChain.push(cur);
+                cur = cur[Symbol.for("parent")];
+            }
+        }
+
+        let originobj = null;
+
+        const recursor = (obj) => {
+            if(obj == undefined) return undefined;
+
+            if(from != null) {
+                let idx = rootChain.indexOf(obj);
+                if(idx >= 0) {
+                    const isRoot = obj?.[Symbol.for("parent")] == undefined;
+                    originobj = from;
+                    const rval = isRoot ? [{type:"T_ROOT",value:"$"}] : []
+                    for(let i = idx;i > 0;i--) {
+                        rval.push({type:"T_BACK",value:"."});
+                    }
+                    return rval;
+                }
+            }
+
+            if(obj instanceof Object) {
+                const parentObj = obj[Symbol.for("parent")];
+                if(parentObj != undefined) {
+                    if(parentObj?.__type === "container" || parentObj instanceof Container) {
+                        return recursor(parentObj);
+                    }
+
+                    const parentPath = recursor(parentObj);
+                    if (parentPath != undefined) {
+                        if (Array.isArray(parentObj)) {
+                            const idx = parentObj.indexOf(obj);
+                            if (idx < 0) return undefined;
+                            parentPath.push({type:"A_LIST",value:[idx]})
+                        } else {
+                            const key = Object.keys(parentObj).find((key) => parentObj[key] === obj);
+                            if(key == undefined) return undefined;
+                            parentPath.push({type:"O_KEY",value:key});
+                        }
+                        return parentPath;
+                    }
+                } else {
+                    // just return the full absolute path if all else fails.
+                    originobj = obj;
+                    return [{type:"T_ROOT",value:"$"}]; 
+                }
+            }
+            return undefined;
+        }
+
+        if(obj instanceof Path) {
+            return new Path(obj,Path.pathTo(obj.origin,from));
+        }
+        return new Path(recursor(obj),originobj);
+    }
+
+    /**
+     * 
+     * @param {Object|Array|undefined} obj 
+     * @returns {string|number}
+     */
+    static getName(obj) {
+        if(obj == undefined) return undefined;
+        if(obj?.[Symbol.for("parent")] == undefined) 
+            return "";
+        if(Array.isArray(obj[Symbol.for("parent")]))
+            return obj[Symbol.for("parent")].indexOf(obj);
+        else if (obj instanceof Object)
+            return Object.keys(obj[Symbol.for("parent")])?.find(key => obj[Symbol.for("parent")][key] === obj);
+        else
+            return undefined;
+    }
+
+    /**
+     * @param {Object} obj 
+     * @returns {Object}
+     */
+    static findRoot(obj) {
+        let parentObj = obj;
+        while (parentObj?.[Symbol.for("parent")] != undefined) {
+            parentObj = parentObj[Symbol.for("parent")];
+        }
+        return parentObj;
+    }
+
+    /**
+     * @param {Token|Token[]|Token[][]} tokens 
+     * @returns {Token|Token[]|Token[][]}
+     */
+    static copyTokens(tokens) {
+        const _isValidToken = (token) => {
+            return (token instanceof Object)
+            && token?.type != undefined 
+            && token?.value != undefined 
+            && typeof(token.type) == "string";
+        }
+
+        const _copyTokens = (tokens) => {
+            const tokenCopies = []
+            for(const token of tokens) {
+                let tokenCopy;
+                if(Array.isArray(token)) {
+                    tokenCopy = _copyTokens(token);
+                    if(tokenCopy.length < 1) continue; // skip arrays of invalid tokens
+                } else {
+                    tokenCopy = _copyToken(token);
+                }
+                if(tokenCopy == undefined) continue; // skip invalid tokens
+                tokenCopies.push(tokenCopy);
+            }
+            return tokenCopies;
+        }
+
+        const _copyToken = (token) => {
+            if(!_isValidToken(token)) return undefined;
+
+            let tokenCopy = undefined;
+            switch (token.type) {
+                case 'A_LIST':
+                case 'N_ACCESSORS':
+                if(Array.isArray(token.value))
+                    tokenCopy = {type:token.type, value:[...token.value]};
+                break;
+                case 'A_SLICE':
+                    tokenCopy = {type:token.type, value:{min: token.value.min, max: token.value.max}}
+                    break;
+                case 'T_GROUP':
+                    tokenCopy = {type:token.type, value:_copyTokens(token.value)};
+                    break;
+                case 'T_ROOT':
+                case 'T_BACK':
+                case 'O_KEY':
+                case 'A_WILDCARD':
+                default:
+                    tokenCopy = {type:token.type, value:token.value};
+                    break;
+            }
+            return tokenCopy;
+        }
+        
+        if(tokens instanceof Path) {
+            return _copyTokens(tokens.tokens);
+        } else if (Array.isArray(tokens)){
+            return _copyTokens(tokens);
+        } else if (_isValidToken(tokens)){
+            return _copyToken(tokens);
+        }
+        return undefined;
+    }
+
+    /** 
+     * @param {string|Path|Token[]} path 
+     * @param {Path} origin
+     * */
+    static tokenize (path,origin=null) {
+        if (path == undefined) path = "";
+
+        if (origin instanceof Path) {
+            /** @type {Token[][]}*/
+            const allTokens = []
+            for(const _tokens of origin.tokens) {
+                // for each grouping of origin tokens, process new path
+                allTokens.push(..._processPath(path,_tokens));
+            }
+            return allTokens;
+        } else {
+            return _processPath(path);
+        }
+
+        /**
+         * @param {Token|undefined} token 
+         * @param {string} currentTokenType 
+         */
+        function setTokenContainer(token = undefined, currentTokenType = null) {
+            if(token == undefined) return;
+
+            switch(token.type) {
+                case "T_GROUP":
+                    for(const gtokens of token.value) {
+                        setTokenContainer(gtokens.at(-1),currentTokenType);
+                    }
+                    break;
+                default:
+                    let containerType = null;
+                    switch(currentTokenType) {
+                        case "O_KEY":
+                        case "O_WILDCARD":
+                            containerType = "object";
+                            break;
+                        case "A_LIST":
+                        case "A_SLICE":
+                        case "A_WILDCARD":
+                            containerType = "array";
+                            break;
+                        case "N_ACCESSORS":
+                            containerType = "node";
+                            break;
+                    }
+                    token.containerType = containerType;
+            }
+        }
+
+        function _processPath(path, originTokens = []) {
+            /** @type {Token[]} */
+            let tokens = [...originTokens];
+            /** @type {Token[][]} */
+            let allTokens = [tokens];
+
+            if (path instanceof Path || Array.isArray(path)) {
+                
+                /**
+                 * @param {Token[]|Token[][]} pathTokens 
+                 */
+                const _processTokens = (pathTokens) => {
+                    for(let idx = 0;idx < pathTokens.length;idx++) {
+                        const token = pathTokens[idx];
+                        if(Array.isArray(token)) {
+                            _processTokens(token);
+                            if(idx >= pathTokens.length - 1) continue;
+                            tokens = []; // treat end of array as concatenate (;,)
+                            allTokens.push(tokens);
+                            tokens.push(...originTokens);
+                            continue;
+                        }
+                        const tokenCopy = Path.copyTokens(token);
+                        if(tokenCopy == undefined) continue; // skip invalid tokens
+                        let prevToken = tokens.at(-1);
+                        switch(token.type) {
+                            case "T_ROOT":
+                                allTokens.pop();
+                                tokens = [tokenCopy]; // replace any origin pathing with root
+                                allTokens.push(tokens) // replace all origins with root token
+                                break;
+                            case "T_BACK":
+                                // pop tokens off the stack if able to shorten/standardize paths
+                                if(tokens.length > 0 && !(["T_BACK","T_ROOT","T_GROUP"].includes(tokens.at(-1)?.type))) {
+                                    tokens.pop();
+                                    prevToken = tokens.at(-1);
+                                } else {
+                                    tokens.push(tokenCopy);
+                                }
+                                break;
+                            default:
+                                tokens.push(tokenCopy);
+                                setTokenContainer(prevToken,tokenCopy.type);
+                        }
+                    }
+                }
+
+                if(path instanceof Path) {
+                    _processTokens(path.tokens);
+                } else {
+                    _processTokens(path);
+                }
+
+                return allTokens;
+            } else if (typeof(path) !== "string") {
+                path = ""; // process as empty path if path is invalid;
+            }
+
+            /** @type {Token[][][]} */
+            const contextStack = [];
+            
+            /**
+             * 
+             * @param {string} type 
+             * @param {any} value 
+             * @param {string} containerType 
+             * @returns {Token}
+             */
+            function token(type, value, containerType = null) {
+                return {type, value, containerType};
+            }
+
+            for(let i = 0;i < path.length;) {
+                // If for some reason the string is consumed already, quit now.
+                if (i >= path.length)
+                    break;
+
+                Path.tokensRegex.lastIndex = i;
+                const m = Path.tokensRegex.exec(path)
+                if (!m) throw SyntaxError(`Unexpected character '${path[i]}' at ${i} in '${path}'`);
+                // console.log(m); // Cool Debug thing
+
+                let prevToken = tokens.at(-1);
+                if(tokens.length < 1 && contextStack.length > 0) {
+                    prevToken = contextStack.at(-1).at(-1).at(-1);
+                }
+
+
+                if (m[1] !== undefined) {
+                    tokens = [token('T_ROOT','$')];
+                    allTokens.pop();
+                    allTokens.push(tokens) // replace all origins with root token
+                }
+
+                else if (m[2] !== undefined) {
+                    for (let i=0;i<m[2].length;i++) {
+                        if(tokens.length > 0 && !(["T_BACK","T_ROOT","T_GROUP"].includes(tokens.at(-1)?.type))) {
+                            tokens.pop();
+                            prevToken = tokens.at(-1);
+                        } else {
+                            tokens.push(token('T_BACK','.'));
+                        }
+                    }
+                }
+
+                else if(m[3] !== undefined) {
+                    let key = m[3];
+                    if(key === '\\*') key = '*'; // replace escaped \* with *
+                    tokens.push(token('O_KEY',sanatizeKey(key)));
+                    setTokenContainer(prevToken,'O_KEY');
+                }
+
+                else if(m[4] !== undefined) {
+                    tokens.push(token('O_WILDCARD','*'));
+                    setTokenContainer(prevToken,'O_WILDCARD');
+                }
+
+                else if(m[5] !== undefined) {
+                    tokens.push(token('A_LIST',m[5].split(',').map(x => parseInt(x))));
+                    setTokenContainer(prevToken,'A_LIST');
+                }
+
+                else if(m[6] !== undefined) {
+                    let [pmin,pmax] = m[6].split(':');
+                    if (pmin === '') pmin = 0;
+                    else pmin = parseInt(pmin);
+                    if (pmax === '') pmax = undefined;
+                    else pmax = parseInt(pmax);
+
+                    if(Number.isNaN(pmin) || Number.isNaN(pmax)) 
+                        throw SyntaxError(`Token ${m[6]} at ${i}: Array slice indexes must be numbers.`);
+
+                    tokens.push(token('A_SLICE',{min:pmin,max:pmax}));
+                    setTokenContainer(prevToken,'A_SLICE');
+                }
+
+                else if(m[7] !== undefined) {
+                    tokens.push(token('A_WILDCARD','*'));
+                    setTokenContainer(prevToken,'A_WILDCARD');
+                }
+
+                else if(m[8] !== undefined && m[8] !== '') {
+                    tokens.push(token('N_ACCESSORS',m[8].split(',').map(x => sanatizeKey(x))));
+                    setTokenContainer(prevToken,'N_ACCESSORS');
+                }
+                    
+                else if (m[9] !== undefined) { //;, (conatenate)
+                    tokens = [];
+                    allTokens.push(tokens); // make new tokens grouping
+                    if (contextStack.length < 1) {
+                        tokens.push(...originTokens);
+                    }
+                }
+
+                else if (m[10] !== undefined) { // (
+                    contextStack.push(allTokens);// push token context into stack
+                    tokens = []; // create new token context
+                    allTokens = [tokens];
+                }
+
+                else if (m[11] !== undefined) { // )
+                    if (contextStack.length <= 0) throw SyntaxError(`Token ${m[11]} at ${i}: Unbalanced Parentheses. Missing opening '('`);
+                    const group_token = token('T_GROUP', allTokens); // store current token context into group token
+                    allTokens = contextStack.pop(); // pop previous context off the stack to continue where we left off
+                    tokens = allTokens.at(-1);
+                    tokens.push(group_token);
+                }
+                
+                i = Path.tokensRegex.lastIndex;
+            }
+            if(contextStack.length > 0) throw SyntaxError(`EOF: Unbalanced Parentheses. Missing closing ')'`);
+            return allTokens;
+        }
+    }
+
+    /** @type {ResolutionForwardHandler} */
+    static buildHandler({obj, token, isLeaf}, options = {}) {
+        const {factory:newFactory = () => null} = options;
+        if(obj == null) return {action:"continue"};
+
+        const objPath = Path.pathTo(obj)
+
+        const buildNew = (parent,type) => {
+            let newobj = newFactory(parent,type);
+            switch(type) {
+                case "object":
+                    if(!(newobj instanceof Object))
+                        newobj = {};
+                    break;
+                case "array":
+                    if(!(Array.isArray(newobj)))
+                        newobj = [];
+                    break;
+                case "node":
+                    if(newobj == null) // TODO: change later
+                        newobj = {__type:"data",value:0,max:null,min:null};
+                    break;
+                default:
+                    newobj = null
+            }
+            if(
+                newobj instanceof Object 
+                && newobj[Symbol.for("parent")] == null 
+                && parent != null
+            ) 
+                newobj[Symbol.for("parent")] = parent;
+            return newobj;
+        }
+
+        switch(token.type) {
+            case "N_ACCESSORS":
+                return {action:"continue"};
+
+            case "A_LIST":
+                if(!Array.isArray(obj)) {
+                    console.error("Expected Array but found other type")
+                    return {action:"skip"};
+                }
+                for(const idx of token.value)  {
+                    const initLen = obj.length;
+                    const maxIdx = idx > 0 ? idx : -idx - 1;
+                    if(maxIdx >= obj.length) {
+                        obj.length = maxIdx + 1;
+                    }
+                    obj.fill(null,initLen);
+                        
+                    const j = idx < 0 ? idx + obj.length : idx;
+                    if(j < obj.length && obj[j] == null) {
+                        console.log(`Building ${objPath.str}[${j}] as ${token.containerType ?? "default"}`);
+                        obj[j] = buildNew(obj,token.containerType);
+                    }
+                }
+                return {action:"continue"};
+            case "A_SLICE":
+                if(!Array.isArray(obj)) {
+                    console.error("Expected Array but found other type")
+                    return {action:"skip"};
+                }
+                const initLen = obj.length;
+                const bounds = token.value;
+                const max = bounds.max == undefined 
+                    ? bounds.min
+                    : ( bounds.max < 0 
+                        ? bounds.max + 1
+                        : bounds.max - 1 // because max is not included in slice
+                    )
+                const maxIdx = Math.abs(max);
+                if(maxIdx > 0 && maxIdx >= obj.length) {
+                    obj.length = maxIdx + 1;
+                }
+                obj.fill(null,initLen);
+
+                for(let i = bounds.min;i <= max;i++) {
+                    let j = i < 0 ? i + obj.length : i;
+                    if(j < obj.length && obj[j] == null) {
+                        console.log(`Building ${objPath.str}[${j}] as ${token.containerType ?? "default"}`);
+                        obj[j] = buildNew(obj,token.containerType);
+                    }
+                }
+
+                return {action:"continue"};
+            case "O_WILDCARD":
+            case "A_WILDCARD":
+                console.warn("'*' accessor will not create any new paths");
+                return {action:"continue"};
+            case "O_KEY":
+                if(!(obj instanceof Object)) {
+                    console.error("Expected Object but found other type")
+                    return {action:"skip"};
+                }
+                let nextobj = obj[token.value];
+                if(nextobj == undefined) {
+                    console.log(`Building ${objPath.str}.${token.value} as ${token.containerType ?? "default"}`);
+                    nextobj = buildNew(obj,token.containerType)
+                }
+                obj[token.value] = nextobj;
+                return {action:"continue"};
+        }
+    }
+
+    /** @type {ResolutionForwardHandler} */
+    static repairHandler({obj, token, isLeaf}, options = {}) {
+        const objPath = Path.pathTo(obj);
+        switch(token.type) {
+            case "N_ACCESSORS":
+                break;
+            case "A_LIST":
+            case "A_SLICE":
+            case "A_WILDCARD":
+                if(!Array.isArray(obj)) {
+                    console.error("Expected Array but found other type")
+                    return {action:"skip"};
+                }
+                break;
+            case "O_WILDCARD":
+            case "O_KEY":
+                if(!(obj instanceof Object) || Array.isArray(obj)) {
+                    console.error("Expected Object but found other type")
+                    return {action:"skip"};
+                }
+                break;
+        }
+
+        switch(token.type) {
+            case "A_LIST":
+                for(const idx of token.value)  {
+                    const j = idx < 0 ? idx + obj.length : idx;
+                    if(j < obj.length 
+                        && obj[j] instanceof Object
+                        && obj[j]?.[Symbol.for("parent")] == null
+                    ) {
+                        console.log(`Repairing ${objPath.str}[${j}]`);
+                        obj[j][Symbol.for("parent")] = obj;
+                    }
+                }
+                break;
+            case "A_SLICE":
+                const initLen = obj.length;
+                const bounds = token.value;
+                const max = bounds.max == undefined 
+                    ? bounds.min
+                    : ( bounds.max < 0 
+                        ? bounds.max + 1
+                        : bounds.max - 1 // because max is not included in slice
+                    )
+
+                for(let i = bounds.min;i <= max;i++) {
+                    let j = i < 0 ? i + obj.length : i;
+                    if(j < obj.length 
+                        && obj[j] instanceof Object
+                        && obj[j]?.[Symbol.for("parent")] == null
+                    ) {
+                        console.log(`Repairing ${objPath.str}[${j}]`);
+                        obj[j][Symbol.for("parent")] = obj;
+                    }
+                }
+                break;
+            case "A_WILDCARD":
+                obj.forEach((next,idx) => {
+                    if(next instanceof Object && next?.[Symbol.for("parent")] == null) {
+                        console.log(`Repairing ${objPath.str}[${idx}]`);
+                        next[Symbol.for("parent")] = obj;
+                    }
+                })
+                break;
+            case "O_WILDCARD":
+                Object.values(obj).forEach(next => {
+                    if(next instanceof Object && next?.[Symbol.for("parent")] == null)
+                        console.log(`Repairing ${objPath.str}.${token.value}`); {
+                        next[Symbol.for("parent")] = obj;
+                    }
+                });
+                break;
+            case "O_KEY":
+                const next = obj[token.value];
+                if(next instanceof Object && next?.[Symbol.for("parent")] == null) {
+                    console.log(`Repairing ${objPath.str}.${token.value}`);
+                    next[Symbol.for("parent")] = obj;
+                }
+                break;
+        }
+        return {action:"continue"};
+    }
+
+    /** @type {ResolutionReverseHandler} */
+    static deleteHandler({obj, token, isLeaf}, options = null) {
+
+    }
+
+    /** @type {ResolutionForwardHandler} */
+    static debugHandler({obj, token, isLeaf}, options = null) {
+        console.log(`${Path.pathTo(obj).str} => ${token?.type}:`,token?.value,`, ${isLeaf}`);
+        return {action:"continue"};
+    }
+
+    /**
+     * 
+     * @param {string|Path|Array<{type:string,value:any}>} path 
+     * @param {Path|Object} origin
+     */
+    constructor(path = "", origin=null) {
+        /** @type {string} */
+        this.str = null;
+
+        /** @type {Object} */
+        this.origin = null;
+        if(origin instanceof Path) {
+            this.origin = origin.origin;
+        } else if (origin instanceof Object) {
+            this.origin = origin;
+        }
+
+        // tokenize the path syntax from path
+        /** @type {Token[][]} */
+        this.tokens = Path.tokenize(path, origin);
+        this.str = this.buildString();
+
+        Path.tokensRegex.lastIndex = 0;
+    }
+
+    /**
+     * @returns {string} Returns string representation of this path including unresolved wildcards
+     */
+    buildString() {
+        let prevTType = null;
+        /** 
+         * @param {string} pv 
+         * @param {Token} cv
+         * */
+        const pathReducer = (pv,cv,idx,arr) => {
+
+            let tokenStr = '';
+            let postfix = '';
+
+            if(Array.isArray(cv)) {
+                tokenStr =  cv.reduce(pathReducer,'');
+                if(idx < arr.length - 1) postfix = (prevTType === 'N_ACCESSORS' ? ';' : ',');
+            } else {
+                postfix = cv.containerType == 'object' ? '.' : '';
+                switch (cv.type) {
+                    case 'T_ROOT':
+                        return '$';
+                        break;
+                    case 'O_WILDCARD':
+                        tokenStr = '*';
+                    case 'T_BACK':
+                        postfix = '';
+                    case 'O_KEY':
+                        tokenStr = cv.value;
+                        break;
+                    case 'A_LIST':
+                        tokenStr = `[${cv.value.join(',')}]`;
+                        break;
+                    case 'A_SLICE':
+                        tokenStr = `[${cv.value.min === 0 ? '' : cv.value.min}:${cv.value.max ?? ''}]`;
+                        break;
+                    case 'A_WILDCARD':
+                        tokenStr = '[*]';
+                        break;
+                    case 'T_GROUP':
+                        tokenStr = `(${cv.value.reduce(pathReducer,'')})`;
+                        break;
+                    case 'N_ACCESSORS':
+                        tokenStr = `#${cv.value.join(',')}`;
+                        break;
+                    default:
+                        tokenStr = '';
+                }
+                prevTType = cv.type;
+            }
+            return pv + tokenStr + postfix;
+        }
+
+        return this.tokens.reduce(pathReducer,'');
+    }
+
+    /**
+     * 
+     * @param {{
+     *      root: Object,
+     *      relativeTo: Object
+     *  }} options `root` is passed directly to `this.resolve({flat:true})`. `relativeTo` passed as `from` parameter to `Path.pathTo()`.
+     * @returns {string[]} Returns string paths to all objects resolved by this path relative to the `relativeTo` parameter. Relative to root object by default.
+     */
+    resolveStrs(options = {}) {
+        const {root = null,relativeTo = null} = options;
+
+        const results = this.resolve({root:root, flat:true});
+        return results.map((result) => {
+            if (result?.__type === "pathResult" && result.context instanceof BaseNode) {
+                return `${Path.pathTo(result.context,relativeTo ?? root).str}#${result.accessor}`;
+            } else if (result?.__type === "pathResult"){
+                return Path.pathTo(result.result,relativeTo ?? root).str;
+            } 
+        });
+    }  
+
+    /** 
+     * @param {{
+     *  root:Object, 
+     *  forwardHandler: ResolutionForwardHandler, 
+     *  reverseHandler: ResolutionReverseHandler, 
+     *  handlerOptions: Object,
+     *  flat: boolean
+     * }} options All options are optional
+     * @returns {Array<PathResult|undefined|Array>|PathResult|undefined} Always returns an array if 'flat' option is true
+     */
+    resolve(options = {}) {
+        const {
+            root = null,
+            forwardHandler = null, 
+            reverseHandler = null,
+            handlerOptions = null,
+            flat = false
+        } = options;
+        
+        // Some high scope variables to preserve forward handler control 
+        // across recursive function calls.
+        let stopResolution = false, returnEarly = false, collectNext = false;
+
+        // super basic linked list state variables
+        let llhead = null, lltail = null;
+        const ctxStack = [];
+
+        // called on every path leaf to append result to list
+        function llpush (value) {
+            if(flat && value == undefined) return;
+            const newNode = {value:value,next:null,count:0}
+            if(llhead == null) {
+                llhead = newNode
+                lltail = llhead;
+            } else {
+                lltail.next = newNode;
+                lltail = newNode;
+            }
+
+            if(ctxStack.length > 0) 
+                ctxStack.at(-1).count++;
+            return newNode;
+        }
+
+        // pushes special "ctxOPEN" node to specify entry into a deeper 
+        // result context depth. Does nothing in 'flat' mode.
+        function llpushOpen(keepArr = false) {
+            if(flat && ctxStack.length > 0) return;
+            const newNode = llpush({[Symbol.for("ctxOPEN")]: keepArr || flat});
+            ctxStack.push(newNode);
+        }
+
+        // pushes special "ctxCLOSE" node to specify exit from a deeper 
+        // result context depth. Does nothing in 'flat' mode.
+        function llpushClose(keepArr = false) {
+            if(flat && ctxStack.length <= 1) return;
+            // used to tell if resulting array can be discarded for 
+            // single element lists.
+            if(ctxStack.length > 0) {
+                const openNode = ctxStack.at(-1);
+                if(openNode.value?.[Symbol.for("ctxOPEN")] != undefined) 
+                    openNode.value[Symbol.for("ctxOPEN")] = keepArr || flat;
+                ctxStack.pop()
+            }
+        }
+
+        // called to build final resolution output. Allocates Arrays of known
+        // size after all recursion is finished.
+        function llbuildArray() {
+            const incCur = (cur) => {
+                const prev = cur;
+                cur = cur.next;
+                //prev.next = null; // help gc collect garbage
+                return cur;
+            }
+
+            let cur = llhead;
+            //llhead = null;
+
+            const builder = () => {
+                if(cur == null) return undefined;
+                let isCtxOpen = cur.value?.[Symbol.for("ctxOPEN")] != undefined;
+                let rval = undefined;
+                if(isCtxOpen) {
+                    const keepArr = cur.value[Symbol.for("ctxOPEN")];
+                    rval = new Array(cur.count);
+                    cur = incCur(cur);
+                    let idx = 0;
+                    while(cur != null && idx < rval.length) {
+                        isCtxOpen = cur.value?.[Symbol.for("ctxOPEN")] != undefined;
+                        if(isCtxOpen) {
+                            rval[idx++] = builder();
+                        } else {
+                            rval[idx++] = cur.value;
+                            cur = incCur(cur);
+                        }
+                    }
+
+                    if(rval.length === 1 && !keepArr && !flat) {
+                        rval = rval[0];
+                    } else if (rval.length <= 0 && !flat) {
+                        rval = undefined;
+                    }
+                } else {
+                    rval = cur.value;
+                }
+                return rval;
+            }
+
+            return builder();
+        }
+
+        // debug utility function
+        function llprint() {
+            if(llhead == null) console.log("<null>")
+            let cur = llhead;
+            while (cur != null) {
+                console.log(cur);
+                cur = cur.next;
+            }
+        }
+
+        function buildResult(collected = false, result = null,context = null,accessor = null) {
+            return {__type:"pathResult",result,context,accessor,collected}
+        }
+
+        const recursor = (treeRoot,tokens = this.tokens, cursor=0, prevRoot = null, accessor = null) => {
+            
+
+            const handlerParams = (forwardHandler != null || reverseHandler != null) 
+                ? {
+                    obj:treeRoot, 
+                    token:tokens[cursor] ?? {type:"END",value:null,containerType:null}, 
+                    isLeaf:cursor >= tokens.length - 1,
+                    isBegin: cursor === 0 && prevRoot == null,
+                    context: prevRoot,
+                    accessor: accessor
+                }
+                : null;
+            
+            returnEarly = false;
+            let nextRoots = [treeRoot];
+            let nextTokens = [tokens[cursor]];
+            let skipToken = false; 
+            
+            if(forwardHandler != null) {
+                const decision = forwardHandler(handlerParams,handlerOptions);
+                
+                if(decision?.overrides != undefined) {
+                    nextRoots = decision.overrides;
+                }
+
+                if(decision?.override_tokens != undefined) {
+                    nextTokens = decision.override_tokens;
+                }
+
+                switch (decision?.action) {
+                    case "return_next":
+                        returnEarly = true;
+                        break;
+                    case "return":
+                    case "return_this":
+                        returnEarly = true;
+                        //return recursor(treeRoot,tokens,cursor);
+                        break;
+                    
+                    case "collect_next":
+                        collectNext = true;
+                        break;
+                    case "collect":
+                    case "collect_this":
+                        llpush(buildResult(true,treeRoot))
+                        break;
+
+                    case "skip_token":
+                        skipToken = true;
+                        break;
+                    case "skip":
+                    case "skip_branch":
+                        return;
+
+                    case "stop_next":
+                        stopResolution = true;
+                        break;
+                    case "stop":
+                        stopResolution = true;
+                        //return recursor(treeRoot,tokens,cursor);
+                        break;
+
+                    case "continue":
+                    default:
+                        // do nothing, continue as normal
+                }
+            }
+
+            if(stopResolution) return;
+
+            // end conditions
+            if(cursor >= tokens.length || returnEarly) {
+                if(reverseHandler != null) {
+                    reverseHandler(handlerParams,handlerOptions);
+                }
+
+                for(const rval of nextRoots) {
+                    llpush(buildResult(returnEarly||collectNext,rval,prevRoot,accessor));
+                }
+                return;
+            }
+
+            if(collectNext) {
+                llpush(buildResult(true,treeRoot));
+            }
+
+
+
+            const _resolveToken = (_treeRoot,token) => {
+                // skip over containers and BaseNodes for tokens
+                // that access a child element
+                switch(token.type) {
+                    case "O_KEY":
+                    case "O_WILDCARD":
+                    case "A_LIST":
+                    case "A_SLICE":
+                    case "A_WILDCARD":
+                        while (
+                            _treeRoot != undefined && (
+                                _treeRoot.__type === "container" 
+                                || _treeRoot instanceof Container
+                                || _treeRoot instanceof BaseNode
+                            )
+                        ) {
+                            if(_treeRoot instanceof BaseNode) {
+                                _treeRoot = _treeRoot.passThrough;
+                            } else {
+                                _treeRoot = _treeRoot.content;
+                            }
+                        }
+                        break;
+                    default:
+                        break;
+                }
+
+                if(_treeRoot == null) {
+                    return llpush(undefined);
+                }
+
+                switch(token.type) {
+                    case 'T_ROOT':
+                        if(token.value != null) {
+                            const newRoot = Path.findRoot(_treeRoot)
+                            if(newRoot != null) {
+                                _treeRoot = newRoot;
+                            }
+                        }
+                        recursor(_treeRoot,tokens,cursor+1,null,"root");
+                        break;
+                    case 'T_BACK':
+                        let _parent = _treeRoot?.[Symbol.for("parent")];
+                        while (
+                            _parent?.__type === "container" 
+                            || _parent instanceof Container
+                            || _parent instanceof BaseNode
+                        ) {
+                            _parent = _parent?.[Symbol.for("parent")]
+                        }
+                        if(_parent != undefined) {
+                            recursor(_parent,tokens,cursor+1,_treeRoot,Symbol.for("parent"));
+                        } else {
+                            recursor(_treeRoot,tokens,cursor+1,_treeRoot,Symbol.for("parent"));
+                        }
+                        break;
+                    case 'O_KEY':
+                        if(_treeRoot instanceof Object && !Array.isArray(_treeRoot)) {
+                            if(token.value in Object.prototype) {
+                                return llpush(undefined); // stop prototype pollution attacks
+                            }
+                            recursor(_treeRoot[token.value],tokens,cursor+1,_treeRoot,token.value);
+                        }
+                        break;
+                    case "O_WILDCARD":
+                        if(_treeRoot instanceof Object && !Array.isArray(_treeRoot)) {
+                            llpushOpen(true);
+                            /** @type {Array<string>} */
+                            const keys = Object.keys(_treeRoot).filter((val) => !val.startsWith("__"));
+                            keys.forEach((key) => {
+                                recursor(_treeRoot[key],tokens,cursor+1,_treeRoot,key);
+                            });
+                            llpushClose();
+                        }
+                        break;
+                    case 'A_LIST':
+                        if(Array.isArray(_treeRoot)) {
+                            llpushOpen();
+                            token.value.forEach(idx => {
+                                recursor(_treeRoot.at(idx),tokens,cursor+1,_treeRoot,idx);
+                            });
+                            llpushClose();
+                        }
+                        break;
+                    case 'A_SLICE':
+                        if(Array.isArray(_treeRoot)) {
+                            llpushOpen();
+                            const bounds = token.value;
+                            _treeRoot.slice(bounds.min,bounds.max).forEach((item,idx) => {
+                                recursor(item,tokens,cursor+1,_treeRoot,idx);
+                            });
+                            llpushClose(true);
+                        }
+                        break;
+                    case 'A_WILDCARD':
+                        if(Array.isArray(_treeRoot)) {
+                            llpushOpen(true);
+                            _treeRoot.forEach((item,idx) => {
+                                recursor(item,tokens,cursor+1,_treeRoot,idx);
+                            })
+                            llpushClose();
+                        }
+                        break;
+                    case 'N_ACCESSORS':
+                        if(_treeRoot instanceof BaseNode) {
+                            llpushOpen();
+                            token.value.forEach(_accessor => {
+                                recursor(_treeRoot.accessors[_accessor],tokens,cursor+1,_treeRoot,_accessor);
+                            });
+                            llpushClose();
+                        } else {
+                            llpush(undefined);
+                        }
+                        break;
+                    
+                    case 'T_GROUP':
+                        if (_treeRoot != null) {
+                            const oldCtx = {returnEarly, collectNext}
+                            const tokensRest = tokens.slice(cursor+1);
+                            llpushOpen();
+
+                            for(const _tokens of token.value) {
+                                recursor(_treeRoot,[..._tokens,...tokensRest],0,prevRoot,accessor);
+                                if(stopResolution) break;
+                                ({returnEarly,collectNext} = oldCtx);
+                            }
+                            llpushClose();
+                        }
+                        break;
+                    default:
+                        recursor(_treeRoot,tokens,cursor+1,prevRoot,accessor); // skip token
+                        break;  
+                }
+            }
+
+            if(nextRoots.length > 1) llpushOpen();
+            for(const nextRoot of nextRoots) {
+                if(skipToken) recursor(nextRoot,tokens,cursor+1,prevRoot,accessor);
+                else {
+                    for(const token of nextTokens) {
+                        _resolveToken(nextRoot,token);
+                    }
+                }
+                if(reverseHandler != null) {
+                    reverseHandler({...handlerParams,obj:nextRoot},handlerOptions);
+                }
+            }
+            if(nextRoots.length > 1) llpushClose();
+        }
+
+        llpushOpen(false);
+        for(const _tokens of this.tokens) {
+            recursor(this.origin ?? root,_tokens);
+        }
+        llpushClose();
+
+        return llbuildArray();
+    }
+}
