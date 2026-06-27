@@ -86,7 +86,7 @@ export class Path {
     /**
      * @typedef ResolutionDecision
      * @property {"continue"|"collect"|"skip"|"stop"} action
-     * @property {Object|Array} overrides
+     * @property {Object|Array} override_objs
      */
 
     /**
@@ -983,8 +983,8 @@ export class Path {
             if(forwardHandler != null) {
                 const decision = forwardHandler(handlerParams,handlerOptions);
                 
-                if(decision?.overrides != undefined) {
-                    nextRoots = decision.overrides;
+                if(decision?.override_objs != undefined) {
+                    nextRoots = decision.override_objs;
                 }
 
                 if(decision?.override_tokens != undefined) {

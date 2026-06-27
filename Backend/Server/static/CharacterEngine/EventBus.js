@@ -51,6 +51,37 @@ class TrieNode {
         return this[Symbol.for("wildcard")];
     }
 
+    // doesn't work without arrlen yet
+    matchIdx(idx = 0,max = null,arrlen = 0, testobj = {}) {
+        const matches = [];
+        if(idx < 0) idx += arrlen;
+        if(max != null && max < 0) max += arrlen;
+        if(max != null && max <= idx && arrlen > 0) return matches;
+        for(const key of Object.keys(testobj)) {
+            if(key.includes(":")) {
+                let [kmin,kmax] = key.split(":").map(x => parseInt(x));
+                if(kmin < 0) kmin += arrlen;
+                if(kmax < 0) kmax += arrlen;
+                if(isNaN(kmax)) {
+                    if(idx >= kmin || (max != null && max > kmin))
+                        matches.push(testobj[key]);
+                } else {
+                    if(kmax > kmin && idx < kmax && (idx >= kmin || (max != null && max > kmin)))
+                        matches.push(testobj[key]);
+                    else if(kmax < kmin && (idx >= kmin && (max == null || max > kmax)))
+                        matches.push(testobj[key]);
+                }
+            } else {
+                let kv = parseInt(key);
+                if(kv < 0) kv += arrlen;
+                if(idx === kv || (max != null && kv >= idx && kv < max)) {
+                    matches.push(testobj[key]);
+                }
+            }
+        }
+        return matches;
+    }
+
     getMatches(key, arrlen = 0) {
         const matches = [];
         if(this[Symbol.for("wildcard")] != undefined)
@@ -175,14 +206,18 @@ export class EventBus {
                 break;
 
             case "A_SLICE": {
-                    const {min,max} = token.value;
-                    const arraySize = accessMap.get(accessor) ?? 0;
-                    if(max != undefined){
+                    let {min,max} = token.value;
+                    const matches = obj.getMatches()
+                    if(max == undefined){
+                        
+                    } else if(max > min){
                         for(let i = min ?? 0;i < max;i++) {
                             for(const key of obj.getKeyMatches(i)) {
                                 next.push({type:"O_KEY",value:key});
                             }
                         }
+                    } else {
+                        
                     }
                 }
                 break;
@@ -247,11 +282,11 @@ export class EventBus {
                             break;
                         case "END": 
                             obj.addListener(type,callback);
-                            return {overrides:[obj?.[Symbol.for("eventListeners")]]}
+                            return {override_objs:[obj?.[Symbol.for("eventListeners")]]}
                         default:
                             return {action:"continue"};
                     }
-                    return {action:"skip_token",overrides:next};
+                    return {action:"skip_token",override_objs:next};
                 }
             }
         })
@@ -269,7 +304,7 @@ export class EventBus {
             flat:true,
             forwardHandler: (params) => {
                 if(params.token.type === "END")
-                    return {overrides:params.obj?.getListeners(type)};
+                    return {override_objs:params.obj?.getListeners(type)};
                 return EventBus.triePathWalkHandler(params);
             }
         }).map(pathResult => pathResult.result);
@@ -289,7 +324,7 @@ export class EventBus {
             forwardHandler: (params) => {
                 const {obj,token} = params;
                 if(token.type === "END") {
-                    return {overrides:[obj.removeListener(type,ogcallback)]}
+                    return {override_objs:[obj.removeListener(type,ogcallback)]}
                 }
                 return EventBus.triePathWalkHandler(params);
             }
@@ -310,44 +345,63 @@ export class EventBus {
         path.resolve({
             forwardHandler:(params) => {
                 const {obj,token,context,accessor} = params;
-                // // working on new resolver that attaches TrieNode matches to
-                // // the current object, then accesses them from the previous 
-                // // context. Better than ArraySizes map.
-                // let trieMatches = [];
-                // let trieCtx = context?.[EventBus.EventMetaSym];
-                // if(Path.isRoot(obj)) {
-                //     trieMatches = this.trie;
-                //     trieCtx = [this.trie];
-                // }
+                // working on new resolver that attaches TrieNode matches to
+                // the current object, then accesses them from the previous 
+                // context. Better than ArraySizes map.
+                if(token.type === "T_ROOT") {
+                    return {action:"continue"};
+                }
 
-                // if(!Array.isArray(trieCtx))
-                //     return{action:"skip"};
+                let trieMatches = [];
+                let trieCtx = context?.[EventBus.EventMetaSym] ?? obj?.[EventBus.EventMetaSym];
+                if(Path.isRoot(obj)) {
+                    trieMatches = [this.trie];
+                    obj[EventBus.EventMetaSym] = trieMatches;
+                    return {action:"continue"}
+                }
 
-                // for(const trieNode of trieCtx) {
-                //     switch(token.type) {
-                //         case 'T_ROOT'     :
-                //             trieMatches = this.trie;
-                //             break;
-                //         case 'O_WILDCARD' :
-                //             break;
-                //         case 'T_BACK'     :
-                //             break;
-                //         case 'O_KEY'      :
-                //             break;
-                //         case 'A_LIST'     :
-                //             break;
-                //         case 'A_SLICE'    :
-                //             break;
-                //         case 'A_WILDCARD' :
-                //             break;
-                //         case 'T_GROUP'    :
-                //             break;
-                //         case 'N_ACCESSORS':
-                //             break;
-                //         default:
+                if(!Array.isArray(trieCtx))
+                    return{action:"continue"};
 
-                //     }
-                // }
+                const next = [obj]
+                for(const trieNode of trieCtx) {
+                    switch(token.type) {
+                        case 'O_WILDCARD' :
+                            for(const key of Object.keys(trieNode))
+                                trieMatches.push(key);
+                            if(Symbol.for("wildcard") in trieNode)
+                                trieMatches.push(trieNode[Symbol.for("wildcard")]);
+                            break;
+                        case 'O_KEY'      :
+                            trieMatches.push(...trieNode.getMatches(token.value));
+                            break;
+                        case 'A_LIST'     :
+                            if(Array.isArray(obj)) {
+                                for(const idx of token.value) {
+                                    trieMatches.push(...trieNode.getMatches(idx,obj.length));
+                                }
+                            }
+                            break;
+                        case 'A_SLICE'    :
+                            if(Array.isArray(obj)) {
+                                const {min,max} = token.value;
+
+                            }
+                            break;
+                        case 'A_WILDCARD' :
+                            break;
+                        case 'T_GROUP'    :
+                            break;
+                        case 'N_ACCESSORS':
+                            break;
+                        default:
+                            return {action:"continue"};
+                    }
+                }
+
+                obj[EventBus.EventMetaSym] = trieMatches;
+                return {action:"continue",override_objs: next};
+
 
                 if(Array.isArray(obj)) {
                     let accessMap = arraySizes.get(token);
@@ -417,7 +471,7 @@ export class EventBus {
                         for(const func of obj.getListeners(type)) {
                             next.push(func());
                         }
-                        return {overrides:next};
+                        return {override_objs:next};
                         break;
 
                     default:
