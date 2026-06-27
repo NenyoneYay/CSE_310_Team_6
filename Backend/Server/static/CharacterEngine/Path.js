@@ -782,6 +782,7 @@ export class Path {
                         break;
                     case O_WILDCARD:
                         tokenStr = '*';
+                        break;
                     case T_BACK:
                         postfix = '';
                     case O_KEY:
