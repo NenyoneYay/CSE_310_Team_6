@@ -1,5 +1,5 @@
 import {Character} from "./CharacterEngine.js";
-import {EventBus} from "./EventBus.js";
+import {EventBus, Listener} from "./EventBus.js";
 import {Path} from "./Path.js";
 
 //Bind useful classes to the Window for development

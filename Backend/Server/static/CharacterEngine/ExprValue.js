@@ -129,6 +129,7 @@ export class ExprValue {
         ExprValue.parser.functions.data = (path, fallback=NaN) => {
             const replaceVals = (val) => {
                 if (val?.__type === "pathResult") {
+                    console.warn("Found unexpected wrapped PathResult. Unwrapping...")
                     return replaceVals(val.result);
                 } else if (["string","boolean"].includes(typeof(val))) {
                     return val;
@@ -142,7 +143,7 @@ export class ExprValue {
                     return fallback;
                 }
             }
-            let result = path.resolve({root:root});
+            let result = path.resolve({root:root,wrapResults:false});
 
             if (result instanceof ExprValue) {
                 throw EvalError("This isn't supposed to happen!!")

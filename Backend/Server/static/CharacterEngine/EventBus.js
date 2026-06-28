@@ -1,6 +1,43 @@
 import {Path} from "./Path.js";
 import { sanatizeKey } from "./helpers.js";
 
+
+export class Listener {
+    /**
+     * 
+     * @param {() => void} callback 
+     * @param {Object} applier To be used as `this` object when callback is called
+     * @param {any[]} args Arguments in ordered array to be passed to callback
+     */
+    constructor (callback,{applier = undefined,args = undefined} = {}) {
+        this.callback = callback;
+        this.applier = applier;
+        this.args = args;
+        this.locked = false;
+    }
+
+    trigger() {
+        if(!this.locked)
+            return this.callback.apply(this.applier,this.args);
+        return undefined;
+    }
+
+    /**
+     * @param {boolean} state 
+     * @returns {boolean} New locked state
+     */
+    lock(state = true) {
+        return this.locked = state;
+    }
+
+    /**
+     * @param {any[]} newArgs 
+     */
+    setArgs(newArgs = undefined) {
+        this.args = newArgs;
+    }
+}
+
 const sliceRegEx = /^(-?\d+)?:(-?\d+)?|(-?\d+)/;
 
 /**
@@ -99,21 +136,21 @@ class TrieNode {
     }
 
     /**
-     * @param {string|number} key 
-     * @returns {TrieNode}
+     * @param {string|number|symbol} key 
+     * @returns {{key:string|number|symbol,value:TrieNode}}
      */
     addKey(key) {
         const newKey = sanatizeKey(key);
-        if(newKey in this) return this[newKey];
+        if(newKey in this) return {key:newKey, value:this[newKey]};
 
         this[newKey] = new TrieNode();
         this[newKey][Symbol.for("parent")] = this;
-        return this[newKey]
+        return {key:newKey,value:this[newKey]};
     }
 
     /**
      * 
-     * @param {string|number} key 
+     * @param {string|number|symbol} key 
      * @returns {TrieNode[]}
      */
     getKey(key) {
@@ -131,7 +168,7 @@ class TrieNode {
 
     /**
      * 
-     * @param {string|number} key 
+     * @param {string|number|symbol} key 
      * @returns {TrieNode[]}
      */
     getKeyKeys(key) {
@@ -182,8 +219,7 @@ class TrieNode {
     }
 
     /**
-     * 
-     * @returns {TrieNode}
+     * @returns {{key:symbol,value:TrieNode}}
      */
     addWildcard() {
         return this.addKey(TrieNode.WildcardSym);
@@ -221,7 +257,7 @@ class TrieNode {
      * 
      * @param {number} min 
      * @param {number} max 
-     * @returns {TrieNode}
+     * @returns {{key:string,value:TrieNode}}
      */
     addSlice(min = null,max = null) {
         return this.addKey(`${min ?? ''}:${max ?? ''}`);
@@ -315,23 +351,37 @@ class TrieNode {
      * @param {"change"|"structure"} type 
      * @param {() => void} callback 
      */
-    addListener(type,callback) {
-        if(!this[Symbol.for("eventListeners")].has(type))
-            this[Symbol.for("eventListeners")].set(type,[callback]);
+    addListener(type,listener) {
+        if(this[Symbol.for("eventListeners")].has(type))
+            this[Symbol.for("eventListeners")].get(type).push(listener);
         else
-            this[Symbol.for("eventListeners")].get(type).push(callback);
+            this[Symbol.for("eventListeners")].set(type,[listener]);
         return this;
     }
 
     /**
      * @param {"change"|"structure"} type 
-     * @param {() => void} callback 
+     * @param {Listener | () => void} actor 
      */
-    removeListener(type,callback) {
+    removeListener(type,actor) {
         if(!this[Symbol.for("eventListeners")].has(type))
             return;
 
-        const idx = this[Symbol.for("eventListeners")].get(type).indexOf(callback);
+        
+        /** @type {() => boolean} */
+        let finder;
+
+        if(actor instanceof Listener) 
+            /** @param {Listener} listener */
+            finder = (listener) => listener === actor;
+        else
+            /** @param {Listener} listener */
+            finder = (listener) => listener.callback === actor;
+
+        const idx = /** @type {Listener[]}*/
+            (this[Symbol.for("eventListeners")].get(type))
+            .findIndex(finder);
+
         if(idx > -1)
             return this[Symbol.for("eventListeners")].get(type).splice(idx,1)[0];
     }
@@ -339,7 +389,7 @@ class TrieNode {
     /**
      * 
      * @param {string} type 
-     * @returns {(()=>void)[]}
+     * @returns {Listener[]}
      */
     getListeners(type) {
         if(!this[Symbol.for("eventListeners")].has(type))
@@ -348,11 +398,23 @@ class TrieNode {
     }
 
     /**
+     * @param {string} type 
+     * @returns {any[]}
+     */
+    triggerListeners(type) {
+        const results = []
+        for(const listener of this.getListeners(type)) {
+            results.push(listener.trigger());
+        }
+        return results;
+    }
+
+    /**
      * 
      * @param {string} tag 
      * @param {*} dataObj 
      */
-    addData(tag,dataObj) {
+    setData(tag,dataObj) {
         this[Symbol.for("eventData")].set(tag,dataObj);
     }
 
@@ -368,19 +430,18 @@ class TrieNode {
     /**
      * 
      * @param {string} tag 
-     * @param {*} dataObj 
      * @returns {boolean} true if data existed and was removed
      */
-    removeData(tag,dataObj) {
-        Map.prototype.delete
-        return this[Symbol.for("eventData")].delete(tag);
+    deleteData(tag) {
+        return /** @type {Map} */(this[Symbol.for("eventData")]).delete(tag);
     }
 }
 
 export class EventBus {
 
-    static triePathWalkHandler = function ({obj, token}, options) {
-        const type = options?.type;
+    static triePathWalkHandler = function (params, options = {}) {
+        const {obj, token} = params;
+        const {type} = options;
         if(!(obj instanceof TrieNode))
             return {action:"skip"};
         const next = [];
@@ -409,12 +470,10 @@ export class EventBus {
                     next.push({type:"O_KEY",value:key});
                 }
                 break;
-
-            case "END":
-                for(const func of obj.getListeners(type)) {
-                    next.push(func());
-                }
-                return {override_objs:next};
+            case "N_ACCESSORS":
+                for(const acc of token.value)
+                    for(const key of obj.getKeyKeys(acc))
+                        next.push({type:"O_KEY",value:key});
                 break;
             case "T_ROOT":
             default:
@@ -423,57 +482,108 @@ export class EventBus {
         return {action:"continue",override_tokens:next};
     }
 
+    static triePathBuildHandler = function (params) {
+        const {obj,token} = params;
+        if(obj instanceof TrieNode) {
+            const next = [];
+            switch(token.type) {
+                case "O_WILDCARD": 
+                case "A_WILDCARD":
+                    next.push({type:"O_KEY",value:obj.addWildcard().key});
+                    break;
+                case "O_KEY":
+                    next.push({type:"O_KEY",value:obj.addKey(token.value).key});
+                    break;
+                case "A_LIST":
+                    for(const idx of token.value) {
+                        next.push({type:"O_KEY",value:obj.addKey(idx).key});
+                    }
+                    break;
+                case "A_SLICE":
+                    let {min,max} = token.value;
+                    next.push({type:"O_KEY",value:obj.addSlice(min,max).key});
+                    break;
+                case "N_ACCESSORS":
+                    for(const acc of token.value) {
+                        next.push({type:"O_KEY",value:obj.addKey(acc).key});
+                    }
+                    break;
+                default:
+                    return{action:"continue"};
+            }
+            return {action:"continue",override_tokens:next};
+        }
+    }
+
     static EventMetaSym = Symbol("eventMeta");
 
     constructor () {
         this.trie = new TrieNode();
+        this.signals = new Map();
+    }
+
+    /**
+     * @param {string} name 
+     * @param {Listener} listener 
+     */
+    addSignalListener(name,listener) {
+        if(thie.signals.has(name)) {
+            this.signals.get(name).push(listener);
+        } else {
+            this.signals.set(name,[listener]);
+        }
+    }
+
+    /**
+     * @param {string} name 
+     * @param {Listener} listener 
+     */
+    removeSignalListener(name,listener) {
+        if(thie.signals.has(name)) {
+            /** @type {Listener[]} */
+            const listeners = this.signals.get(name);
+            const idx = listeners.indexOf(listener);
+            return listeners.splice(idx,1)[0];
+        }
+    }
+
+    getSignalListeners(name) {
+        return this.signals.get(name);
+    }
+
+    emitSignal(name) {
+        if(this.signals.has(name)) {
+            for(const listener of this.signals.get(name))
+                listener.trigger();
+        }
     }
 
     /**
      * 
      * @param {string} type 
      * @param {Path} target
-     * @param {() => void} callback
+     * @param {Listener} listener
      */
-    addListener(type,target,callback) {
+    addListener(type,target,listener) {
+        if((listener instanceof Function))
+            listener = new Listener(listener);
+        else if(!listener instanceof Listener)
+            return undefined;
+
         const path = Path.pathTo(target);
         path.origin = this.trie;
-        path.resolve({
+        return path.resolve({
             flat:true,
+            wrapResults:false,
             forwardHandler: (params) => {
                 const {obj,token} = params;
-                if(obj instanceof TrieNode) {
-                    let next = [];
-                    switch(token.type) {
-                        case "O_WILDCARD": 
-                        case "A_WILDCARD":
-                            obj.addWildcard();
-                            break;
-                        case "O_KEY":
-                            obj.addKey(token.value);
-                            break;
-                        case "A_LIST":
-                            for(const idx of token.value) {
-                                obj.addKey(idx);
-                            }
-                            break;
-                        case "A_SLICE":
-                            let {min,max} = token.value;
-                            obj.addSlice(min,max);
-                            break;
-                        case "N_ACCESSORS":
-                            for(const acc in token.value) {
-                                obj.addKey(acc);
-                            }
-                            break;
-                        case "END": 
-                            obj.addListener(type,callback);
-                            return {override_objs:obj.getListeners()};
-                    }
+                if(obj instanceof TrieNode && token.type === "END") {
+                    obj.addListener(type,listener);
+                    return {override_objs:obj.getListeners()};
                 }
-                return EventBus.triePathWalkHandler(params);
+                return EventBus.triePathBuildHandler(params);
             }
-        }).map(x => x.result);
+        });
     }
 
     /**
@@ -486,33 +596,36 @@ export class EventBus {
         path.origin = this.trie;
         return path.resolve({
             flat:true,
+            wrapResults:false,
             forwardHandler: (params) => {
-                if(params.token.type === "END")
-                    return {override_objs:params.obj?.getListeners(type)};
+                const {obj,token} = params;
+                if(obj instanceof TrieNode && token.type === "END")
+                    return {override_objs:obj.getListeners(type)};
                 return EventBus.triePathWalkHandler(params);
             }
-        }).map(x => x.result);
+        });
     }
 
     /**
      * 
      * @param {string} type 
      * @param {Path} target
-     * @param {() => void} ogcallback original reference to callback registered
+     * @param {Listener} oglistener original reference to Listener registered
      */
-    removeListener(type,target,ogcallback) {
+    removeListener(type,target,oglistener) {
         const _path = Path.pathTo(target); // re-origin path to this trie
         _path.origin = this.trie;
         return _path.resolve({
             flat:true,
+            wrapResults:false,
             forwardHandler: (params) => {
                 const {obj,token} = params;
                 if(token.type === "END") {
-                    return {override_objs:[obj.removeListener(type,ogcallback)]}
+                    return {override_objs:[obj.removeListener(type,oglistener)]}
                 }
                 return EventBus.triePathWalkHandler(params);
             }
-        }).map(x => x.result);
+        });
     }
 
     /**
@@ -525,52 +638,107 @@ export class EventBus {
         const path = Path.pathTo(target);
         if(path == undefined) return;
         
-        const arraySizes = new Map();
-        path.resolve({
-            forwardHandler:(params) => {
-                const {obj,token,context,accessor} = params;
-
-                if(!(obj instanceof Object))
-                    return {action:"skip"};
+        return path.resolve({
+            flat:true,
+            wrapResults:false,
+            forwardHandler:(context) => {
+                const {obj,token,accessor,prevContext} = context;
+                
 
                 if(token.type === "T_ROOT") {
                     return {action:"continue"};
                 }
 
                 let trieMatches = [];
-                /** @type {TrieNode[]} */
                 
-                if(Path.isRoot(obj)) {
+                if(obj === path.origin) {
                     trieMatches = [this.trie];
                 } else {
-                    let trieCtx = context?.[EventBus.EventMetaSym];
+                    /** @type {TrieNode[]} */
+                    let trieCtx = prevContext?.[EventBus.EventMetaSym];
                     if(!Array.isArray(trieCtx))
-                        return {action:"continue"};
+                        return {action:"skip"};
 
                     for(const trieNode of trieCtx) {
-                        const arrlen = Array.isArray(context) ? context.length : null;
-                        if(accessor != null)
-                            trieMatches.push(...trieNode.getMatches(accessor,arrlen));
+                        if(accessor != null) {
+                            if(Array.isArray(prevContext.obj)) {
+                                trieMatches.push(...trieNode.getIdx(accessor, prevContext.obj.length));
+                            } else {
+                                trieMatches.push(...trieNode.getKey(accessor));
+                            }
+                        }
                     }
-                }               
+                } 
 
                 if(token.type === "END"){
                     const results = [];
                     for(const trieNode of trieMatches) {
-                        for(const listener of trieNode.getListeners(type))
-                            results.push(listener());
+                        results.push(...trieNode.triggerListeners(type))
                     }
                     return {override_objs:results};
                 }
 
-                obj[EventBus.EventMetaSym] = trieMatches;
+                context[EventBus.EventMetaSym] = trieMatches; 
                 return {action:"continue"};
+            }
+        });
+    }
 
-            },
-            reverseHandler: (params) => {
-                const {obj,token,context,accessor} = params;
-                if(obj instanceof Object && EventBus.EventMetaSym in obj)
-                    obj[EventBus.EventMetaSym] = null; //cleanup
+    /**
+     * 
+     * @param {string} type 
+     * @param {Object|Path} target 
+     * @param {any} dataObj
+     * @returns {any[]} Array of results of setting data.
+     */
+    setData(tag,target,dataObj) {
+        const path = Path.pathTo(target); // re-origin path to this trie
+        path.origin = this.trie;
+        return path.resolve({
+            flat:true,
+            wrapResults:false,
+            forwardHandler: (params) => {
+                const {obj,token} = params;
+                if(obj instanceof TrieNode && token.type === "END") {
+                    return {override_objs:obj.setData(tag,dataObj)};
+                }
+                return EventBus.triePathBuildHandler(params);
+            }
+        });
+    }
+
+    /**
+     * 
+     * @param {string} type 
+     * @param {Object|Path} target 
+     * @returns {any[]} Array of results of data retrieval.
+     */
+    getData(tag,target) {
+        const path = Path.pathTo(target); 
+        path.origin = this.trie; // re-origin path to this trie
+        return path.resolve({
+            flat:true,
+            wrapResults:false,
+            forwardHandler: (params) => {
+                const {obj, token} = params;
+                if(obj instanceof TrieNode && token.type === "END")
+                    return {override_objs:obj.getData(tag)};
+                return EventBus.triePathWalkHandler(params);
+            }
+        });
+    }
+
+    deleteData(tag,target) {
+        const path = Path.pathTo(target); 
+        path.origin = this.trie; // re-origin path to this trie
+        return path.resolve({
+            flat:true,
+            wrapResults:false,
+            forwardHandler: (params) => {
+                const {obj, token} = params;
+                if(obj instanceof TrieNode && token.type === "END")
+                    return {override_objs:obj.deleteData(tag)};
+                return EventBus.triePathWalkHandler(params);
             }
         });
     }

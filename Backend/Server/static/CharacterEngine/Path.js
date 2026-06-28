@@ -113,8 +113,8 @@ export class Path {
      *  obj:(Object|Array), 
      *  token: Token, 
      *  isLeaf: boolean,
-     *  context: (Object|Array),
-     *  accessor: Symbol|string|number
+     *  accessor: Symbol|string|number,
+     *  prevContext: {obj:(Object|Array),token:Token,isLeaf:boolean,accessor:Symbol|string|number}
      * }} handlerParams
      * @param {Object} options
      * @returns {ResolutionDecision} 
@@ -533,14 +533,14 @@ export class Path {
     }
 
     /** @type {ResolutionForwardHandler} */
-    static buildHandler({obj, token, isLeaf}, options = {}) {
-        const {factory:newFactory = () => null} = options;
+    static buildHandler({obj, token, isLeaf}, options) {
+        const {factory:newFactory = (() => null)} = options ?? {};
         if(obj == null) return {action:"continue"};
 
         const objPath = Path.pathTo(obj)
 
         const buildNew = (parent,type) => {
-            let newobj = newFactory(parent,type);
+            let newobj = null;
             switch(type) {
                 case "object":
                     if(!(newobj instanceof Object))
@@ -552,10 +552,10 @@ export class Path {
                     break;
                 case "node":
                     if(newobj == null) // TODO: change later
-                        newobj = {__type:"data",value:0,max:null,min:null};
+                        newobj = {__type:"data",accessors:{value:0,max:null,min:null}};
                     break;
                 default:
-                    newobj = null
+                    newobj = newFactory(parent,type); 
             }
             if(
                 newobj instanceof Object 
@@ -851,7 +851,8 @@ export class Path {
             forwardHandler = null, 
             reverseHandler = null,
             handlerOptions = null,
-            flat = false
+            flat = false,
+            wrapResults = true,
         } = options;
         
         // Some high scope variables to preserve forward handler control 
@@ -958,21 +959,25 @@ export class Path {
         }
 
         function buildResult(collected = false, result = null,context = null,accessor = null) {
-            return {__type:"pathResult",result,context,accessor,collected}
+            if(wrapResults) return {__type:"pathResult",result,context,accessor,collected}
+            return result;
         }
 
-        const recursor = (currentRoot,tokens = this.tokens, cursor=0, prevRoot = null, accessor = null) => {
+        const recursor = (currentRoot,tokens = this.tokens, cursor=0, accessor = null, prevContext = {obj:null,token:null,isLeaf:false,accessor:null}) => {
             if(stopResolution) return;
 
-            const handlerParams = (forwardHandler != null || reverseHandler != null) 
-                ? {
+            if(prevContext == undefined) {
+                prevContext = {obj:null,token:null,isLeaf:false,accessor:null};
+                throw Error("Prev Context not defined")
+            }
+
+            const handlerCtx = {
                     obj:currentRoot, 
                     token:tokens[cursor] ?? {type:"END",value:null,containerType:null}, 
                     isLeaf:cursor >= tokens.length - 1,
-                    context: prevRoot,
-                    accessor: accessor
+                    accessor: accessor,
+                    prevContext: prevContext,
                 }
-                : null;
 
             
             
@@ -982,7 +987,7 @@ export class Path {
             let skipToken = false; 
             
             if(forwardHandler != null) {
-                const decision = forwardHandler(handlerParams,handlerOptions);
+                const decision = forwardHandler(handlerCtx,handlerOptions);
                 
                 if(decision?.override_objs != undefined) {
                     nextRoots = decision.override_objs;
@@ -997,7 +1002,7 @@ export class Path {
                         returnEarly = true;
                         break;
                     case "collect":
-                        llpush(buildResult(true,currentRoot,prevRoot,accessor))
+                        llpush(buildResult(true,currentRoot,prevContext?.obj,accessor))
                         break;
 
                     case "skip_token":
@@ -1022,11 +1027,11 @@ export class Path {
             // end conditions
             if(cursor >= tokens.length || returnEarly) {
                 if(reverseHandler != null) {
-                    reverseHandler(handlerParams,handlerOptions);
+                    reverseHandler(handlerCtx,handlerOptions);
                 }
 
                 for(const rval of nextRoots) {
-                    llpush(buildResult(returnEarly,rval,prevRoot,accessor));
+                    llpush(buildResult(returnEarly,rval,prevContext?.obj,accessor));
                 }
                 return;
             }
@@ -1073,7 +1078,7 @@ export class Path {
                                 _currentRoot = newRoot;
                             }
                         }
-                        recursor(_currentRoot,tokens,cursor+1,_prevRoot,null);
+                        recursor(_currentRoot,tokens,cursor+1,null,handlerCtx);
                         break;
                     case T_BACK:
                         let _parent = _currentRoot?.[Symbol.for("parent")];
@@ -1085,9 +1090,9 @@ export class Path {
                             _parent = _parent?.[Symbol.for("parent")]
                         }
                         if(_parent != undefined) {
-                            recursor(_parent,tokens,cursor+1,_currentRoot,Symbol.for("parent"));
+                            recursor(_parent,tokens,cursor+1,Symbol.for("parent"),handlerCtx);
                         } else {
-                            recursor(_currentRoot,tokens,cursor+1,_currentRoot,Symbol.for("parent"));
+                            recursor(_currentRoot,tokens,cursor+1,Symbol.for("parent"),handlerCtx);
                         }
                         break;
                     case O_KEY:
@@ -1095,7 +1100,7 @@ export class Path {
                             if(token.value in Object.prototype) {
                                 return llpush(undefined); // stop prototype pollution attacks
                             }
-                            recursor(_currentRoot[token.value],tokens,cursor+1,_currentRoot,token.value);
+                            recursor(_currentRoot[token.value],tokens,cursor+1,token.value,handlerCtx);
                         }
                         break;
                     case O_WILDCARD:
@@ -1104,7 +1109,7 @@ export class Path {
                             /** @type {Array<string>} */
                             const keys = Object.keys(_currentRoot).filter((val) => !val.startsWith("__"));
                             keys.forEach((key) => {
-                                recursor(_currentRoot[key],tokens,cursor+1,_currentRoot,key);
+                                recursor(_currentRoot[key],tokens,cursor+1,key,handlerCtx);
                             });
                             llpushClose();
                         }
@@ -1113,7 +1118,7 @@ export class Path {
                         if(Array.isArray(_currentRoot)) {
                             llpushOpen();
                             token.value.forEach(idx => {
-                                recursor(_currentRoot.at(idx),tokens,cursor+1,_currentRoot,idx);
+                                recursor(_currentRoot.at(idx),tokens,cursor+1,idx,handlerCtx);
                             });
                             llpushClose();
                         }
@@ -1123,7 +1128,7 @@ export class Path {
                             llpushOpen();
                             const bounds = token.value;
                             _currentRoot.slice(bounds.min,bounds.max).forEach((item,idx) => {
-                                recursor(item,tokens,cursor+1,_currentRoot,idx+(bounds.min ?? 0));
+                                recursor(item,tokens,cursor+1,idx+(bounds.min ?? 0,handlerCtx));
                             });
                             llpushClose(true);
                         }
@@ -1132,7 +1137,7 @@ export class Path {
                         if(Array.isArray(_currentRoot)) {
                             llpushOpen(true);
                             _currentRoot.forEach((item,idx) => {
-                                recursor(item,tokens,cursor+1,_currentRoot,idx);
+                                recursor(item,tokens,cursor+1,idx,handlerCtx);
                             })
                             llpushClose();
                         }
@@ -1141,7 +1146,7 @@ export class Path {
                         if(_currentRoot instanceof BaseNode) {
                             llpushOpen();
                             token.value.forEach(_accessor => {
-                                recursor(_currentRoot.accessors[_accessor],tokens,cursor+1,_currentRoot,_accessor);
+                                recursor(_currentRoot.accessors[_accessor],tokens,cursor+1,_accessor,handlerCtx);
                             });
                             llpushClose();
                         } else {
@@ -1155,28 +1160,28 @@ export class Path {
                             llpushOpen();
 
                             for(const _tokens of token.value) {
-                                recursor(_currentRoot,[..._tokens,...tokensRest],0,prevRoot,accessor);
+                                recursor(_currentRoot,[..._tokens,...tokensRest],0,accessor,handlerCtx);
                                 if(stopResolution) break;
                             }
                             llpushClose();
                         }
                         break;
                     default:
-                        recursor(_currentRoot,tokens,cursor+1,prevRoot,accessor); // skip token
+                        recursor(_currentRoot,tokens,cursor+1,accessor,handlerCtx); // skip token
                         break;  
                 }
             }
 
             if(nextRoots.length > 1) llpushOpen();
             for(const nextRoot of nextRoots) {
-                if(skipToken) recursor(nextRoot,tokens,cursor+1,currentRoot,accessor);
+                if(skipToken) recursor(nextRoot,tokens,cursor+1,accessor,handlerCtx);
                 else {
                     for(const token of nextTokens) {
                         _resolveToken(nextRoot,token);
                     }
                 }
                 if(reverseHandler != null) {
-                    reverseHandler({...handlerParams,obj:nextRoot},handlerOptions);
+                    reverseHandler({...handlerCtx,obj:nextRoot},handlerOptions);
                 }
             }
             if(nextRoots.length > 1) llpushClose();
