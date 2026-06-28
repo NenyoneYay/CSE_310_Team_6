@@ -17,8 +17,10 @@ export class Listener {
     }
 
     trigger() {
-        if(!this.locked)
+        if(!this.locked) {
+            console.log(`Listener triggered!`);
             return this.callback.apply(this.applier,this.args);
+        }
         return undefined;
     }
 
@@ -572,18 +574,19 @@ export class EventBus {
 
         const path = Path.pathTo(target);
         path.origin = this.trie;
-        return path.resolve({
+        path.resolve({
             flat:true,
             wrapResults:false,
             forwardHandler: (params) => {
                 const {obj,token} = params;
                 if(obj instanceof TrieNode && token.type === "END") {
                     obj.addListener(type,listener);
-                    return {override_objs:obj.getListeners()};
+                    return {override_objs:[listener]};
                 }
                 return EventBus.triePathBuildHandler(params);
             }
         });
+        return listener;
     }
 
     /**
@@ -638,6 +641,8 @@ export class EventBus {
         const path = Path.pathTo(target);
         if(path == undefined) return;
         
+        console.log(`Emitting '${type}' event to '${path.str}'`);
+
         return path.resolve({
             flat:true,
             wrapResults:false,

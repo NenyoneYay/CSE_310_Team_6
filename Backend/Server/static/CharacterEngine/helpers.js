@@ -116,7 +116,7 @@ export function compareObj(obj1, obj2, keyWhitelist = []) {
         return true;
     }
 
-    rval = true;
+    let rval = true;
     obj1[Symbol.for("compareObj_visited")] = true;
     obj2[Symbol.for("compareObj_visited")] = true;
     for(const key of Object.keys({...obj1,...obj2})) {

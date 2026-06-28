@@ -1,6 +1,7 @@
 import {Path} from "./Path.js";
 import {ExprValue} from "./ExprValue.js";
 import {compareObj, sanatizeKey} from "./helpers.js";
+import { EventBus, Listener } from "./EventBus.js";
 
 export class Container {
     static defaultDataObj = {
@@ -93,6 +94,9 @@ export class BaseNode {
             value: dataVal
         };
         this.passThrough = undefined;
+
+        /** @type {EventBus|undefined} */
+        this.evBus = undefined;
 
         // dependents and precedents are mapped directly to nodes after
         // the character data tree is constructed. Maps are used to 
@@ -240,11 +244,18 @@ export class BaseNode {
             if(!this.dirty){
                 this.dirty = true;
             }
-            for (let node of this.dependents.keys()) {
-                if (node instanceof BaseNode) {
-                    node.setDirty()
-                }
-            }
+            // for (let node of this.dependents.keys()) {
+            //     if (node instanceof BaseNode) {
+            //         node.setDirty()
+            //     }
+            // }
+            
+            // // if made async, please await this call so that loops can be
+            // // detected.
+            const stale_accessors = {...this.accessors}
+            this.evaluate();
+            if(!compareObj(this.accessors,stale_accessors))
+                this.evBus?.emit("change",this);
         } catch (e){
             this.isErrorSrc = false;
             this.error = e.message;
@@ -259,10 +270,11 @@ export class BaseNode {
             this.dirty = false;
             
             try {
-                for(let dependent of this.dependents.keys()) {
-                    if (dependent instanceof BaseNode)
-                        dependent.evaluate();
-                }
+                // for(let dependent of this.dependents.keys()) {
+                //     if (dependent instanceof BaseNode)
+                //         dependent.evaluate();
+                // }
+                //this.evBus?.emit("change",this);
             } catch (e) {
                 this.isErrorSrc = false;
                 this.error = e.message;
@@ -280,8 +292,14 @@ export class BaseNode {
     }
 
     evaluateDependencies() {
+        this.evBus = Path.findRoot(this)[Symbol.for("EventBus")];
         this.dependencyModifications.forEach((mod) => {
             if(mod == null || mod.path == null || mod.type == null) return;
+
+            this.evBus.addListener("change",mod.path,new Listener(this.setDirty,{applier: this}))
+            //this.evBus.addListener("change",mod.path,new Listener(this.evaluate,{applier: this}))
+            
+            return;
             //Update Path
             const resolvedPaths = mod.path.resolve({flat:true}) ?? null;
             
@@ -591,7 +609,10 @@ export class DataNode extends BaseNode {
     set({value=undefined,min=undefined,max=undefined}) {
         if(!this[Symbol.for("virtual")]) {
             let success = false;
-            if(value != undefined) if(this.value.set(value)) success = true;
+            if(value != undefined) {
+                if(this.value.set(value)) 
+                    success = true;
+            }
             if(min != undefined) if(this.min.set(min)) success = true;
             if(max != undefined) if(this.max.set(max)) success = true;
             if(success) {

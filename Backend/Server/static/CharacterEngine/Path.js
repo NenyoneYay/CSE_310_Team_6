@@ -16,9 +16,9 @@ var  N_ACCESSORS = 'N_ACCESSORS';
 switch(token.type) {
     case 'T_ROOT'     :
         break;
-    case 'O_WILDCARD' :
-        break;
     case 'T_BACK'     :
+        break;
+    case 'O_WILDCARD' :
         break;
     case 'O_KEY'      :
         break;
@@ -31,6 +31,8 @@ switch(token.type) {
     case 'T_GROUP'    :
         break;
     case 'N_ACCESSORS':
+        break;
+    case 'END'        :
         break;
     default:
 
@@ -551,6 +553,7 @@ export class Path {
                         newobj = [];
                     break;
                 case "node":
+                    newobj = newFactory(parent,type);
                     if(newobj == null) // TODO: change later
                         newobj = {__type:"data",accessors:{value:0,max:null,min:null}};
                     break;
@@ -972,12 +975,12 @@ export class Path {
             }
 
             const handlerCtx = {
-                    obj:currentRoot, 
-                    token:tokens[cursor] ?? {type:"END",value:null,containerType:null}, 
-                    isLeaf:cursor >= tokens.length - 1,
-                    accessor: accessor,
-                    prevContext: prevContext,
-                }
+                obj:currentRoot, 
+                token:tokens[cursor] ?? {type:"END",value:null,containerType:null}, 
+                isLeaf:cursor >= tokens.length - 1,
+                accessor: accessor,
+                prevContext: prevContext,
+            }
 
             
             
