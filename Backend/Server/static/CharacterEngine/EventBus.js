@@ -22,10 +22,14 @@ function matchIdxPattern(pattern, key, arrlen = null) {
     const ge = (x,y) => ((x < 0 !== y < 0) ? x < 0 : x >= y); // >=
     const gt = (x,y) => ((x < 0 !== y < 0) ? x < 0 : x > y);  // >
 
-    const idxAdjust = arrlen > 0 ? 0 : arrlen;
-    let pmin = parseInt(pm[1]) + idxAdjust;
-    let pmax = parseInt(pm[2]) + idxAdjust;
-    let pidx = parseInt(pm[3]) + idxAdjust;
+    const idxAdjust = (arrlen == null || arrlen < 0) ? 0 : arrlen;
+    let pmin = parseInt(pm[1]);
+    let pmax = parseInt(pm[2]);
+    let pidx = parseInt(pm[3]);
+    if(pmin < 0) pmin += idxAdjust;
+    if(pmax < 0) pmax += idxAdjust;
+    if(pidx < 0) pidx += idxAdjust;
+    
     if(!isNaN(arrlen)){
         if(!isNaN(pmin) && pmin < 0) pmin = 0;
         if(!isNaN(pmax) && pmax < 0)pmax = 0;
@@ -33,18 +37,21 @@ function matchIdxPattern(pattern, key, arrlen = null) {
     if(!isNaN(pmin) && !isNaN(pmax) && ge(pmax,pmin))
         return false;
 
-    let idx = NaN;
+    let kidx = NaN;
     let kmin = NaN;
     let kmax = NaN;
     
     if(typeof(key) === "number") {
-        idx = key + idxAdjust;
+        kidx = key + (key < 0) * idxAdjust;
     } else if(typeof(key) === "string") {
         const km = key.match(sliceRegEx);
         if(km == null) return false;
-        kmin = parseInt(km[1]) + idxAdjust;
-        kmax = parseInt(km[2]) + idxAdjust;
-        idx = parseInt(km[3]) + idxAdjust;
+        kmin = parseInt(km[1]);
+        kmax = parseInt(km[2]);
+        kidx = parseInt(km[3]);
+        if(kmin < 0) kmin += idxAdjust;
+        if(kmax < 0) kmax += idxAdjust;
+        if(kidx < 0) kidx += idxAdjust;
 
         if(!isNaN(arrlen)){
             if(!isNaN(kmin) && kmin < 0) kmin = 0;
@@ -54,22 +61,19 @@ function matchIdxPattern(pattern, key, arrlen = null) {
             return false;
     }
 
-
     if(!isNaN(pidx)) {
-        if (!isNaN(idx) && pidx === idx) {
-            return true;
-        } else if((isNaN(kmin) || ge(pidx,kmin)) && (isNaN(kmax) || gt(kmax,pidx))){
-            return true;
+        if (!isNaN(kidx)) {
+            return pidx === kidx;
+        } else {
+            return (isNaN(kmin) || ge(pidx,kmin)) && (isNaN(kmax) || gt(kmax,pidx));
         }
     } else {
-        if(!isNaN(idx)) {
-            if((isNaN(pmin) || ge(idx,pmin)) && (isNaN(pmax) || gt(pmax,idx)))
-                return true;
+        if(!isNaN(kidx)) {
+            return (isNaN(pmin) || ge(kidx,pmin)) && (isNaN(pmax) || gt(pmax,kidx));
         } else {
             const ltMax = (isNaN(pmax) || isNaN(kmin) || gt(pmax,kmin));
             const gtMin = (isNaN(pmin) || isNaN(kmax) || gt(kmax,pmin));
-            if(gtMin && ltMax)
-                return true;
+            return gtMin && ltMax;
         }
     }
 
@@ -77,6 +81,9 @@ function matchIdxPattern(pattern, key, arrlen = null) {
 }
 
 class TrieNode {
+
+    static WildcardSym = Symbol("wildcard");
+
     constructor () {
         this[Symbol.for("eventData")] = new Map();
         this[Symbol.for("eventListeners")] = new Map();
@@ -117,8 +124,8 @@ class TrieNode {
         if(sKey in this)
             matches.push(this[sKey]);
 
-        if(Symbol.for("wildcard") in this)
-            matches.push(this[Symbol.for("wildcard")]);
+        if(TrieNode.WildcardSym in this)
+            matches.push(this[TrieNode.WildcardSym]);
         return matches;
     }
 
@@ -135,8 +142,8 @@ class TrieNode {
         if(sKey in this)
             matches.push(sKey);
 
-        if(Symbol.for("wildcard") in this)
-            matches.push(Symbol.for("wildcard"));
+        if(TrieNode.WildcardSym in this)
+            matches.push(TrieNode.WildcardSym);
         return matches;
     }
 
@@ -152,8 +159,8 @@ class TrieNode {
             if(matchIdxPattern(key,idx,arrlen))
                 matches.push(this[key]);
         }
-        if(Symbol.for("wildcard") in this)
-            matches.push(this[Symbol.for("wildcard")]);
+        if(TrieNode.WildcardSym in this)
+            matches.push(this[TrieNode.WildcardSym]);
         return matches;
     }
 
@@ -169,8 +176,8 @@ class TrieNode {
             if(matchIdxPattern(key,idx,arrlen))
                 matches.push(key);
         }
-        if(Symbol.for("wildcard") in this)
-            matches.push(Symbol.for("wildcard"));
+        if(TrieNode.WildcardSym in this)
+            matches.push(TrieNode.WildcardSym);
         return matches;
     }
 
@@ -179,7 +186,7 @@ class TrieNode {
      * @returns {TrieNode}
      */
     addWildcard() {
-        return this.addKey(Symbol.for("wildcard"));
+        return this.addKey(TrieNode.WildcardSym);
     }
 
     /**
@@ -191,8 +198,8 @@ class TrieNode {
         for(const value of Object.values(this)) {
             matches.push(value);
         }
-        if(Symbol.for("wildcard") in this)
-            matches.push(this[Symbol.for("wildcard")]);
+        if(TrieNode.WildcardSym in this)
+            matches.push(this[TrieNode.WildcardSym]);
         return matches;
     }
 
@@ -205,8 +212,8 @@ class TrieNode {
         for(const key of Object.keys(this)) {
             matches.push(key);
         }
-        if(Symbol.for("wildcard") in this)
-            matches.push(Symbol.for("wildcard"));
+        if(TrieNode.WildcardSym in this)
+            matches.push(TrieNode.WildcardSym);
         return matches;
     }
 
@@ -234,8 +241,8 @@ class TrieNode {
             if(matchIdxPattern(key,str,arrlen))
                 matches.push(this[key]);
         }
-        if(Symbol.for("wildcard") in this)
-            matches.push(this[Symbol.for("wildcard")]);
+        if(TrieNode.WildcardSym in this)
+            matches.push(this[TrieNode.WildcardSym]);
         return matches;
     }
 
@@ -253,8 +260,8 @@ class TrieNode {
             if(matchIdxPattern(key,str,arrlen))
                 matches.push(key);
         }
-        if(Symbol.for("wildcard") in this)
-            matches.push(Symbol.for("wildcard"));
+        if(TrieNode.WildcardSym in this)
+            matches.push(TrieNode.WildcardSym);
         return matches;
     }
 
@@ -276,8 +283,8 @@ class TrieNode {
                 matches.push(this[_key]);
             }
         }
-        if(Symbol.for("wildcard") in this)
-            matches.push(this[Symbol.for("wildcard")]);
+        if(TrieNode.WildcardSym in this)
+            matches.push(this[TrieNode.WildcardSym]);
         return matches;
     }
 
@@ -299,8 +306,8 @@ class TrieNode {
                 matches.push(_key);
             }
         }
-        if(Symbol.for("wildcard") in this)
-            matches.push(this[Symbol.for("wildcard")]);
+        if(TrieNode.WildcardSym in this)
+            matches.push(this[TrieNode.WildcardSym]);
         return matches;
     }
 
@@ -541,7 +548,7 @@ export class EventBus {
                         return {action:"continue"};
 
                     for(const trieNode of trieCtx) {
-                        const arrlen = Array.isArray(obj) ? obj.length : null;
+                        const arrlen = Array.isArray(context) ? context.length : null;
                         if(accessor != null)
                             trieMatches.push(...trieNode.getMatches(accessor,arrlen));
                     }

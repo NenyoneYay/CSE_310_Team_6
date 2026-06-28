@@ -1123,7 +1123,7 @@ export class Path {
                             llpushOpen();
                             const bounds = token.value;
                             _currentRoot.slice(bounds.min,bounds.max).forEach((item,idx) => {
-                                recursor(item,tokens,cursor+1,_currentRoot,idx);
+                                recursor(item,tokens,cursor+1,_currentRoot,idx+(bounds.min ?? 0));
                             });
                             llpushClose(true);
                         }
