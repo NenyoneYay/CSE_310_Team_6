@@ -1,4 +1,4 @@
-import {Path} from "./Path.js";
+import {Path, PathToken} from "./Path.js";
 import { sanatizeKey } from "./helpers.js";
 
 
@@ -451,31 +451,31 @@ export class EventBus {
             case "A_WILDCARD":
             case "O_WILDCARD":
                 for(const key of obj.getWildcardKeys())
-                    next.push({type:"O_KEY",value:key});
+                    next.push(new PathToken("O_KEY",key));
                 break;
 
             case "O_KEY":
                 for(const key of obj.getKeyKeys(token.value))
-                    next.push({type:"O_KEY",value:key});
+                    next.push(new PathToken("O_KEY",key));
                 break;
 
             case "A_LIST":
                 for(const idx of token.value){
                     for(const key of obj.getIdxKeys(idx)) {
-                        next.push({type:"O_KEY",value:key});
+                        next.push(new PathToken("O_KEY",key));
                     }
                 }
                 break;
 
             case "A_SLICE": 
                 for(const key of obj.getSliceKeys(token.value.min,token.value.max)) {
-                    next.push({type:"O_KEY",value:key});
+                    next.push(new PathToken("O_KEY",key));
                 }
                 break;
             case "N_ACCESSORS":
                 for(const acc of token.value)
                     for(const key of obj.getKeyKeys(acc))
-                        next.push({type:"O_KEY",value:key});
+                        next.push(new PathToken("O_KEY",key));
                 break;
             case "T_ROOT":
             default:
@@ -491,23 +491,23 @@ export class EventBus {
             switch(token.type) {
                 case "O_WILDCARD": 
                 case "A_WILDCARD":
-                    next.push({type:"O_KEY",value:obj.addWildcard().key});
+                    next.push(new PathToken("O_KEY",obj.addWildcard().key));
                     break;
                 case "O_KEY":
-                    next.push({type:"O_KEY",value:obj.addKey(token.value).key});
+                    next.push(new PathToken("O_KEY",obj.addKey(token.value).key));
                     break;
                 case "A_LIST":
                     for(const idx of token.value) {
-                        next.push({type:"O_KEY",value:obj.addKey(idx).key});
+                        next.push(new PathToken("O_KEY",obj.addKey(idx).key));
                     }
                     break;
                 case "A_SLICE":
                     let {min,max} = token.value;
-                    next.push({type:"O_KEY",value:obj.addSlice(min,max).key});
+                    next.push(new PathToken("O_KEY",obj.addSlice(min,max).key));
                     break;
                 case "N_ACCESSORS":
                     for(const acc of token.value) {
-                        next.push({type:"O_KEY",value:obj.addKey(acc).key});
+                        next.push(new PathToken("O_KEY",obj.addKey(acc).key));
                     }
                     break;
                 default:
@@ -579,7 +579,7 @@ export class EventBus {
             wrapResults:false,
             forwardHandler: (params) => {
                 const {obj,token} = params;
-                if(obj instanceof TrieNode && token.type === "END") {
+                if(obj instanceof TrieNode && token === Path.END_TOKEN) {
                     obj.addListener(type,listener);
                     return {override_objs:[listener]};
                 }
@@ -602,7 +602,7 @@ export class EventBus {
             wrapResults:false,
             forwardHandler: (params) => {
                 const {obj,token} = params;
-                if(obj instanceof TrieNode && token.type === "END")
+                if(obj instanceof TrieNode && token === Path.END_TOKEN)
                     return {override_objs:obj.getListeners(type)};
                 return EventBus.triePathWalkHandler(params);
             }
@@ -623,7 +623,7 @@ export class EventBus {
             wrapResults:false,
             forwardHandler: (params) => {
                 const {obj,token} = params;
-                if(token.type === "END") {
+                if(token === Path.END_TOKEN) {
                     return {override_objs:[obj.removeListener(type,oglistener)]}
                 }
                 return EventBus.triePathWalkHandler(params);
@@ -675,13 +675,17 @@ export class EventBus {
                     }
                 } 
 
-                if(token.type === "END"){
+                if(token === Path.END_TOKEN){
                     const results = [];
                     for(const trieNode of trieMatches) {
                         results.push(...trieNode.triggerListeners(type))
                     }
                     return {override_objs:results};
                 }
+
+                // prune branches that don't have any matching events under them
+                if(trieMatches.length <= 0)
+                    return {action:"skip"}; 
 
                 context[EventBus.EventMetaSym] = trieMatches; 
                 return {action:"continue"};
@@ -704,7 +708,7 @@ export class EventBus {
             wrapResults:false,
             forwardHandler: (params) => {
                 const {obj,token} = params;
-                if(obj instanceof TrieNode && token.type === "END") {
+                if(obj instanceof TrieNode && token === Path.END_TOKEN) {
                     return {override_objs:obj.setData(tag,dataObj)};
                 }
                 return EventBus.triePathBuildHandler(params);
@@ -726,7 +730,7 @@ export class EventBus {
             wrapResults:false,
             forwardHandler: (params) => {
                 const {obj, token} = params;
-                if(obj instanceof TrieNode && token.type === "END")
+                if(obj instanceof TrieNode && token === Path.END_TOKEN)
                     return {override_objs:obj.getData(tag)};
                 return EventBus.triePathWalkHandler(params);
             }
@@ -741,7 +745,7 @@ export class EventBus {
             wrapResults:false,
             forwardHandler: (params) => {
                 const {obj, token} = params;
-                if(obj instanceof TrieNode && token.type === "END")
+                if(obj instanceof TrieNode && token === Path.END_TOKEN)
                     return {override_objs:obj.deleteData(tag)};
                 return EventBus.triePathWalkHandler(params);
             }

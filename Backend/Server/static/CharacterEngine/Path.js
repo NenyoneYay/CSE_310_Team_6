@@ -11,6 +11,7 @@ var  A_WILDCARD  = 'A_WILDCARD';
 var  T_GROUP     = 'T_GROUP';
 var  N_ACCESSORS = 'N_ACCESSORS';
 
+
 /* Helpful switch skeleton for comparing tokens
 
 switch(token.type) {
@@ -39,6 +40,112 @@ switch(token.type) {
 }
 
 */
+
+export class PathToken {
+    /**
+     * @param {string} type The type of this token. Determines what to
+     * do with value
+     * @param {any} value Parsed value of token. Can be anything from obj 
+     * references to strings and preocessed arrays
+     * @param {string} containerType Expected container type based on next token
+     */
+    constructor (type,value,containerType = null) {
+        this.type = type;
+        this.value = value;
+        this.containerType = containerType;
+    }
+
+    /**
+     * @param {PathToken} containingToken 
+     */
+    setContainer(containingToken = null) {
+        if(this == undefined) return;
+
+        let containerType = null;
+        switch(containingToken.type) {
+            case O_KEY:
+            case O_WILDCARD:
+                containerType = "object";
+                break;
+            case A_LIST:
+            case A_SLICE:
+            case A_WILDCARD:
+                containerType = "array";
+                break;
+            case N_ACCESSORS:
+                containerType = "node";
+                break;
+        }
+        this.containerType = containerType;
+
+        // handle recursive tokens
+        switch(this.type) {
+            case T_GROUP:
+                for(const gtokens of /** @type {PathToken[][]} */(this.value)) {
+                    gtokens.at(-1).setContainer(containingToken);
+                }
+                break;
+        }
+    }
+
+    getString(isEnd = true, isConcat = false) {
+        /** 
+         * @param {string} pv 
+         * @param {PathToken} cv
+         * */
+        let tokenStr = '';
+        let postfix = '';
+
+        if(isEnd && isConcat) {
+            postfix = (this.type === N_ACCESSORS ? ';' : ',');
+        } else if(!isEnd) {
+            postfix = this.containerType === 'object' ? '.' : '';
+        }
+
+        switch (this.type) {
+            case T_ROOT:
+                return '$';
+                break;
+            case O_WILDCARD:
+                tokenStr = '*';
+                break;
+            case T_BACK:
+                postfix = '';
+            case O_KEY:
+                tokenStr = this.value;
+                break;
+            case A_LIST:
+                tokenStr = `[${this.value.join(',')}]`;
+                break;
+            case A_SLICE:
+                tokenStr = `[${this.value.min === 0 ? '' : this.value.min}:${this.value.max ?? ''}]`;
+                break;
+            case A_WILDCARD:
+                tokenStr = '[*]';
+                break;
+            case T_GROUP:
+                tokenStr = `(${
+                    /** @type {Token[][]} */(this.value).reduce(
+                        (pv,cv,idx,arr) => {
+                            return pv + cv.reduce( (_pv,_cv,_idx,_arr) => {
+                                return _pv + _cv.getString(_idx >= _arr.length-1, idx < arr.length-1);
+                            },'');
+                        }
+                    ,'')
+                })`;
+                break;
+            case N_ACCESSORS:
+                tokenStr = `#${this.value.join(',')}`;
+                break;
+            default:
+                tokenStr = '';
+        }
+        
+        return tokenStr + postfix;
+    }
+}
+
+
 
 export class Path {
     /* Tokens Regex Group Explination:
@@ -86,9 +193,17 @@ export class Path {
     */
 
     /**
-     * @typedef ResolutionDecision
-     * @property {"continue"|"collect"|"skip"|"stop"} action
-     * @property {Object|Array} override_objs
+     * @typedef ResolutionHandlerDecision
+     * @property {"continue"|"collect"|"return"|"skip"|"skip_token|"stop"} action
+     * @property {Iterable} override_objs
+     * @property {Iterable<PathToken>} override_tokens
+     */
+
+    /**
+     * @typedef {{action:"keep"}
+     * |{action:"discard"}
+     * |{action:"override",value:any}
+     * |{action:"override_many",values:Iterable}} ResolutionResultDecision
      */
 
     /**
@@ -100,43 +215,50 @@ export class Path {
      * 
      */
 
-    /** 
-     * @typedef Token
-     * @property {string} type The type of this token. Determines what to
-     * do with value
-     * @property {any} value Parsed value of token. Can be anything from obj 
-     * references to strings and preocessed arrays
-     * @property {string} containerType Expected container type based on next token
-     */
-
     /**
      * @callback ResolutionForwardHandler
      * @param {{
      *  obj:(Object|Array), 
-     *  token: Token, 
+     *  token: PathToken, 
      *  isLeaf: boolean,
      *  accessor: Symbol|string|number,
-     *  prevContext: {obj:(Object|Array),token:Token,isLeaf:boolean,accessor:Symbol|string|number}
-     * }} handlerParams
+     *  prevContext: {obj:(Object|Array),token:PathToken,isLeaf:boolean,accessor:Symbol|string|number}
+     * }} handlerContext
      * @param {Object} options
-     * @returns {ResolutionDecision} 
+     * @returns {ResolutionHandlerDecision} 
      */
 
     /**
      * @callback ResolutionReverseHandler
      * @param {{
      *  obj:(Object|Array), 
-     *  token: Token, 
+     *  token: PathToken, 
      *  isLeaf: boolean,
-     *  context: (Object|Array),
-     *  accessor: Symbol|string|number
-     * }} handlerParams
+     *  accessor: Symbol|string|number,
+     *  prevContext: {obj:(Object|Array),token:PathToken,isLeaf:boolean,accessor:Symbol|string|number}
+     * }} handlerContext
      * 
      * @param {Object} options
      * @returns {void}
      */
 
-    
+    /**
+     * @callback ResolutionResultHandler
+     * @param {{
+     *  result:any,
+     *  collected: boolean,
+     *  obj:(Object|Array), 
+     *  token: PathToken, 
+     *  isLeaf: boolean,
+     *  accessor: Symbol|string|number,
+     *  prevContext: {obj:(Object|Array),token:PathToken,isLeaf:boolean,accessor:Symbol|string|number}
+     * }} handlerContext
+     * 
+     * @param {Object} options
+     * @returns {ResolutionResultDecision}
+     */
+
+    static END_TOKEN = Object.freeze(new PathToken("END",null));
 
     /**
      * @param {Object|Path} obj 
@@ -166,9 +288,9 @@ export class Path {
                 if(idx >= 0) {
                     const isRoot = obj?.[Symbol.for("parent")] == undefined;
                     originobj = from;
-                    const rval = isRoot ? [{type:T_ROOT,value:"$"}] : []
+                    const rval = isRoot ? [new PathToken(T_ROOT,"$")] : []
                     for(let i = idx;i > 0;i--) {
-                        rval.push({type:T_BACK,value:"."});
+                        rval.push(new PathToken(T_BACK,"."));
                     }
                     return rval;
                 }
@@ -186,18 +308,18 @@ export class Path {
                         if (Array.isArray(parentObj)) {
                             const idx = parentObj.indexOf(obj);
                             if (idx < 0) return undefined;
-                            parentPath.push({type:A_LIST,value:[idx]})
+                            parentPath.push(new PathToken(A_LIST,[idx]))
                         } else {
                             const key = Object.keys(parentObj).find((key) => parentObj[key] === obj);
                             if(key == undefined) return undefined;
-                            parentPath.push({type:O_KEY,value:key});
+                            parentPath.push(new PathToken(O_KEY,key));
                         }
                         return parentPath;
                     }
                 } else {
                     // just return the full absolute path if all else fails.
                     originobj = obj;
-                    return [{type:T_ROOT,value:"$"}]; 
+                    return [new PathToken(T_ROOT,"$")]; 
                 }
             }
             return undefined;
@@ -243,8 +365,8 @@ export class Path {
     }
 
     /**
-     * @param {Token|Token[]|Token[][]} tokens 
-     * @returns {Token|Token[]|Token[][]}
+     * @param {PathToken|PathToken[]|PathToken[][]} tokens 
+     * @returns {PathToken|PathToken[]|PathToken[][]}
      */
     static copyTokens(tokens) {
         const _isValidToken = (token) => {
@@ -278,20 +400,20 @@ export class Path {
                 case A_LIST:
                 case N_ACCESSORS:
                 if(Array.isArray(token.value))
-                    tokenCopy = {type:token.type, value:[...token.value]};
+                    tokenCopy = new PathToken(token.type,[...token.value]);
                 break;
                 case A_SLICE:
-                    tokenCopy = {type:token.type, value:{min: token.value.min, max: token.value.max}}
+                    tokenCopy = new PathToken(token.type,{min: token.value.min, max: token.value.max})
                     break;
                 case T_GROUP:
-                    tokenCopy = {type:token.type, value:_copyTokens(token.value)};
+                    tokenCopy = new PathToken(token.type,_copyTokens(token.value));
                     break;
                 case T_ROOT:
                 case T_BACK:
                 case O_KEY:
                 case A_WILDCARD:
                 default:
-                    tokenCopy = {type:token.type, value:token.value};
+                    tokenCopy = new PathToken(token.type,token.value);
                     break;
             }
             return tokenCopy;
@@ -308,14 +430,15 @@ export class Path {
     }
 
     /** 
-     * @param {string|Path|Token[]} path 
+     * @param {string|Path|PathToken[]} path 
      * @param {Path} origin
+     * @returns {PathToken[][]}
      * */
     static tokenize (path,origin=null) {
         if (path == undefined) path = "";
 
         if (origin instanceof Path) {
-            /** @type {Token[][]}*/
+            /** @type {PathToken[][]}*/
             const allTokens = []
             for(const _tokens of origin.tokens) {
                 // for each grouping of origin tokens, process new path
@@ -326,49 +449,16 @@ export class Path {
             return _processPath(path);
         }
 
-        /**
-         * @param {Token|undefined} token 
-         * @param {string} currentTokenType 
-         */
-        function setTokenContainer(token = undefined, currentTokenType = null) {
-            if(token == undefined) return;
-
-            switch(token.type) {
-                case T_GROUP:
-                    for(const gtokens of token.value) {
-                        setTokenContainer(gtokens.at(-1),currentTokenType);
-                    }
-                    break;
-                default:
-                    let containerType = null;
-                    switch(currentTokenType) {
-                        case O_KEY:
-                        case O_WILDCARD:
-                            containerType = "object";
-                            break;
-                        case A_LIST:
-                        case A_SLICE:
-                        case A_WILDCARD:
-                            containerType = "array";
-                            break;
-                        case N_ACCESSORS:
-                            containerType = "node";
-                            break;
-                    }
-                    token.containerType = containerType;
-            }
-        }
-
         function _processPath(path, originTokens = []) {
-            /** @type {Token[]} */
+            /** @type {PathToken[]} */
             let tokens = [...originTokens];
-            /** @type {Token[][]} */
+            /** @type {PathToken[][]} */
             let allTokens = [tokens];
 
             if (path instanceof Path || Array.isArray(path)) {
                 
                 /**
-                 * @param {Token[]|Token[][]} pathTokens 
+                 * @param {PathToken[]|PathToken[][]} pathTokens 
                  */
                 const _processTokens = (pathTokens) => {
                     for(let idx = 0;idx < pathTokens.length;idx++) {
@@ -401,7 +491,7 @@ export class Path {
                                 break;
                             default:
                                 tokens.push(tokenCopy);
-                                setTokenContainer(prevToken,tokenCopy.type);
+                                prevToken?.setContainer(tokenCopy);
                         }
                     }
                 }
@@ -417,19 +507,8 @@ export class Path {
                 path = ""; // process as empty path if path is invalid;
             }
 
-            /** @type {Token[][][]} */
+            /** @type {PathToken[][][]} */
             const contextStack = [];
-            
-            /**
-             * 
-             * @param {string} type 
-             * @param {any} value 
-             * @param {string} containerType 
-             * @returns {Token}
-             */
-            function token(type, value, containerType = null) {
-                return {type, value, containerType};
-            }
 
             for(let i = 0;i < path.length;) {
                 // If for some reason the string is consumed already, quit now.
@@ -448,7 +527,7 @@ export class Path {
 
 
                 if (m[1] !== undefined) {
-                    tokens = [token(T_ROOT,'$')];
+                    tokens = [new PathToken(T_ROOT,'$')];
                     allTokens.pop();
                     allTokens.push(tokens) // replace all origins with root token
                 }
@@ -459,7 +538,7 @@ export class Path {
                             tokens.pop();
                             prevToken = tokens.at(-1);
                         } else {
-                            tokens.push(token(T_BACK,'.'));
+                            tokens.push(new PathToken(T_BACK,'.'));
                         }
                     }
                 }
@@ -467,18 +546,18 @@ export class Path {
                 else if(m[3] !== undefined) {
                     let key = m[3];
                     if(key === '\\*') key = '*'; // replace escaped \* with *
-                    tokens.push(token(O_KEY,sanatizeKey(key)));
-                    setTokenContainer(prevToken,O_KEY);
+                    tokens.push(new PathToken(O_KEY,sanatizeKey(key)));
+                    prevToken?.setContainer(tokens.at(-1));
                 }
 
                 else if(m[4] !== undefined) {
-                    tokens.push(token(O_WILDCARD,'*'));
-                    setTokenContainer(prevToken,O_WILDCARD);
+                    tokens.push(new PathToken(O_WILDCARD,'*'));
+                    prevToken?.setContainer(tokens.at(-1));
                 }
 
                 else if(m[5] !== undefined) {
-                    tokens.push(token(A_LIST,m[5].split(',').map(x => parseInt(x))));
-                    setTokenContainer(prevToken,A_LIST);
+                    tokens.push(new PathToken(A_LIST,m[5].split(',').map(x => parseInt(x))));
+                    prevToken?.setContainer(tokens.at(-1));
                 }
 
                 else if(m[6] !== undefined) {
@@ -491,18 +570,18 @@ export class Path {
                     if(Number.isNaN(pmin) || Number.isNaN(pmax)) 
                         throw SyntaxError(`Token ${m[6]} at ${i}: Array slice indexes must be numbers.`);
 
-                    tokens.push(token(A_SLICE,{min:pmin,max:pmax}));
-                    setTokenContainer(prevToken,A_SLICE);
+                    tokens.push(new PathToken(A_SLICE,{min:pmin,max:pmax}));
+                    prevToken?.setContainer(tokens.at(-1));
                 }
 
                 else if(m[7] !== undefined) {
-                    tokens.push(token(A_WILDCARD,'*'));
-                    setTokenContainer(prevToken,A_WILDCARD);
+                    tokens.push(new PathToken(A_WILDCARD,'*'));
+                    prevToken?.setContainer(tokens.at(-1));
                 }
 
                 else if(m[8] !== undefined && m[8] !== '') {
-                    tokens.push(token(N_ACCESSORS,m[8].split(',').map(x => sanatizeKey(x))));
-                    setTokenContainer(prevToken,N_ACCESSORS);
+                    tokens.push(new PathToken(N_ACCESSORS,m[8].split(',').map(x => sanatizeKey(x))));
+                    prevToken?.setContainer(tokens.at(-1));
                 }
                     
                 else if (m[9] !== undefined) { //;, (conatenate)
@@ -521,7 +600,7 @@ export class Path {
 
                 else if (m[11] !== undefined) { // )
                     if (contextStack.length <= 0) throw SyntaxError(`Token ${m[11]} at ${i}: Unbalanced Parentheses. Missing opening '('`);
-                    const group_token = token(T_GROUP, allTokens); // store current token context into group token
+                    const group_token = new PathToken(T_GROUP, allTokens); // store current token context into group token
                     allTokens = contextStack.pop(); // pop previous context off the stack to continue where we left off
                     tokens = allTokens.at(-1);
                     tokens.push(group_token);
@@ -737,7 +816,7 @@ export class Path {
 
     /**
      * 
-     * @param {string|Path|Array<{type:string,value:any}>} path 
+     * @param {string|Path|Array<PathToken>} path 
      * @param {Path|Object} origin
      */
     constructor(path = "", origin=null) {
@@ -753,7 +832,7 @@ export class Path {
         }
 
         // tokenize the path syntax from path
-        /** @type {Token[][]} */
+        /** @type {PathToken[][]} */
         this.tokens = Path.tokenize(path, origin);
         this.str = this.buildString();
 
@@ -764,57 +843,52 @@ export class Path {
      * @returns {string} Returns string representation of this path including unresolved wildcards
      */
     buildString() {
-        let prevTType = null;
-        /** 
-         * @param {string} pv 
-         * @param {Token} cv
-         * */
-        const pathReducer = (pv,cv,idx,arr) => {
+        return this.tokens.reduce((pv,cv,idx,arr) => {
+            return pv + cv.reduce( (_pv,_cv,_idx,_arr) => {
+                return _pv + _cv.getString(_idx >= _arr.length-1, idx < arr.length-1);
+            },'');
+        },'');
+    }
 
-            let tokenStr = '';
-            let postfix = '';
-
-            if(Array.isArray(cv)) {
-                tokenStr =  cv.reduce(pathReducer,'');
-                if(idx < arr.length - 1) postfix = (prevTType === N_ACCESSORS ? ';' : ',');
-            } else {
-                postfix = cv.containerType == 'object' ? '.' : '';
-                switch (cv.type) {
-                    case T_ROOT:
-                        return '$';
-                        break;
-                    case O_WILDCARD:
-                        tokenStr = '*';
-                        break;
-                    case T_BACK:
-                        postfix = '';
-                    case O_KEY:
-                        tokenStr = cv.value;
-                        break;
-                    case A_LIST:
-                        tokenStr = `[${cv.value.join(',')}]`;
-                        break;
-                    case A_SLICE:
-                        tokenStr = `[${cv.value.min === 0 ? '' : cv.value.min}:${cv.value.max ?? ''}]`;
-                        break;
-                    case A_WILDCARD:
-                        tokenStr = '[*]';
-                        break;
-                    case T_GROUP:
-                        tokenStr = `(${cv.value.reduce(pathReducer,'')})`;
-                        break;
-                    case N_ACCESSORS:
-                        tokenStr = `#${cv.value.join(',')}`;
-                        break;
-                    default:
-                        tokenStr = '';
+    /**
+     * 
+     */
+    append(pathExt) {
+        const newTokens = Path.tokenize(pathExt);
+        for(const tokens of this.tokens) {
+            for(const ntokens of newTokens) {
+                if(tokens.length > 0 && ntokens.length > 0) {
+                    for(const ntoken of ntokens) {
+                        const prevToken = tokens.at(-1);
+                        switch(ntoken.type) {
+                            case T_ROOT:
+                                throw SyntaxError(`Cannot append absolute path to an existing path. Use new Path() instead.`);
+                                break;
+                            case T_BACK:
+                                // pop tokens off the stack if able to shorten/standardize paths
+                                if(tokens.length > 0 && !([T_BACK,T_ROOT,T_GROUP].includes(prevToken?.type))) {
+                                    tokens.pop();
+                                } else {
+                                    tokens.push(ntoken);
+                                }
+                                break;
+                            default:
+                                tokens.push(ntoken);
+                                prevToken?.setContainer(ntoken);
+                        }
+                    }
                 }
-                prevTType = cv.type;
             }
-            return pv + tokenStr + postfix;
         }
+        this.str = this.buildString();
+        return this;
+    }
 
-        return this.tokens.reduce(pathReducer,'');
+    concatenate(newPath) {
+        const newTokens = Path.tokenize(newPath);
+        this.tokens.push(...newTokens);
+        this.str = this.buildString();
+        return this;
     }
 
     /**
@@ -843,6 +917,7 @@ export class Path {
      *  root:Object, 
      *  forwardHandler: ResolutionForwardHandler, 
      *  reverseHandler: ResolutionReverseHandler, 
+     *  resultHandler:  ResolutionResultHandler,
      *  handlerOptions: Object,
      *  flat: boolean
      * }} options All options are optional
@@ -853,6 +928,7 @@ export class Path {
             root = null,
             forwardHandler = null, 
             reverseHandler = null,
+            resultHandler = null,
             handlerOptions = null,
             flat = false,
             wrapResults = true,
@@ -961,85 +1037,136 @@ export class Path {
             }
         }
 
-        function buildResult(collected = false, result = null,context = null,accessor = null) {
-            if(wrapResults) return {__type:"pathResult",result,context,accessor,collected}
-            return result;
+        function buildResult(collected = false, result = null,finalContext = null) {
+            let finalResult;
+
+            if(wrapResults) 
+                finalResult = {
+                    __type:"pathResult",
+                    result,
+                    context: finalContext?.prevContext?.obj, 
+                    accessor:finalContext?.accessor,
+                    collected
+                }
+            else 
+                finalResult = result;
+
+            
+
+            // run resultMapper and compare decision to keep, discard, override, or overrideMany result;
+            // Push into LinkedList only happens here to provide chokepoint control over data that leaves.
+            if(resultHandler != null) {
+
+                if(finalContext != null && finalContext instanceof Object) {
+                    finalContext.result = finalResult;
+                    finalContext.collected = collected;
+                } else {
+                    finalContext = {
+                        result:finalResult,
+                        collected:collected
+                    };
+                }
+
+                const decision = resultHandler(finalContext,handlerOptions);
+                switch(decision?.action) {
+                    case 'discard':
+                        break;
+                    case 'override':
+                        if('value' in decision)
+                            llpush(decision.value);
+                        break;
+                    case 'override_many':
+                        if('values' in decision){
+                            for(const value of decision.values) {
+                                llpush(value);
+                            }
+                        }
+                        break;
+                    case 'keep':
+                    default:
+                        llpush(finalResult);
+                }
+            } else {
+                llpush(finalResult);
+            }
+            return finalResult;
         }
 
         const recursor = (currentRoot,tokens = this.tokens, cursor=0, accessor = null, prevContext = {obj:null,token:null,isLeaf:false,accessor:null}) => {
             if(stopResolution) return;
 
-            if(prevContext == undefined) {
-                prevContext = {obj:null,token:null,isLeaf:false,accessor:null};
-                throw Error("Prev Context not defined")
-            }
-
             const handlerCtx = {
+                ...prevContext, // propagate context variables between handler calls
                 obj:currentRoot, 
-                token:tokens[cursor] ?? {type:"END",value:null,containerType:null}, 
+                token:tokens[cursor] ?? Path.END_TOKEN, 
                 isLeaf:cursor >= tokens.length - 1,
                 accessor: accessor,
                 prevContext: prevContext,
             }
 
             
-            
             let returnEarly = false;
             let nextRoots = [currentRoot];
             let nextTokens = [tokens[cursor]];
             let skipToken = false; 
-            
-            if(forwardHandler != null) {
-                const decision = forwardHandler(handlerCtx,handlerOptions);
+            try {
                 
-                if(decision?.override_objs != undefined) {
-                    nextRoots = decision.override_objs;
-                }
-
-                if(decision?.override_tokens != undefined) {
-                    nextTokens = decision.override_tokens;
-                }
-
-                switch (decision?.action) {
-                    case "return":
-                        returnEarly = true;
-                        break;
-                    case "collect":
-                        llpush(buildResult(true,currentRoot,prevContext?.obj,accessor))
-                        break;
-
-                    case "skip_token":
-                        skipToken = true;
-                        break;
-                    case "skip":
-                    case "skip_branch":
-                        return;
+                if(forwardHandler) {
+                    const decision = forwardHandler(handlerCtx,handlerOptions);
                     
-                    case "stop":
-                        stopResolution = true;
-                        return;
+                    if(decision?.override_objs != undefined) {
+                        nextRoots = decision.override_objs;
+                    }
 
-                    case "continue":
-                    default:
-                        // do nothing, continue as normal
+                    if(decision?.override_tokens != undefined) {
+                        nextTokens = decision.override_tokens;
+                    }
+
+                    switch (decision?.action) {
+                        case "return":
+                            returnEarly = true;
+                            break;
+                        case "collect":
+                            buildResult(true,currentRoot,handlerCtx);
+                            break;
+
+                        case "skip_token":
+                            skipToken = true;
+                            break;
+                        case "skip":
+                        case "skip_branch":
+                            return;
+                        
+                        case "stop":
+                            stopResolution = true;
+                            return;
+
+                        case "continue":
+                        default:
+                            // do nothing, continue as normal
+                    }
                 }
-            }
 
-            
+            } catch (e) { 
+                // call the reverse handler to clean up after any errors that 
+                // occur inside the forward handler.
+                if(reverseHandler) {
+                    reverseHandler(handlerCtx,handlerOptions);
+                }
+                throw(e);
+            }
 
             // end conditions
             if(cursor >= tokens.length || returnEarly) {
-                if(reverseHandler != null) {
+                if(reverseHandler) { // call reverse handler on end token
                     reverseHandler(handlerCtx,handlerOptions);
                 }
 
                 for(const rval of nextRoots) {
-                    llpush(buildResult(returnEarly,rval,prevContext?.obj,accessor));
+                    buildResult(returnEarly,rval,handlerCtx);
                 }
                 return;
             }
-
-
 
             const _resolveToken = (_currentRoot,token) => {
                 // skip over containers and BaseNodes for tokens
@@ -1069,7 +1196,7 @@ export class Path {
                 }
 
                 if(_currentRoot == null) {
-                    return llpush(undefined);
+                    return buildResult(false,undefined,handlerCtx);
                 }
 
                 switch(token.type) {
@@ -1101,7 +1228,7 @@ export class Path {
                     case O_KEY:
                         if(_currentRoot instanceof Object && !Array.isArray(_currentRoot)) {
                             if(token.value in Object.prototype) {
-                                return llpush(undefined); // stop prototype pollution attacks
+                                return buildResult(false,undefined,handlerCtx); // stop prototype pollution attacks
                             }
                             recursor(_currentRoot[token.value],tokens,cursor+1,token.value,handlerCtx);
                         }
@@ -1153,7 +1280,7 @@ export class Path {
                             });
                             llpushClose();
                         } else {
-                            llpush(undefined);
+                            buildResult(false,undefined,handlerCtx);
                         }
                         break;
                     
@@ -1169,25 +1296,59 @@ export class Path {
                             llpushClose();
                         }
                         break;
+                    
+                    case 'T_DEEP_WILDCARD':
+                        if(Array.isArray(_currentRoot)) {
+                            for(const item of _currentRoot) {
+                                recursor(item,tokens,cursor,handlerCtx,accessor);
+                            }
+                        } else if (_currentRoot instanceof BaseNode || !(_currentRoot instanceof Object)) {
+                            recursor(_currentRoot,tokens,cursor+1,handlerCtx,accessor);
+                        } else{
+                            for(const value of Object.values(_currentRoot)) {
+                                recursor(value,tokens,cursor,handlerCtx,accessor);
+                            }
+                        }
+                        break;
                     default:
                         recursor(_currentRoot,tokens,cursor+1,accessor,handlerCtx); // skip token
                         break;  
                 }
             }
 
+            
             if(nextRoots.length > 1) llpushOpen();
             for(const nextRoot of nextRoots) {
-                if(skipToken) recursor(nextRoot,tokens,cursor+1,accessor,handlerCtx);
-                else {
-                    for(const token of nextTokens) {
-                        _resolveToken(nextRoot,token);
+                // One reverse handler call per token/level. Wrapped in try/finally
+                // so that cleanup steps in reverse handlers do not get skipped
+                // when errors are thrown.
+                if(skipToken) {
+                    try {
+                        recursor(nextRoot,tokens,cursor+1,accessor,handlerCtx);
+                    } finally {
+                        if(reverseHandler) {
+                            handlerCtx.obj = nextRoot;
+                            reverseHandler({...handlerCtx,obj:nextRoot},handlerOptions);
+                        }
                     }
+                } else {
+                    if (nextTokens.length > 1) llpushOpen();
+                    for(const token of nextTokens) {
+                        try {
+                            _resolveToken(nextRoot,token);
+                        } finally {
+                            if(reverseHandler) {
+                                handlerCtx.obj = nextRoot;
+                                reverseHandler(handlerCtx,handlerOptions);
+                            }
+                        }
+                    }
+                    if (nextTokens.length > 1) llpushClose();
                 }
-                if(reverseHandler != null) {
-                    reverseHandler({...handlerCtx,obj:nextRoot},handlerOptions);
-                }
+                
             }
             if(nextRoots.length > 1) llpushClose();
+        
         }
 
         llpushOpen(false);

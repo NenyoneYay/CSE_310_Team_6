@@ -127,29 +127,31 @@ export class ExprValue {
         //Update path
         /** @param {Path} path */
         ExprValue.parser.functions.data = (path, fallback=NaN) => {
-            const replaceVals = (val) => {
-                if (val?.__type === "pathResult") {
-                    console.warn("Found unexpected wrapped PathResult. Unwrapping...")
-                    return replaceVals(val.result);
-                } else if (["string","boolean"].includes(typeof(val))) {
-                    return val;
-                } else if (typeof(val) === "number") {
-                    return Number.isNaN(val) ? fallback : val;
-                } else if(val instanceof BaseNode) {
-                    return replaceVals(val.accessors.value);
-                } else if (Array.isArray(val)) {
-                    return val.map(replaceVals)
-                } else {
-                    return fallback;
-                }
-            }
-            let result = path.resolve({root:root,wrapResults:false});
+            let result = path.resolve({
+                root:root,
+                wrapResults:false,
+                resultHandler: (context) => {
+                    let {result:val} = context;
+                    
+                    if(val instanceof BaseNode)
+                        val = val.accessors.value;
 
-            if (result instanceof ExprValue) {
-                throw EvalError("This isn't supposed to happen!!")
-            } else {
-                result = replaceVals(result);
-            }
+                    let rval;
+
+                    if (val instanceof ExprValue){
+                        console.log("ExprValue Found. This isn't supposed to happen")
+                        return {action:"discard"};
+                    } else if (["string","boolean"].includes(typeof(val))) {
+                        rval = val;
+                    } else if (typeof(val) === "number") {
+                        rval = Number.isNaN(val) ? fallback : val;
+                    } else {
+                        rval = fallback;
+                    }
+
+                    return {action:"override",value:rval};
+                }
+            });
             return result;
         }
 

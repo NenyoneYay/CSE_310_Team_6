@@ -97,6 +97,8 @@ export class BaseNode {
 
         /** @type {EventBus|undefined} */
         this.evBus = undefined;
+        /** @type {Path[]} */
+        this.emitters = [];
 
         // dependents and precedents are mapped directly to nodes after
         // the character data tree is constructed. Maps are used to 
@@ -254,8 +256,12 @@ export class BaseNode {
             // // detected.
             const stale_accessors = {...this.accessors}
             this.evaluate();
-            if(!compareObj(this.accessors,stale_accessors))
+            if(!compareObj(this.accessors,stale_accessors)) {
                 this.evBus?.emit("change",this);
+                for(const emitPath of this.emitters) {
+                    this.evBus?.emit("modify",emitPath);
+                }
+            }
         } catch (e){
             this.isErrorSrc = false;
             this.error = e.message;
@@ -293,52 +299,61 @@ export class BaseNode {
 
     evaluateDependencies() {
         this.evBus = Path.findRoot(this)[Symbol.for("EventBus")];
+        const updateListener = new Listener(this.setDirty,{applier: this});
+        const thisPath = Path.pathTo(this).append("#value,max,min").concatenate(Path.pathTo(this));
+        this.evBus.addListener("modify",thisPath,updateListener);
+
         this.dependencyModifications.forEach((mod) => {
             if(mod == null || mod.path == null || mod.type == null) return;
 
-            this.evBus.addListener("change",mod.path,new Listener(this.setDirty,{applier: this}))
-            //this.evBus.addListener("change",mod.path,new Listener(this.evaluate,{applier: this}))
+            
+            if(mod.type == "add precedent")
+                this.evBus.addListener("change",mod.path,updateListener)
+            else if(mod.type === "add dependent")
+                this.emitters.push(mod.path);
+            // implement remove operations as well
             
             return;
+
             //Update Path
-            const resolvedPaths = mod.path.resolve({flat:true}) ?? null;
+            // const resolvedPaths = mod.path.resolve({flat:true}) ?? null;
             
-            const pathCrawler = (pathResult) => {
-                if(pathResult == null) return;
-                else if (pathResult?.__type === "pathResult") {
-                    let node = null, accessor = null;
+            // const pathCrawler = (pathResult) => {
+            //     if(pathResult == null) return;
+            //     else if (pathResult?.__type === "pathResult") {
+            //         let node = null, accessor = null;
 
-                    if(pathResult.result instanceof BaseNode) {
-                        node = pathResult.result;
-                    } else if (pathResult.context instanceof BaseNode) {
-                        node = pathResult.context;
-                        accessor = pathResult.accessor;
-                    }
+            //         if(pathResult.result instanceof BaseNode) {
+            //             node = pathResult.result;
+            //         } else if (pathResult.context instanceof BaseNode) {
+            //             node = pathResult.context;
+            //             accessor = pathResult.accessor;
+            //         }
 
-                    if(node != null) {
-                        switch (mod.type) {
-                            case "add precedent":
-                                this.registerPrecedent(node,accessor,mod.amount);
-                                break;
-                            case "add dependent":
-                                this.registerDependent(node,accessor,mod.amount);
-                                break;
-                            case "remove precedent":
-                                this.unregisterPrecedent(node,accessor,mod.amount);
-                                break;
-                            case "remove dependent":
-                                this.unregisterDependent(node,accessor,mod.amount);
-                                break;
-                        }
-                    }
-                    return;
-                } else if (Array.isArray(pathResult)) {
-                    pathResult.forEach(item => pathCrawler(item));
-                } else if (pathResult instanceof Object) {
-                    console.error(`${Path.pathTo(this).str}: Encountered unexpected Object in dependency results.`);
-                }
-            }
-            pathCrawler(resolvedPaths);
+            //         if(node != null) {
+            //             switch (mod.type) {
+            //                 case "add precedent":
+            //                     this.registerPrecedent(node,accessor,mod.amount);
+            //                     break;
+            //                 case "add dependent":
+            //                     this.registerDependent(node,accessor,mod.amount);
+            //                     break;
+            //                 case "remove precedent":
+            //                     this.unregisterPrecedent(node,accessor,mod.amount);
+            //                     break;
+            //                 case "remove dependent":
+            //                     this.unregisterDependent(node,accessor,mod.amount);
+            //                     break;
+            //             }
+            //         }
+            //         return;
+            //     } else if (Array.isArray(pathResult)) {
+            //         pathResult.forEach(item => pathCrawler(item));
+            //     } else if (pathResult instanceof Object) {
+            //         console.error(`${Path.pathTo(this).str}: Encountered unexpected Object in dependency results.`);
+            //     }
+            // }
+            // pathCrawler(resolvedPaths);
         });
 
         // Once connections are made, clear out modifications list
@@ -876,6 +891,10 @@ export class ModifierNode extends DataNode {
         })
 
         this.accessors.condition = condition ?? true;
+    }
+
+    evaluateDependencies() {
+        super.evaluateDependencies();
     }
 
     evaluate() {
