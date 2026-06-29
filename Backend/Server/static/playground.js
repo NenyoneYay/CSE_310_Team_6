@@ -1,193 +1,166 @@
 
 let sheet = {
-
-    meta: {
-        name: "My Character", 
-        system: "Custom", 
-        version: "1" 
-    },
-    content: [
-        {
-            type: "section",
-            label: "Basics", 
-            content: [
-                {
-                    label: "Name",  
-                    type: "text",   
-                    value: "" 
-                },
-                {
-                    label: "Class", 
-                    type: "text",   
-                    value: "" 
-                },
-                {
-                    label: "Level", 
-                    type: "number", 
-                    value: "1" 
-                }
-            ]
+    "data":{
+        "HP": {
+            "__type": "data",
+            "value": 30,
+            "max": 110
         },
-        {
-            label: "Ability scores", 
-            content: [
-                {
-                    label: "Strength",
-                    expanded: false,
-                    type: "section", 
-                    content: [
-                        {
-                            label:"score",
-                            type:"number",
-                            value:"10"
-                        },
-                        {
-                            label:"mod",
-                            type:"number",
-                            value:"0"
-                        },
-                        {
-                            label:"save",
-                            type:"number",
-                            value:"0"
-                        }
-                    ] 
+        "Speed": 30,
+        "Ability Scores": {
+            "__direction": "column",
+            "Strength": {
+                "score": {
+                    "__type": "data",
+                    "value": 10,
+                    "min": 0,
+                    "max": 20
                 },
-                {
-                    label: "Dexterity",
-                    expanded: false,
-                    type: "section", 
-                    content: [
-                        {
-                            label:"score",
-                            type:"number",
-                            value:"10"
-                        },
-                        {
-                            label:"mod",
-                            type:"number",
-                            value:"0"
-                        },
-                        {
-                            label:"save",
-                            type:"number",
-                            value:"0"
-                        }
-                    ] 
-                },
-                {
-                    label: "Constitution",
-                    expanded: false,
-                    type: "section", 
-                    content: [
-                        {
-                            label:"score",
-                            type:"number",
-                            value:"10"
-                        },
-                        {
-                            label:"mod",
-                            type:"number",
-                            value:"0"
-                        },
-                        {
-                            label:"save",
-                            type:"number",
-                            value:"0"
-                        }
-                    ] 
-                },
-                {
-                    label: "Intelligence",
-                    expanded: false,
-                    type: "section", 
-                    content: [
-                        {
-                            label:"score",
-                            type:"number",
-                            value:"10"
-                        },
-                        {
-                            label:"mod",
-                            type:"number",
-                            value:"0"
-                        },
-                        {
-                            label:"save",
-                            type:"number",
-                            value:"0"
-                        }
-                    ] 
-                },
-                {
-                    label: "Wisdom",
-                    expanded: false,
-                    type: "section", 
-                    content: [
-                        {
-                            label:"score",
-                            type:"number",
-                            value:"10"
-                        },
-                        {
-                            label:"mod",
-                            type:"number",
-                            value:"0"
-                        },
-                        {
-                            label:"save",
-                            type:"number",
-                            value:"0"
-                        }
-                    ] 
-                },
-                {
-                    label: "Charisma",
-                    expanded: false,
-                    type: "section", 
-                    content: [
-                        {
-                            label:"score",
-                            type:"number",
-                            value:"10"
-                        },
-                        {
-                            label:"mod",
-                            type:"number",
-                            value:"0"
-                        },
-                        {
-                            label:"save",
-                            type:"number",
-                            value:"0"
-                        }
-                    ] 
+                "deep_data":{
+                    "key2":"world"
                 }
-            ]
+            },
+            "Dexterity": {
+                "score": {
+                    "__type": "data",
+                    "value": 15,
+                    "min": 0,
+                    "max": 20
+                }
+            },
+            "Constitution": {
+                "score": {
+                    "__type": "data",
+                    "value": 13,
+                    "min": 0,
+                    "max": 20
+                }
+            },
+            "Intelligence": {
+                "score": {
+                    "__type": "data",
+                    "value": 18,
+                    "min": 0,
+                    "max": 20
+                }
+            },
+            "Wisdom": {
+                "score": {
+                    "__type": "data",
+                    "value": 11,
+                    "min": 0,
+                    "max": 20
+                }
+            },
+            "Charisma": {
+                "score": {
+                    "__type": "data",
+                    "value": 8,
+                    "min": 0,
+                    "max": 20
+                }
+            }
         },
-        {
-            label: "Combat", 
-            type: "section",
-            content: [
+        "Some Data": {
+            "multiNode": {
+                "__type": "container",
+                "content": [
+                    10,
+                    20,
+                    30
+                ]
+            },
+            "sideNode": "=data('.multiNode.1')",
+            "accessor": "=data('$Ability Scores.Strength.score#max')"
+        },
+        "Equipment": {
+            "capacity": "=data('$Ability Scores.Strength.score') * 15",
+            "items": [
                 {
-                    label: "HP",    
-                    type: "number", 
-                    value: "" 
+                    "name": "Shortsword",
+                    "desc": "blablabla",
+                    "equipped": true,
+                    "weight": 5
                 },
                 {
-                    label: "AC",    
-                    type: "number", 
-                    value: "" 
+                    "name": "Shield",
+                    "desc": "blablabla",
+                    "equipped": false,
+                    "weight": 3
                 },
                 {
-                    label: "Speed", 
-                    type: "text",   
-                    value: "30ft" 
+                    "desc": "no name",
+                    "weight": 40
                 }
-            ]
+            ],
+            "carrying": "=sum(aprod(data('$Equipment.items[*].weight'),data('$Equipment.items[*].equipped',1)))"
+        },
+        "~constructor": "malicious code",
+        "Modifiers": {
+            "Save Increase": {
+                "__type": "modifier",
+                "target": "$Ability Scores.*.save",
+                "operation": "add",
+                "condition": true,
+                "value": 2,
+                "tier": "default"
+            },
+            "beltEquipped": true,
+            "Strength Boost": {
+                "__type": "modifier",
+                "target": "$Ability Scores.Strength.score",
+                "operation": "add",
+                "condition": true,
+                "value": 5,
+                "tier": "default"
+            },
+            "Belt of Strength": {
+                "__type": "modifier",
+                "target": "$Ability Scores.Strength.score#value,max",
+                "operation": "replace",
+                "condition": "=data('.beltEquipped')",
+                "value": 25,
+                "tier": 20000000
+            },
+            "Dexterity Boost": {
+                "__type": "modifier",
+                "target": "$Ability Scores.Dexterity.score",
+                "operation": "add",
+                "condition": true,
+                "value": 2,
+                "tier": "default"
+            },
+            "Modified Checkbox": true,
+            "Checkbox Modifier": {
+                "__type": "modifier",
+                "target": ".Modified Checkbox",
+                "operation": "replace",
+                "condition": true,
+                "value": false,
+                "tier": "default"
+            }
         }
-    ]
+    },
+    "rules": {
+        "Ability Scores.*": {
+            "mod":"=floor(data('.score')/2)-5",
+            "save":"=data('.mod')",
+            "deep_data":{
+                "array1":[
+                    1,2,3
+                ],
+                "key2":"hello",
+                "key3":{
+                    "real_test":["=data('$Ability Scores.Strength.score')","=data('$Ability Scores.Strength.mod')","=data('$Ability Scores.Strength.save')"]
+                }
+            }
+        },
+        "Equipment.items[*]": {
+            "__type":"requirement",
+            "equipped":false
+        }
 
+    }
 };
 
 /** @type {Object} */
