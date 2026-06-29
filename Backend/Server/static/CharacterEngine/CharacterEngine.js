@@ -1,7 +1,7 @@
-import {Path} from "./Path.js";
-import {BaseNode, DataNode, ModifierNode} from "./Nodes.js";
-import {EventBus} from "./EventBus.js";
 import {deepCopy, sanatizeKey} from "./helpers.js"
+import {BaseNode, DataNode, ModifierNode} from "./Nodes.js";
+import {Path} from "./Path.js";
+import {EventBus} from "./EventBus.js";
 
 /* Future features
  * actions:

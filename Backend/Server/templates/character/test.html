@@ -6,6 +6,27 @@
     window.jseEval = {parse: parse, evaluate: evaluate, jsep: jsep};
 </script> -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/expr-eval/2.0.2/bundle.min.js" integrity="sha512-TNliDPFdpL1W1sP7v9WzHUxTAY+PN7wRiHqJzntb4HpaJ0HlreSm0tzbA8MU7EBEoPTYgEtB+ZpbBB2yQQu49g==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+<script type="importmap">
+    {
+        "imports":{
+            "CharacterEngine":"{{ url_for('static',filename='CharacterEngine/CharacterEngine.js') }}",
+            "Path":"{{ url_for('static',filename='CharacterEngine/Path.js') }}",
+            "Nodes":"{{ url_for('static',filename='CharacterEngine/Nodes.js') }}",
+            "ExprValue":"{{ url_for('static',filename='CharacterEngine/ExprValue.js') }}",
+            "helpers":"{{ url_for('static',filename='CharacterEngine/helpers.js') }}",
+            "EventBus":"{{ url_for('static',filename='CharacterEngine/EventBus.js') }}"
+        }
+    }
+</script>
+
+<link rel="modulepreload" href="{{ url_for('static',filename='CharacterEngine/helpers.js') }}">
+<link rel="modulepreload" href="{{ url_for('static',filename='CharacterEngine/ExprValue.js') }}">
+<link rel="modulepreload" href="{{ url_for('static',filename='CharacterEngine/Path.js') }}">
+<link rel="modulepreload" href="{{ url_for('static',filename='CharacterEngine/Nodes.js') }}">
+<link rel="modulepreload" href="{{ url_for('static',filename='CharacterEngine/EventBus.js') }}">
+<link rel="modulepreload" href="{{ url_for('static',filename='CharacterEngine/CharacterEngine.js') }}">
+
 <script type="module" src="{{ url_for('static',filename='CharacterEngine/test.js') }}"></script>
 {% endblock %}
 

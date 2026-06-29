@@ -1,15 +1,16 @@
 import {BaseNode, Container} from "./Nodes.js"
 import {sanatizeKey} from "./helpers.js"
 
-var  T_ROOT      = 'T_ROOT';
-var  O_WILDCARD  = 'O_WILDCARD';
-var  T_BACK      = 'T_BACK';
-var  O_KEY       = 'O_KEY';
-var  A_LIST      = 'A_LIST';
-var  A_SLICE     = 'A_SLICE';
-var  A_WILDCARD  = 'A_WILDCARD';
-var  T_GROUP     = 'T_GROUP';
-var  N_ACCESSORS = 'N_ACCESSORS';
+var  T_ROOT          = 'T_ROOT';
+var  T_BACK          = 'T_BACK';
+var  T_DEEP_WILDCARD = 'T_DEEP_WILDCARD'
+var  O_KEY           = 'O_KEY';
+var  O_WILDCARD      = 'O_WILDCARD';
+var  A_LIST          = 'A_LIST';
+var  A_SLICE         = 'A_SLICE';
+var  A_WILDCARD      = 'A_WILDCARD';
+var  T_GROUP         = 'T_GROUP';
+var  N_ACCESSORS     = 'N_ACCESSORS';
 
 
 /* Helpful switch skeleton for comparing tokens
@@ -63,6 +64,9 @@ export class PathToken {
 
         let containerType = null;
         switch(containingToken.type) {
+            case T_DEEP_WILDCARD:
+                containerType = "deep";
+                break;
             case O_KEY:
             case O_WILDCARD:
                 containerType = "object";
@@ -99,20 +103,23 @@ export class PathToken {
         if(isEnd && isConcat) {
             postfix = (this.type === N_ACCESSORS ? ';' : ',');
         } else if(!isEnd) {
-            postfix = this.containerType === 'object' ? '.' : '';
+            postfix = ['object','deep'].includes(this.containerType) ? '.' : '';
         }
 
         switch (this.type) {
             case T_ROOT:
                 return '$';
                 break;
-            case O_WILDCARD:
-                tokenStr = '*';
-                break;
             case T_BACK:
                 postfix = '';
+            case T_DEEP_WILDCARD:
+                tokenStr = '**';
+                break;
             case O_KEY:
                 tokenStr = this.value;
+                break;
+            case O_WILDCARD:
+                tokenStr = '*';
                 break;
             case A_LIST:
                 tokenStr = `[${this.value.join(',')}]`;
@@ -151,27 +158,30 @@ export class Path {
     /* Tokens Regex Group Explination:
      * Group 1: Path from root object. Path starts with '$'
      * Group 2: '.' or ',' for path separator logics
-     * Group 3: Key token. Expressed: Key1.Key2
+     * Group 3: '*' Object key wildcard. Expressed '.*'
+     * Group 4: '**' Deep wildcard. Expressed '.**' 
+     * - Returns all nodes and leaves under this in a flat array.
+     * - May be used with '#' accessor sigils to get all [accessors] on nodes
+     * Group 5: Key token. Expressed: Key1.Key2
      * - Each of these keys can have array accessors. These are singleton
      *   object paths.
-     * Group 4: '*' Object key wildcard. Expressed .*
-     * Group 5: Array index list accessor. Expressed: [1,2,3] or [2]
+     * Group 6: Array index list accessor. Expressed: [1,2,3] or [2]
      * - Can be negative numbers. Negatives are wrapped around to end of array.
      * - Comes after Key or Group tokens.
-     * Group 6: Array index slice accessor. Expressed: [:5](beginning -> 5), [3:] (3 -> end), [:] (Everything)
+     * Group 7: Array index slice accessor. Expressed: [:5](beginning -> 5), [3:] (3 -> end), [:] (Everything)
      * - Can be negative numbers. Also wrapped to end of array.
      * - Comes after Key or Group tokens.
-     * Group 7: '*' Wildcard array accessor. Expressed: [*]
+     * Group 8: '*' Wildcard array accessor. Expressed: [*]
      * - refers to entire array
      * - Comes after Key or Group tokens.
-     * Group 8: '#' accessor sigils. Expressed: #accessor1,accessor2,...
+     * Group 9: '#' accessor sigils. Expressed: #accessor1,accessor2,...
      * - Access node accessors (i.e. value, min, or max)
-     * Group 9: ';,' semicoln or comma to separate full path queries. 
+     * Group 10: ';,' semicoln or comma to separate full path queries. 
      * - Commas cannot be used for this purpose after accessor sigils, 
      *   but semicolns can.
      * - Can be used in groups to specify multiple sub paths.
-     * Group 10: '(' Start of Group token. 
-     * Group 11: ')' End of Group token.
+     * Group 11: '(' Start of Group token. 
+     * Group 12: ')' End of Group token.
      * - Groups are expressed by: (Subpath 1;subpath 2,...)
      *   - Each subpath may be a full path to something from previous path 
      *     endpoint, each separated by either a comma or semicolon. Must all 
@@ -180,7 +190,7 @@ export class Path {
      *     (i.e. object, arrray, node) as well.
      *   - Tokens are recursively parsed inside.
      */
-    static tokensRegex = /(?<=^|[\(;,])\s*(\$)\s*|(?<=^|[\(;,\.])\s*(\.+)|(?:(?<=^|[\.;,\($])\s*(?:((?:[\w~]|\*[\w: ~\-\*])[\w: ~\-\*]*?|\\\*)|(\*))\s*(?=$|[\.\[;#,\)]))|(?<!(?<!^|[\(;,\.])\.)\[\s*(?:(-?\d+(?:\s*,\s*-?\d+)*)|(-?\d*\s*:\s*-?\d*)|(\*))\s*\]\s*(?=$|[\.\[#,;\)])|(?<!(?<!^|[\(;,\.])\.)#(\w+(?:,\w+)*)\s*(?=$|[;\)])|(;|,)|\.|(\()|(\))/y;
+    static tokensRegex = /(?<=^|[\(;,])\s*(\$)\s*|(?<=^|[\(;,\.])\s*(\.+)|(?:(?<=^|[\.;,\($])\s*(?:(\*)|(\*\*)|(\\?[\w~\*][\w: ~\-\*]*?|\\\*))\s*(?=$|[\.\[;#,\)]))|(?<!(?<!^|[\(;,\.])\.)\[\s*(?:(-?\d+(?:\s*,\s*-?\d+)*)|(-?\d*\s*:\s*-?\d*)|(\*))\s*\]\s*(?=$|[\.\[#,;\)])|(?<!(?<!^|[\(;,\.])\.)#(\w+(?:,\w+)*)\s*(?=$|[;\)])|(;|,)|\.|(\()|(\))/y;
     /* 
     Test Syntax string:
     $~Key Value.(Key[47],Key,key)[5][5:][*].Key[5,789,-6]#accessor1,accessor2;Key:morekey.Key.Key[:-1].*#accessor1,accessor3,accessor4
@@ -542,49 +552,55 @@ export class Path {
                         }
                     }
                 }
-
+                
                 else if(m[3] !== undefined) {
-                    let key = m[3];
-                    if(key === '\\*') key = '*'; // replace escaped \* with *
-                    tokens.push(new PathToken(O_KEY,sanatizeKey(key)));
-                    prevToken?.setContainer(tokens.at(-1));
-                }
-
-                else if(m[4] !== undefined) {
                     tokens.push(new PathToken(O_WILDCARD,'*'));
                     prevToken?.setContainer(tokens.at(-1));
                 }
 
+                else if(m[4] !== undefined) {
+                    tokens.push(new PathToken(T_DEEP_WILDCARD,'**'));
+                    prevToken?.setContainer(tokens.at(-1));
+                }
+
                 else if(m[5] !== undefined) {
-                    tokens.push(new PathToken(A_LIST,m[5].split(',').map(x => parseInt(x))));
+                    let key = m[5];
+                    if(key === '\\*') key = '*'; // replace escaped \* with *
+                    else if(key === '\\**') key = '**';
+                    tokens.push(new PathToken(O_KEY,sanatizeKey(key)));
                     prevToken?.setContainer(tokens.at(-1));
                 }
 
                 else if(m[6] !== undefined) {
-                    let [pmin,pmax] = m[6].split(':');
+                    tokens.push(new PathToken(A_LIST,m[6].split(',').map(x => parseInt(x))));
+                    prevToken?.setContainer(tokens.at(-1));
+                }
+
+                else if(m[7] !== undefined) {
+                    let [pmin,pmax] = m[7].split(':');
                     if (pmin === '') pmin = 0;
                     else pmin = parseInt(pmin);
                     if (pmax === '') pmax = undefined;
                     else pmax = parseInt(pmax);
 
                     if(Number.isNaN(pmin) || Number.isNaN(pmax)) 
-                        throw SyntaxError(`Token ${m[6]} at ${i}: Array slice indexes must be numbers.`);
+                        throw SyntaxError(`Token ${m[7]} at ${i}: Array slice indexes must be numbers.`);
 
                     tokens.push(new PathToken(A_SLICE,{min:pmin,max:pmax}));
                     prevToken?.setContainer(tokens.at(-1));
                 }
 
-                else if(m[7] !== undefined) {
+                else if(m[8] !== undefined) {
                     tokens.push(new PathToken(A_WILDCARD,'*'));
                     prevToken?.setContainer(tokens.at(-1));
                 }
 
-                else if(m[8] !== undefined && m[8] !== '') {
-                    tokens.push(new PathToken(N_ACCESSORS,m[8].split(',').map(x => sanatizeKey(x))));
+                else if(m[9] !== undefined && m[9] !== '') {
+                    tokens.push(new PathToken(N_ACCESSORS,m[9].split(',').map(x => sanatizeKey(x))));
                     prevToken?.setContainer(tokens.at(-1));
                 }
                     
-                else if (m[9] !== undefined) { //;, (conatenate)
+                else if (m[10] !== undefined) { //;, (conatenate)
                     tokens = [];
                     allTokens.push(tokens); // make new tokens grouping
                     if (contextStack.length < 1) {
@@ -592,14 +608,14 @@ export class Path {
                     }
                 }
 
-                else if (m[10] !== undefined) { // (
+                else if (m[11] !== undefined) { // (
                     contextStack.push(allTokens);// push token context into stack
                     tokens = []; // create new token context
                     allTokens = [tokens];
                 }
 
-                else if (m[11] !== undefined) { // )
-                    if (contextStack.length <= 0) throw SyntaxError(`Token ${m[11]} at ${i}: Unbalanced Parentheses. Missing opening '('`);
+                else if (m[12] !== undefined) { // )
+                    if (contextStack.length <= 0) throw SyntaxError(`Token ${m[12]} at ${i}: Unbalanced Parentheses. Missing opening '('`);
                     const group_token = new PathToken(T_GROUP, allTokens); // store current token context into group token
                     allTokens = contextStack.pop(); // pop previous context off the stack to continue where we left off
                     tokens = allTokens.at(-1);
@@ -614,30 +630,48 @@ export class Path {
     }
 
     /** @type {ResolutionForwardHandler} */
-    static buildHandler({obj, token, isLeaf}, options) {
-        const {factory:newFactory = (() => null)} = options ?? {};
-        if(obj == null) return {action:"continue"};
+    static buildHandler(context, options = {}) {
+        const {obj, token} = context;
 
-        const objPath = Path.pathTo(obj)
+        if(obj == null) return {action:"continue"};
+        // guard switch
+        switch(token.type) {
+            case A_LIST:
+            case A_SLICE:
+            case A_WILDCARD:
+                if(!Array.isArray(obj)) {
+                    console.error("Expected Array but found other type")
+                    return {action:"skip"};
+                }
+            case O_KEY:
+            case O_WILDCARD:
+                if(!(obj instanceof Object)) {
+                    console.error("Expected Object but found other type")
+                    return {action:"skip"};
+                }
+        }
+
+        const {factory:newFactory = null} = options;
+        const objPath = Path.pathTo(obj);
 
         const buildNew = (parent,type) => {
             let newobj = null;
             switch(type) {
                 case "object":
                     if(!(newobj instanceof Object))
-                        newobj = {};
+                        newobj = {[Symbol.for("okeys")]: []};
                     break;
                 case "array":
                     if(!(Array.isArray(newobj)))
                         newobj = [];
                     break;
                 case "node":
-                    newobj = newFactory(parent,type);
-                    if(newobj == null) // TODO: change later
-                        newobj = {__type:"data",accessors:{value:0,max:null,min:null}};
+                    newobj = newFactory ? newFactory(parent,type) : null;
+                    if(newobj == null)
+                        newobj = new BaseNode(false,parent,{value:0});
                     break;
                 default:
-                    newobj = newFactory(parent,type); 
+                    newobj = newFactory ? newFactory(parent,type) : null; 
             }
             if(
                 newobj instanceof Object 
@@ -649,14 +683,11 @@ export class Path {
         }
 
         switch(token.type) {
-            case N_ACCESSORS:
-                return {action:"continue"};
-
+            case T_DEEP_WILDCARD:
+                if(token !== context.prevContext?.token)
+                    console.warn("Cannot build new paths from deep wildcard '**'");
+                break;
             case A_LIST:
-                if(!Array.isArray(obj)) {
-                    console.error("Expected Array but found other type")
-                    return {action:"skip"};
-                }
                 for(const idx of token.value)  {
                     const initLen = obj.length;
                     const maxIdx = idx > 0 ? idx : -idx - 1;
@@ -671,12 +702,8 @@ export class Path {
                         obj[j] = buildNew(obj,token.containerType);
                     }
                 }
-                return {action:"continue"};
+                break;
             case A_SLICE:
-                if(!Array.isArray(obj)) {
-                    console.error("Expected Array but found other type")
-                    return {action:"skip"};
-                }
                 const initLen = obj.length;
                 const bounds = token.value;
                 const max = bounds.max == undefined 
@@ -698,118 +725,65 @@ export class Path {
                         obj[j] = buildNew(obj,token.containerType);
                     }
                 }
-
-                return {action:"continue"};
+                break;
             case O_WILDCARD:
             case A_WILDCARD:
                 console.warn("'*' accessor will not create any new paths");
-                return {action:"continue"};
+                break;
             case O_KEY:
-                if(!(obj instanceof Object)) {
-                    console.error("Expected Object but found other type")
-                    return {action:"skip"};
-                }
                 let nextobj = obj[token.value];
                 if(nextobj == undefined) {
                     console.log(`Building ${objPath.str}.${token.value} as ${token.containerType ?? "default"}`);
                     nextobj = buildNew(obj,token.containerType)
                 }
                 obj[token.value] = nextobj;
-                return {action:"continue"};
-        }
-    }
-
-    /** @type {ResolutionForwardHandler} */
-    static repairHandler({obj, token, isLeaf}, options = {}) {
-        const objPath = Path.pathTo(obj);
-        switch(token.type) {
-            case N_ACCESSORS:
-                break;
-            case A_LIST:
-            case A_SLICE:
-            case A_WILDCARD:
-                if(!Array.isArray(obj)) {
-                    console.error("Expected Array but found other type")
-                    return {action:"skip"};
-                }
-                break;
-            case O_WILDCARD:
-            case O_KEY:
-                if(!(obj instanceof Object) || Array.isArray(obj)) {
-                    console.error("Expected Object but found other type")
-                    return {action:"skip"};
-                }
-                break;
-        }
-
-        switch(token.type) {
-            case A_LIST:
-                for(const idx of token.value)  {
-                    const j = idx < 0 ? idx + obj.length : idx;
-                    if(j < obj.length 
-                        && obj[j] instanceof Object
-                        && obj[j]?.[Symbol.for("parent")] == null
-                    ) {
-                        console.log(`Repairing ${objPath.str}[${j}]`);
-                        obj[j][Symbol.for("parent")] = obj;
-                    }
-                }
-                break;
-            case A_SLICE:
-                const initLen = obj.length;
-                const bounds = token.value;
-                const max = bounds.max == undefined 
-                    ? bounds.min
-                    : ( bounds.max < 0 
-                        ? bounds.max + 1
-                        : bounds.max - 1 // because max is not included in slice
-                    )
-
-                for(let i = bounds.min;i <= max;i++) {
-                    let j = i < 0 ? i + obj.length : i;
-                    if(j < obj.length 
-                        && obj[j] instanceof Object
-                        && obj[j]?.[Symbol.for("parent")] == null
-                    ) {
-                        console.log(`Repairing ${objPath.str}[${j}]`);
-                        obj[j][Symbol.for("parent")] = obj;
-                    }
-                }
-                break;
-            case A_WILDCARD:
-                obj.forEach((next,idx) => {
-                    if(next instanceof Object && next?.[Symbol.for("parent")] == null) {
-                        console.log(`Repairing ${objPath.str}[${idx}]`);
-                        next[Symbol.for("parent")] = obj;
-                    }
-                })
-                break;
-            case O_WILDCARD:
-                Object.values(obj).forEach(next => {
-                    if(next instanceof Object && next?.[Symbol.for("parent")] == null)
-                        console.log(`Repairing ${objPath.str}.${token.value}`); {
-                        next[Symbol.for("parent")] = obj;
-                    }
-                });
-                break;
-            case O_KEY:
-                const next = obj[token.value];
-                if(next instanceof Object && next?.[Symbol.for("parent")] == null) {
-                    console.log(`Repairing ${objPath.str}.${token.value}`);
-                    next[Symbol.for("parent")] = obj;
-                }
+                obj[Symbol.for("okeys")].push(token.value);
                 break;
         }
         return {action:"continue"};
     }
 
-    /** @type {ResolutionReverseHandler} */
-    static deleteHandler({obj, token, isLeaf}, options = null) {
+    /** @type {ResolutionForwardHandler|ResolutionReverseHandler} */
+    static repairHandler(context, options = {}) {
+        const {obj,prevContext:prevCtx,accessor} = context;
+        if(accessor === Symbol.for("parent")) return;
 
+        if(obj instanceof Object 
+            && obj[Symbol.for("parent")] == null
+            && prevCtx?.obj != null
+        ) {
+            obj[Symbol.for("parent")] = prevCtx.obj;
+            console.log(`Repaired ${accessor}'s parent`);
+        }
+
+        if(obj != null && prevCtx?.obj instanceof Object) {
+            const pObj = prevCtx.obj;
+            if(!Array.isArray(pObj)) {
+                if(pObj?.[Symbol.for("okeys")] != null && Array.isArray(pObj[Symbol.for("okeys")])){
+                    if(!(pObj[Symbol.for("okeys")].includes(accessor))) {
+                        pObj[Symbol.for("okeys")].push(accessor);
+                        console.log(`Repaired ${prevCtx?.accessor}'s okeys`);
+                    }
+                } else {
+                    pObj[Symbol.for("okeys")] = [accessor];
+                    console.log(`Repaired ${prevCtx?.accessor}'s okeys`);
+                }
+            }
+        }
     }
 
-    /** @type {ResolutionForwardHandler} */
-    static debugHandler({obj, token, isLeaf}, options = null) {
+    /** @type {ResolutionReverseHandler} */
+    static deleteHandler(context, options = {}) {
+        const {obj,prevContext,accessor} = context;
+        if (obj instanceof Object) { // deletes items from both arrays and object keys
+            for(const idx in obj) obj[idx] = null;
+            if(Path.isRoot(obj)) return;
+            for(const sym of Object.getOwnPropertySymbols(obj)) obj[sym] = null;
+        }
+    }
+
+    /** @type {ResolutionForwardHandler|ResolutionReverseHandler} */
+    static debugHandler({obj, token, isLeaf}, options = {}) {
         console.log(`${Path.pathTo(obj).str} => ${token?.type}:`,token?.value,`, ${isLeaf}`);
         return {action:"continue"};
     }
@@ -929,7 +903,7 @@ export class Path {
             forwardHandler = null, 
             reverseHandler = null,
             resultHandler = null,
-            handlerOptions = null,
+            handlerOptions = {},
             flat = false,
             wrapResults = true,
         } = options;
@@ -1089,7 +1063,6 @@ export class Path {
             } else {
                 llpush(finalResult);
             }
-            return finalResult;
         }
 
         const recursor = (currentRoot,tokens = this.tokens, cursor=0, accessor = null, prevContext = {obj:null,token:null,isLeaf:false,accessor:null}) => {
@@ -1297,18 +1270,22 @@ export class Path {
                         }
                         break;
                     
-                    case 'T_DEEP_WILDCARD':
+                    case T_DEEP_WILDCARD:
+                        if(prevContext?.token !== token)
+                            llpushOpen();
                         if(Array.isArray(_currentRoot)) {
-                            for(const item of _currentRoot) {
-                                recursor(item,tokens,cursor,handlerCtx,accessor);
+                            for(const [idx,item] of _currentRoot.entries()) {
+                                recursor(item,tokens,cursor,idx,handlerCtx);
                             }
                         } else if (_currentRoot instanceof BaseNode || !(_currentRoot instanceof Object)) {
-                            recursor(_currentRoot,tokens,cursor+1,handlerCtx,accessor);
+                            recursor(_currentRoot,tokens,cursor+1,accessor,prevContext);
                         } else{
-                            for(const value of Object.values(_currentRoot)) {
-                                recursor(value,tokens,cursor,handlerCtx,accessor);
+                            for(const [key,value] of Object.entries(_currentRoot)) {
+                                recursor(value,tokens,cursor,key,handlerCtx);
                             }
                         }
+                        if(prevContext?.token?.type !== T_DEEP_WILDCARD)
+                            llpushClose();
                         break;
                     default:
                         recursor(_currentRoot,tokens,cursor+1,accessor,handlerCtx); // skip token

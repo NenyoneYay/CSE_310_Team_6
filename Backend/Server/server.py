@@ -1,5 +1,6 @@
 from flask import Flask, request, render_template, send_from_directory, Response
 from os import path
+# from waitress import serve as waitress_serve
 
 app = Flask(__name__)
 
@@ -21,4 +22,7 @@ def show_page(filename:str):
     return "<title>Error!</title><p>Page does not exist</p>"
 
 if __name__ == "__main__":
-    app.run("localhost",port=5000,debug=True)
+    # run server on ::1 IPv6 address (localhost) so that chrome doesn't cry
+    app.run("::1",port=5000,threaded=True,debug=True)
+    # production server handler
+    #waitress_serve(app,host="::1",port=5000,threads=6)

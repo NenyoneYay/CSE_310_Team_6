@@ -448,6 +448,8 @@ export class EventBus {
             return {action:"skip"};
         const next = [];
         switch (token.type) {
+            case "T_DEEP_WILDCARD":
+                break;
             case "A_WILDCARD":
             case "O_WILDCARD":
                 for(const key of obj.getWildcardKeys())
