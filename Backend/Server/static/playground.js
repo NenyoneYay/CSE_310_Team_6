@@ -1,165 +1,158 @@
 
 let sheet = {
-    "data":{
-        "HP": {
+    [Symbol.for("okeys")]:["Basics","Ability Scores","Combat"],
+    "Basics": {
+        [Symbol.for("okeys")]:["Name","Class","Level"],
+        "__type": "section",
+        "expanded": true,
+        "Name": {
             "__type": "data",
-            "value": 30,
-            "max": 110
+            "value": "Bob"
         },
-        "Speed": 30,
-        "Ability Scores": {
-            "__direction": "column",
-            "Strength": {
-                "score": {
-                    "__type": "data",
-                    "value": 10,
-                    "min": 0,
-                    "max": 20
-                },
-                "deep_data":{
-                    "key2":"world"
-                }
+        "Class": {
+            "__type": "data",
+            "value": "Warlock"
+        },
+        "Level": {
+            "__type": "data",
+            "value": "1"
+        },
+    },
+    "Ability Scores": {
+        [Symbol.for("okeys")]:["Strength","Dexterity","Constitution","Intelligence","Wisdom","Charisma"],
+        "__type": "section",
+        "expanded": true,
+        "Strength": {
+            [Symbol.for("okeys")]:["score","mod","save"],
+            "__type": "section",
+            "expanded": false,
+            "score": {
+                "__type": "data",
+                "value": 10,
+                "min": 0,
+                "max": 20
             },
-            "Dexterity": {
-                "score": {
-                    "__type": "data",
-                    "value": 15,
-                    "min": 0,
-                    "max": 20
-                }
+            "mod": {
+                "__type": "data",
+                "value": 0
             },
-            "Constitution": {
-                "score": {
-                    "__type": "data",
-                    "value": 13,
-                    "min": 0,
-                    "max": 20
-                }
-            },
-            "Intelligence": {
-                "score": {
-                    "__type": "data",
-                    "value": 18,
-                    "min": 0,
-                    "max": 20
-                }
-            },
-            "Wisdom": {
-                "score": {
-                    "__type": "data",
-                    "value": 11,
-                    "min": 0,
-                    "max": 20
-                }
-            },
-            "Charisma": {
-                "score": {
-                    "__type": "data",
-                    "value": 8,
-                    "min": 0,
-                    "max": 20
-                }
+            "save": {
+                "__type": "data",
+                "value": 0
             }
         },
-        "Some Data": {
-            "multiNode": {
-                "__type": "container",
-                "content": [
-                    10,
-                    20,
-                    30
-                ]
+        "Dexterity": {
+            [Symbol.for("okeys")]:["score","mod","save"],
+            "__type": "section",
+            "expanded": false,
+            "score": {
+                "__type": "data",
+                "value": 15,
+                "min": 0,
+                "max": 20
             },
-            "sideNode": "=data('.multiNode.1')",
-            "accessor": "=data('$Ability Scores.Strength.score#max')"
+            "mod": {
+                "__type": "data",
+                "value": 0
+            },
+            "save": {
+                "__type": "data",
+                "value": 0
+            }
         },
-        "Equipment": {
-            "capacity": "=data('$Ability Scores.Strength.score') * 15",
-            "items": [
-                {
-                    "name": "Shortsword",
-                    "desc": "blablabla",
-                    "equipped": true,
-                    "weight": 5
-                },
-                {
-                    "name": "Shield",
-                    "desc": "blablabla",
-                    "equipped": false,
-                    "weight": 3
-                },
-                {
-                    "desc": "no name",
-                    "weight": 40
-                }
-            ],
-            "carrying": "=sum(aprod(data('$Equipment.items[*].weight'),data('$Equipment.items[*].equipped',1)))"
+        "Constitution": {
+            [Symbol.for("okeys")]:["score","mod","save"],
+            "__type": "section",
+            "expanded": false,
+            "score": {
+                "__type": "data",
+                "value": 13,
+                "min": 0,
+                "max": 20
+            },
+            "mod": {
+                "__type": "data",
+                "value": 0
+            },
+            "save": {
+                "__type": "data",
+                "value": 0
+            }
         },
-        "~constructor": "malicious code",
-        "Modifiers": {
-            "Save Increase": {
-                "__type": "modifier",
-                "target": "$Ability Scores.*.save",
-                "operation": "add",
-                "condition": true,
-                "value": 2,
-                "tier": "default"
+        "Intelligence": {
+            [Symbol.for("okeys")]:["score","mod","save"],
+            "__type": "section",
+            "expanded": false,
+            "score": {
+                "__type": "data",
+                "value": 18,
+                "min": 0,
+                "max": 20
             },
-            "beltEquipped": true,
-            "Strength Boost": {
-                "__type": "modifier",
-                "target": "$Ability Scores.Strength.score",
-                "operation": "add",
-                "condition": true,
-                "value": 5,
-                "tier": "default"
+            "mod": {
+                "__type": "data",
+                "value": 0
             },
-            "Belt of Strength": {
-                "__type": "modifier",
-                "target": "$Ability Scores.Strength.score#value,max",
-                "operation": "replace",
-                "condition": "=data('.beltEquipped')",
-                "value": 25,
-                "tier": 20000000
+            "save": {
+                "__type": "data",
+                "value": 0
+            }
+        },
+        "Wisdom": {
+            [Symbol.for("okeys")]:["score","mod","save"],
+            "__type": "section",
+            "expanded": false,
+            "score": {
+                "__type": "data",
+                "value": 11,
+                "min": 0,
+                "max": 20
             },
-            "Dexterity Boost": {
-                "__type": "modifier",
-                "target": "$Ability Scores.Dexterity.score",
-                "operation": "add",
-                "condition": true,
-                "value": 2,
-                "tier": "default"
+            "mod": {
+                "__type": "data",
+                "value": 0
             },
-            "Modified Checkbox": true,
-            "Checkbox Modifier": {
-                "__type": "modifier",
-                "target": ".Modified Checkbox",
-                "operation": "replace",
-                "condition": true,
-                "value": false,
-                "tier": "default"
+            "save": {
+                "__type": "data",
+                "value": 0
+            }
+        },
+        "Charisma": {
+            [Symbol.for("okeys")]:["score","mod","save"],
+            "__type": "section",
+            "expanded": false,
+            "score": {
+                "__type": "data",
+                "value": 8,
+                "min": 0,
+                "max": 20
+            },
+            "mod": {
+                "__type": "data",
+                "value": 0
+            },
+            "save": {
+                "__type": "data",
+                "value": 0
             }
         }
     },
-    "rules": {
-        "Ability Scores.*": {
-            "mod":"=floor(data('.score')/2)-5",
-            "save":"=data('.mod')",
-            "deep_data":{
-                "array1":[
-                    1,2,3
-                ],
-                "key2":"hello",
-                "key3":{
-                    "real_test":["=data('$Ability Scores.Strength.score')","=data('$Ability Scores.Strength.mod')","=data('$Ability Scores.Strength.save')"]
-                }
-            }
+    "Combat": {
+        [Symbol.for("okeys")]:["HP","AC","Speed"],
+        "__type": "section",
+        "expanded": true,
+        "HP": {
+            "__type": "data",
+            "value": 20
         },
-        "Equipment.items[*]": {
-            "__type":"requirement",
-            "equipped":false
-        }
-
+        "AC": {
+            "__type": "data",
+            "value": 12
+        },
+        "Speed": {
+            "__type": "data",
+            "value": "30ft"
+        },
     }
 };
 
