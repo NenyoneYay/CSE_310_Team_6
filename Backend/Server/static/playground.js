@@ -156,6 +156,47 @@ let sheet = {
     }
 };
 
+// Operations for sheet above ////////////////////
+function getItemWithOkey(obj, index){
+    return obj[obj[Symbol.for("okeys")][index]];
+}
+function getItemNameWithOkey(obj, index){
+    return obj[Symbol.for("okeys")][index];
+}
+function getOkeyWithItemName(obj, name){
+    return obj[Symbol.for("okeys")].indexOf(name);
+}
+function moveItemWithOkeys(obj, oldIndex, newIndex){
+    const movingItem = obj[Symbol.for("okeys")].splice(oldIndex,1)[0];
+    obj[Symbol.for("okeys")].splice(newIndex,0,movingItem);
+    return movingItem;
+}
+function moveItemWithItemNames(obj, fromItemName, toItemName){
+    moveItemWithOkeys(
+        obj,
+        getOkeyWithItemName(obj,fromItemName),
+        getOkeyWithItemName(obj,toItemName),
+    )
+}
+function moveItemToOkey(obj, itemName, newIndex){
+    moveItemWithOkeys(
+        obj,
+        getOkeyWithItemName(obj,fromItemName),
+        newIndex,
+    )
+}
+//////////////////////////////////////////////////////
+
+function okeyObjToList(obj){
+    let list = [];
+    for (const okey of obj[Symbol.for("okeys")]){
+        list.push(obj[okey]);
+    }
+    return list;
+}
+
+
+
 /** @type {Object} */
 let dragSrc = null;
 /** @type {{type:string,label:string,content:Array}} */
