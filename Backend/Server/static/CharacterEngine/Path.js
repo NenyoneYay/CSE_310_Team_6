@@ -1087,8 +1087,12 @@ export class Path {
                 if(forwardHandler) {
                     const decision = forwardHandler(handlerCtx,handlerOptions);
                     
-                    if(decision?.override_objs != undefined) {
+                    // if override_objs is iterable, then override.
+                    if(typeof(decision?.override_objs?.[Symbol.iterator]) === 'function') {
                         nextRoots = decision.override_objs;
+                    } else if (Object.hasOwn(decision,"override_objs")) {
+                        console.error("override_objs provided but isn't iterable. Ignoring.");
+                        throw new EvalError("throw~~!~~")
                     }
 
                     if(decision?.override_tokens != undefined) {

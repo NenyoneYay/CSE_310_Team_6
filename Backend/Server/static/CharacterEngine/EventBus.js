@@ -40,6 +40,24 @@ export class Listener {
     }
 }
 
+export class TrieData {
+    /**
+     * 
+     * @param {TrieNode} containerNode 
+     * @param {*} data 
+     */
+    constructor (tag, containerNode, data) {
+        this.tag = tag;
+        /** @type {TrieNode} */
+        this.containerNode = containerNode;
+        this.data = data;
+    }
+
+    destroy() {
+        this.containerNode.deleteData(this.tag,this);
+    }
+}
+
 const sliceRegEx = /^(-?\d+)?:(-?\d+)?|(-?\d+)/;
 
 /**
@@ -414,16 +432,21 @@ class TrieNode {
     /**
      * 
      * @param {string} tag 
-     * @param {*} dataObj 
+     * @param {*} data 
      */
-    setData(tag,dataObj) {
-        this[Symbol.for("eventData")].set(tag,dataObj);
+    addData(tag,data) {
+        if(!this[Symbol.for("eventData")].has(tag))
+            this[Symbol.for("eventData")].set(tag,new Set());
+
+        const rval = new TrieData(tag,this,data);
+        /** @type {Set}*/(this[Symbol.for("eventData")].get(tag)).add(rval);
+        return rval;
     }
 
     /**
      * 
      * @param {string} tag 
-     * @returns {*}
+     * @returns {Set<TrieData>}
      */
     getData(tag) {
         return this[Symbol.for("eventData")].get(tag);
@@ -434,8 +457,11 @@ class TrieNode {
      * @param {string} tag 
      * @returns {boolean} true if data existed and was removed
      */
-    deleteData(tag) {
-        return /** @type {Map} */(this[Symbol.for("eventData")]).delete(tag);
+    deleteData(tag,dataObj) {
+        if(/** @type {Map} */(this[Symbol.for("eventData")]).has(tag)) {
+            return /** @type {Set} */(this[Symbol.for("eventData")].get(tag)).delete(dataObj);
+        }
+        return false;
     }
 }
 
@@ -699,10 +725,10 @@ export class EventBus {
      * 
      * @param {string} type 
      * @param {Object|Path} target 
-     * @param {any} dataObj
+     * @param {any} data
      * @returns {any[]} Array of results of setting data.
      */
-    setData(tag,target,dataObj) {
+    addData(tag,target,data) {
         const path = Path.pathTo(target); // re-origin path to this trie
         path.origin = this.trie;
         return path.resolve({
@@ -711,7 +737,7 @@ export class EventBus {
             forwardHandler: (params) => {
                 const {obj,token} = params;
                 if(obj instanceof TrieNode && token === Path.END_TOKEN) {
-                    return {override_objs:obj.setData(tag,dataObj)};
+                    return {override_objs:[obj.addData(tag,data)]};
                 }
                 return EventBus.triePathBuildHandler(params);
             }
@@ -730,11 +756,20 @@ export class EventBus {
         return path.resolve({
             flat:true,
             wrapResults:false,
-            forwardHandler: (params) => {
-                const {obj, token} = params;
+            forwardHandler: (context) => {
+                const {obj, token} = context;
                 if(obj instanceof TrieNode && token === Path.END_TOKEN)
-                    return {override_objs:obj.getData(tag)};
-                return EventBus.triePathWalkHandler(params);
+                    return {override_objs:obj.getData(tag)?.values() ?? []};
+                return EventBus.triePathWalkHandler(context);
+            },
+            resultHandler: (context) => {
+                const {result} = context;
+                if(result instanceof TrieNode || result == null) {
+                    return {action:"discard"};
+                } else if(result instanceof Set) {
+                    return {action:"override_many", values:result.values()};
+                }
+                return {action:"keep"};
             }
         });
     }

@@ -555,6 +555,11 @@ export class DataNode extends BaseNode {
         this.max = new ExprValue(max,this);
         this.min = new ExprValue(min,this);
 
+        this.valuePath = new Path("#value",this);
+        this.maxPath = new Path("#max",this);
+        this.minPath= new Path("#min",this);
+        this.basePath= new Path("#base",this);
+
         this.value.precedentPaths.forEach(depPath => {
             this.dependencyModifications.push({type:"add precedent",path:depPath,amount:1});
         });
@@ -711,63 +716,140 @@ export class DataNode extends BaseNode {
 
                 // calculate modifiers
                 const modOperations = {}
-                for(const [node,accessors] of this.precedents.entries()) {
-                    if (node instanceof ModifierNode){
 
-                        if(!node.accessors.condition) continue;
-
-                        for (let accessor of Object.keys(accessors)) {
-                            // do something with the node operation and value
-                            // priority order: replace first, then multiply, then add
-                            if(accessor === "node") accessor = "value";
-                            if(modOperations[accessor] == undefined) {
-                                modOperations[accessor] = {};
-                            }
-                            const accessorMods = modOperations[accessor];
-                            switch(node.operation) {
-                                case "replace":
-                                    if(accessorMods?.replace == undefined) {
-                                        accessorMods.replace = {__highest: node.tier}
-                                    } else if(node.tier > accessorMods.replace.__highest || accessorMods.replace.__highest === "default") {
-                                        accessorMods.replace.__highest = node.tier; // highest tier takes priority. "default" is lowest tier
-                                    }
-                                    accessorMods.replace[node.tier] = node.accessors.value;
+                if(this.evBus != null){
+                    const setupMods = (accessorMods, node) => {
+                        if(!node.accessors.condition) return;
+                        switch(node.operation) {
+                            case "replace":
+                                if(accessorMods?.replace == undefined) {
+                                    accessorMods.replace = {__highest: node.tier}
+                                } else if(node.tier > accessorMods.replace.__highest || accessorMods.replace.__highest === "default") {
+                                    accessorMods.replace.__highest = node.tier; // highest tier takes priority. "default" is lowest tier
+                                }
+                                accessorMods.replace[node.tier] = node.accessors.value;
+                                break;
+                            case "multiply":
+                                if(accessorMods.replace != undefined)
                                     break;
-                                case "multiply":
-                                    if(accessorMods.replace != undefined)
-                                        break;
-                                    if(accessorMods?.multiply == undefined)
-                                        accessorMods.multiply = {}
-                                    if(accessorMods.multiply?.[node.tier] == undefined) {
-                                        accessorMods.multiply[node.tier] = node.accessors.value
-                                    } else {
-                                        accessorMods.multiply[node.tier] += node.accessors.value; // all multipliers of same tier add
-                                    }
+                                if(accessorMods?.multiply == undefined)
+                                    accessorMods.multiply = {}
+                                if(accessorMods.multiply?.[node.tier] == undefined) {
+                                    accessorMods.multiply[node.tier] = node.accessors.value
+                                } else {
+                                    accessorMods.multiply[node.tier] += node.accessors.value; // all multipliers of same tier add
+                                }
+                                break;
+                            case "add":
+                                if(accessorMods.replace != undefined)
                                     break;
-                                case "add":
-                                    if(accessorMods.replace != undefined)
-                                        break;
-                                    if(accessorMods?.add == undefined)
-                                        accessorMods.add = {}
-                                    if(accessorMods.add?.[node.tier] == undefined) {
-                                        accessorMods.add[node.tier] = node.accessors.value;
-                                    } else {
-                                        if(node.tier === "default") {               // default tier simply adds addition modifiers together
-                                            accessorMods.add[node.tier] += node.accessors.value;
-                                        } else {                                    // specified tier sets strongest value
-                                            if(Math.abs(node.accessors.value) > accessorMods.add[node.tier]) {
-                                                accessorMods.add[node.tier] = node.accessors.value;
-                                            }
+                                if(accessorMods?.add == undefined)
+                                    accessorMods.add = {}
+                                if(accessorMods.add?.[node.tier] == undefined) {
+                                    accessorMods.add[node.tier] = node.accessors.value;
+                                } else {
+                                    if(node.tier === "default") {               // default tier simply adds addition modifiers together
+                                        accessorMods.add[node.tier] += node.accessors.value;
+                                    } else {                                    // specified tier sets strongest value
+                                        if(Math.abs(node.accessors.value) > accessorMods.add[node.tier]) {
+                                            accessorMods.add[node.tier] = node.accessors.value;
                                         }
                                     }
-                                    break;
-                                default:
-                                    //Skip over node
-                                    break;
-                            }
+                                }
+                                break;
+                            default:
+                                //Skip over node
+                                break;
                         }
                     }
+
+                    const valueMods = [...this.evBus.getData("modifiers",this),...this.evBus.getData("modifiers",this.valuePath)];
+                    if(valueMods.length > 0) {
+                        modOperations["value"] = {}
+                        for(const dataobj of valueMods) {
+                            setupMods(modOperations["value"],dataobj.data);
+                        }
+                    }
+                    const maxMods = this.evBus.getData("modifiers",this.maxPath);
+                    if(maxMods.length > 0) {
+                        modOperations["max"] = {}
+                        for(const dataobj of maxMods) {
+                            setupMods(modOperations["max"],dataobj.data);
+                        }
+                    }
+                    const minMods = this.evBus.getData("modifiers",this.minPath);
+                    if(minMods.length > 0) {
+                        modOperations["min"] = {}
+                        for(const dataobj of minMods) {
+                            setupMods(modOperations["min"],dataobj.data);
+                        }
+                    }
+                    const baseMods = this.evBus.getData("modifiers",this.basePath);
+                    if(baseMods.length > 0) {
+                        modOperations["base"] = {}
+                        for(const dataobj of baseMods) {
+                            setupMods(modOperations["base"],dataobj.data);
+                        }
+                    } 
                 }
+
+                // for(const [node,accessors] of this.precedents.entries()) {
+                //     if (node instanceof ModifierNode){
+
+                //         if(!node.accessors.condition) continue;
+
+                //         for (let accessor of Object.keys(accessors)) {
+                //             // do something with the node operation and value
+                //             // priority order: replace first, then multiply, then add
+                //             if(accessor === "node") accessor = "value";
+                //             if(modOperations[accessor] == undefined) {
+                //                 modOperations[accessor] = {};
+                //             }
+                //             const accessorMods = modOperations[accessor];
+                //             switch(node.operation) {
+                //                 case "replace":
+                //                     if(accessorMods?.replace == undefined) {
+                //                         accessorMods.replace = {__highest: node.tier}
+                //                     } else if(node.tier > accessorMods.replace.__highest || accessorMods.replace.__highest === "default") {
+                //                         accessorMods.replace.__highest = node.tier; // highest tier takes priority. "default" is lowest tier
+                //                     }
+                //                     accessorMods.replace[node.tier] = node.accessors.value;
+                //                     break;
+                //                 case "multiply":
+                //                     if(accessorMods.replace != undefined)
+                //                         break;
+                //                     if(accessorMods?.multiply == undefined)
+                //                         accessorMods.multiply = {}
+                //                     if(accessorMods.multiply?.[node.tier] == undefined) {
+                //                         accessorMods.multiply[node.tier] = node.accessors.value
+                //                     } else {
+                //                         accessorMods.multiply[node.tier] += node.accessors.value; // all multipliers of same tier add
+                //                     }
+                //                     break;
+                //                 case "add":
+                //                     if(accessorMods.replace != undefined)
+                //                         break;
+                //                     if(accessorMods?.add == undefined)
+                //                         accessorMods.add = {}
+                //                     if(accessorMods.add?.[node.tier] == undefined) {
+                //                         accessorMods.add[node.tier] = node.accessors.value;
+                //                     } else {
+                //                         if(node.tier === "default") {               // default tier simply adds addition modifiers together
+                //                             accessorMods.add[node.tier] += node.accessors.value;
+                //                         } else {                                    // specified tier sets strongest value
+                //                             if(Math.abs(node.accessors.value) > accessorMods.add[node.tier]) {
+                //                                 accessorMods.add[node.tier] = node.accessors.value;
+                //                             }
+                //                         }
+                //                     }
+                //                     break;
+                //                 default:
+                //                     //Skip over node
+                //                     break;
+                //             }
+                //         }
+                //     }
+                // }
                 
                 // apply modifiers
                 this.accessors.base = clamp(
@@ -779,7 +861,7 @@ export class DataNode extends BaseNode {
                 const modProcessOrder = [];
                 const {base:modOperationsBase,...modOperationsRest} = modOperations;
                 if(modOperationsBase != undefined)
-                    modProcessOrder.push(modOperationsBase)
+                    modProcessOrder.push(['base',modOperationsBase]);
                 else
                     this.accessors.value = this.accessors.base;
                 modProcessOrder.push(...Object.entries(modOperationsRest))
@@ -891,10 +973,15 @@ export class ModifierNode extends DataNode {
         })
 
         this.accessors.condition = condition ?? true;
+        this.modifierData = null;
     }
 
     evaluateDependencies() {
         super.evaluateDependencies();
+        if(this.evBus != null) {
+            if(this.modifierData == null)
+                this.modifierData = this.evBus.addData('modifiers',this.target,this);
+        }
     }
 
     evaluate() {
@@ -955,5 +1042,14 @@ export class ModifierNode extends DataNode {
         }
 
         return rval;
+    }
+
+    destroy() {
+        super.destroy();
+        if(this.modifierData != null) {
+            for(const dataObj of this.modifierData)
+                this.modifierData.destroy();
+            this.modifierData = null;
+        }
     }
 }
