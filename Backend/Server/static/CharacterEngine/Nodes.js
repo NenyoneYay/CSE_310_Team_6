@@ -107,7 +107,7 @@ export class BaseNode {
         this.listenerChanges = [];
 
         /** @type {Map<string,Listener[]>} */
-        this.registeredListeners = new Map()
+        this.listenerRegistrations = new Map()
         this.updateListener = new Listener(this.update,{thisArg:this});
 
         this.dirty = true;
@@ -268,14 +268,19 @@ export class BaseNode {
     evaluateDependencies() {
         this.evBus = Path.findRoot(this)[Symbol.for("EventBus")];
 
-        this.listenerChanges.forEach((mod) => {
-            if(mod == null || mod.path == null || mod.type == null) return;
+        this.listenerChanges.forEach((change) => {
+            if(change == null || change.path == null || change.type == null) return;
 
             // TODO: implement remove operations as well
 
-            switch (mod.type) {
+            switch (change.type) {
+                case "add listener":
                 case "add precedent":
-                    this.evBus.registerListener("change",mod.path,this.updateListener)
+                    if(!this.listenerRegistrations.has(change.src))
+                        this.listenerRegistrations.set(src,new Set());
+                    this.listenerRegistrations.get(src).add(
+                        this.evBus.registerListener("change",change.path,this.updateListener)
+                    );
                     break;
 //                 case "add dependent":
 //                     this.registerDependent(node,accessor,mod.amount);
@@ -777,7 +782,7 @@ export class ModifierNode extends DataNode {
         super.destroy();
         if(this.registeredData != null) {
             if(Array.isArray(this.registeredData)) {
-                for(const dataObj of this.registeredData)
+                for(const dataReg of this.registeredData)
                     this.registeredData.destroy();
             } else {
                 this.registeredData.destroy();

@@ -41,10 +41,10 @@ export class Listener {
 }
 
 class TrieRegistration {
-    constructor (trieNode, type, key, payload) {
-        this.trieNodes = [trieNode];
+    constructor (trieNode, type, channel, payload) {
+        this.trieNodes = trieNode;
         this.type = type;
-        this.key = key;
+        this.channel = channel;
         this.payload = payload;
     }
 
@@ -54,25 +54,9 @@ class TrieRegistration {
         this.payload = null;
         this.trieNode = null;
     }
-}
 
-export class TrieData {
-    /**
-     * 
-     * @param {TrieNode} trieNode 
-     * @param {*} data 
-     */
-    constructor (tag, trieNode, data) {
-        this.tag = tag;
-        /** @type {TrieNode} */
-        this.trieNode = trieNode;
-        this.data = data;
-    }
-
-    destroy() {
-        this.trieNode.deleteData(this.tag,this);
-        this.data = null;
-        this.trieNode = null;
+    unregister() {
+        this.destroy();
     }
 }
 
@@ -160,11 +144,10 @@ const regTypePropMap = new Map([["listener","listeners"],["data","data"]])
 class TrieNode {
 
     static WildcardSym = Symbol("wildcard");
-    static RegistrationSym = Symbol("registrations")
+    static RegistrationsSym = Symbol("registrations")
 
     constructor () {
-        this[Symbol.for("eventData")] = new Map();
-        this[TrieNode.RegistrationSym] = {
+        this[TrieNode.RegistrationsSym] = {
             listeners: new Map(),
             data: new Map()
         }
@@ -174,8 +157,7 @@ class TrieNode {
         for(const [key,value] of Object.entries(node)) {
             value.destroy();
             this[Symbol.for("parent")] = null;
-            this[Symbol.for("eventListeners")] = null;
-            for(const regMap of Object.values(this[TrieNode.RegistrationSym])) {
+            for(const regMap of Object.values(this[TrieNode.RegistrationsSym])) {
                 for(const regSet of /** @type {Map<string,Set<TrieRegistration>>} */(regMap).values()) {
                     for(const reg of regSet) {
                         reg.destroy();
@@ -194,15 +176,9 @@ class TrieNode {
      * @returns {TrieRegistration|undefined} 
      */
     register(type,key,payload) {
-        let regMap = this[TrieNode.RegistrationSym][regTypePropMap.get(type)];
+        let regMap = this[TrieNode.RegistrationsSym][regTypePropMap.get(type)];
         if(regMap != undefined) {
-            let rval;
-            if(payload instanceof TrieRegistration) {
-                rval = payload;
-                rval.trieNodes.push(this);
-            } else {
-                rval = new TrieRegistration(this,type,key,payload);
-            }
+            let rval = new TrieRegistration(this,type,key,payload);
             if(!regMap.has(key)) regMap.set(key,new Set());
             regMap.get(key).add(rval);
             return rval;
@@ -217,10 +193,10 @@ class TrieNode {
     unregister(registration) {
         if(!(registration instanceof TrieRegistration))
             return false;
-        let regMap = this[TrieNode.RegistrationSym][regTypePropMap.get(registration.type)];
+        let regMap = this[TrieNode.RegistrationsSym][regTypePropMap.get(registration.type)];
         if(regMap != undefined) {
             /** @type {Map<string,Set<TrieRegistration>>}*/
-            (regMap).get(registration.key)?.delete(registration);
+            (regMap).get(registration.channel)?.delete(registration);
             return true;
         }
         return false;
@@ -233,7 +209,7 @@ class TrieNode {
      * @returns {Set<TrieRegistration>|undefined}
      */
     getRegistrations(type,key) {
-        let regMap = this[TrieNode.RegistrationSym][regTypePropMap.get(type)];
+        let regMap = this[TrieNode.RegistrationsSym][regTypePropMap.get(type)];
         if(regMap != undefined) {
             return regMap.get(key);
         }
@@ -283,7 +259,7 @@ class TrieNode {
     /**
      * 
      * @param {string} channel 
-     * @returns {Set<TrieData>}
+     * @returns {any[]} data stored across all registrations under `channel`
      */
     getData(channel) {
         const regSet = this.getRegistrations("data",channel);
@@ -633,7 +609,7 @@ export class EventBus {
      * @param {string} channel 
      * @param {Path|Object} target 
      * @param {TrieRegistration|*} payload 
-     * @returns {TrieRegistration}
+     * @returns {TrieRegistration[]}
      */
     register(type,channel,target,payload) {
         if(typeof(payload) === "function")
@@ -641,21 +617,17 @@ export class EventBus {
         if(type === "listener" && !(payload instanceof Listener))
             return undefined;
         const path = Path.pathTo(target);
-        let currentReg = undefined;
         return path.resolve({
             flat:true,
             wrapResults:false,
             forwardHandler: (context) => {
                 const {obj,token} = context;
                 if(obj instanceof TrieNode && token === Path.END_TOKEN) {
-                    const reg = obj.register(type,channel,currentReg ?? payload);
-                    if(reg != undefined) currentReg = reg;
-                    return {action:"skip"};
+                    return {override_objs:[obj.register(type,channel,payload)]};
                 }
                 return EventBus.triePathBuildHandler(context);
             }
         });
-        return currentReg;
     }
 
     /**
@@ -667,7 +639,7 @@ export class EventBus {
 
     /**
      * 
-     * @param {string} type 
+     * @param {"listener"|"data"} type 
      * @param {string} channel 
      * @param {Path|Object} target 
      * @returns {TrieRegistration[]}
@@ -814,26 +786,22 @@ export class EventBus {
      * @param {string} type 
      * @param {Object|Path} target 
      * @param {any} data
-     * @returns {any[]} Array of results of setting data.
+     * @returns {TrieRegistration[]} Array of results of setting data.
      */
     registerData(tag,target,data) {
         const path = Path.pathTo(target); // re-origin path to this trie
         path.origin = this.trie;
-        let currentReg = undefined;
         path.resolve({
             flat:true,
             wrapResults:false,
             forwardHandler: (params) => {
                 const {obj,token} = params;
                 if(obj instanceof TrieNode && token === Path.END_TOKEN) {
-                    const reg = obj.registerData(tag,currentReg ?? data);
-                    if(reg != undefined) currentReg = reg;
-                    return {action:"skip"};
+                    return {override_objs:[obj.registerData(tag, data)]};
                 }
                 return EventBus.triePathBuildHandler(params);
             }
         });
-        return currentReg;
     }
 
     /**
@@ -842,7 +810,7 @@ export class EventBus {
      * @param {Object|Path} target 
      * @returns {any[]} Array of results of data retrieval.
      */
-    getData(tag,target) {
+    getData(channel,target) {
         const path = Path.pathTo(target); 
         path.origin = this.trie; // re-origin path to this trie
         return path.resolve({
@@ -851,15 +819,13 @@ export class EventBus {
             forwardHandler: (context) => {
                 const {obj, token} = context;
                 if(obj instanceof TrieNode && token === Path.END_TOKEN)
-                    return {override_objs:obj.getData(tag)?.values() ?? []};
+                    return {override_objs:obj.getData(channel)};
                 return EventBus.triePathWalkHandler(context);
             },
             resultHandler: (context) => {
                 const {result} = context;
                 if(result instanceof TrieNode || result == null) {
                     return {action:"discard"};
-                } else if(result instanceof Set) {
-                    return {action:"override_many", values:result.values()};
                 }
                 return {action:"keep"};
             }
