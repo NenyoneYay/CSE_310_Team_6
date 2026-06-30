@@ -277,8 +277,8 @@ export class BaseNode {
                 case "add listener":
                 case "add precedent":
                     if(!this.listenerRegistrations.has(change.src))
-                        this.listenerRegistrations.set(src,new Set());
-                    this.listenerRegistrations.get(src).add(
+                        this.listenerRegistrations.set(change.src,new Set());
+                    this.listenerRegistrations.get(change.src).add(
                         this.evBus.registerListener("change",change.path,this.updateListener)
                     );
                     break;
@@ -342,13 +342,13 @@ export class DataNode extends BaseNode {
         this.basePath= new Path("#base",this);
 
         this.value.precedentPaths.forEach(depPath => {
-            this.listenerChanges.push({type:"add precedent",path:depPath,amount:1});
+            this.listenerChanges.push({type:"add precedent",src:"value",path:depPath});
         });
         this.max.precedentPaths.forEach(depPath => {
-            this.listenerChanges.push({type:"add precedent",path:depPath,amount:1});
+            this.listenerChanges.push({type:"add precedent",src:"max",path:depPath,amount:1});
         });
         this.min.precedentPaths.forEach(depPath => {
-            this.listenerChanges.push({type:"add precedent",path:depPath,amount:1});
+            this.listenerChanges.push({type:"add precedent",src:"min",path:depPath,amount:1});
         });
 
         this.dirty = true;
@@ -390,7 +390,7 @@ export class DataNode extends BaseNode {
      * @param {"precedent"|"dependent"} type 
      * @returns 
      */
-    calculateDepMods(oldPaths,newPaths,type="precedent") {
+    calculateDepMods(src,oldPaths,newPaths,type="precedent") {
         if(!(["precedent","dependent"].includes(type))) return;
 
         const dependencyMods = [];
@@ -398,11 +398,11 @@ export class DataNode extends BaseNode {
             if (oldPaths.has(key)) {
                 oldPaths.delete(key)
             } else {
-                dependencyMods.push({type:`add ${type}`,path:path,amount:1})
+                dependencyMods.push({type:`add ${type}`,path:path,src})
             }
         });
         oldPaths.forEach((path,key) => {
-            dependencyMods.push({type:`remove ${type}`,path:path,amount:1})
+            dependencyMods.push({type:`remove ${type}`,path:path,src})
         })
         return dependencyMods;
     }
@@ -435,25 +435,25 @@ export class DataNode extends BaseNode {
          * @param {string|boolean|number} newVal 
          * @returns {Array<{type:string,path:Path,amount:Number}>}
          */
-        const getDepMods = (accessor,newVal) => {
+        const getDepMods = (src,accessor,newVal) => {
             const dependencyMods = [];
             const oldPaths = accessor.modify(newVal,this);
             //Update Path
-            return this.calculateDepMods(oldPaths,accessor.precedentPaths);
+            return this.calculateDepMods(src,oldPaths,accessor.precedentPaths);
         }
 
         if(!this[Symbol.for("virtual")]) {
             if(value != undefined && value !== this.value.value) {
                 try {value = JSON.parse(value)} catch (err) {}
-                this.listenerChanges.push(...getDepMods(this.value,value));
+                this.listenerChanges.push(...getDepMods("value",this.value,value));
             }
             if(min != undefined && min !== this.min.value) {
                 try {min = JSON.parse(min)} catch (err) {}
-                this.listenerChanges.push(...getDepMods(this.min,min)); 
+                this.listenerChanges.push(...getDepMods("min",this.min,min)); 
             }
             if(max != undefined && max !== this.max.value) {
                 try {max = JSON.parse(max)} catch (err) {}
-                this.listenerChanges.push(...getDepMods(this.max,max)); 
+                this.listenerChanges.push(...getDepMods("max",this.max,max)); 
             }
 
             this.evaluateDependencies();
@@ -686,7 +686,7 @@ export class ModifierNode extends DataNode {
 
         this.condition = new ExprValue(condition ?? true, this);
         this.condition.precedentPaths.forEach(depPath => {
-            this.listenerChanges.push({type:"add precedent",path:depPath,amount:1});
+            this.listenerChanges.push({type:"add precedent",path:depPath,src:"condition"});
         })
 
         this.accessors.condition = condition ?? true;
@@ -739,17 +739,17 @@ export class ModifierNode extends DataNode {
          * @param {string|boolean|number} newVal 
          * @returns {Array<{type:string,path:Path,amount:Number}>}
          */
-        const getDepMods = (accessor,newVal) => {
+        const getDepMods = (src,accessor,newVal) => {
             const dependencyMods = [];
             const oldPaths = accessor.modify(newVal,this);
             //Update Path
-            return this.calculateDepMods(oldPaths,accessor.precedentPaths);
+            return this.calculateDepMods(src,oldPaths,accessor.precedentPaths);
         }
 
         if(!this[Symbol.for("virtual")]) {
             if(condition != undefined) {
                 try {condition = JSON.parse(condition)} catch (err) {}
-                this.listenerChanges.push(...getDepMods(this.condition,condition));
+                this.listenerChanges.push(...getDepMods("condition",this.condition,condition));
             }
         }
 
