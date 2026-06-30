@@ -1,194 +1,201 @@
 
 let sheet = {
-
-    meta: {
-        name: "My Character", 
-        system: "Custom", 
-        version: "1" 
+    [Symbol.for("okeys")]:["Basics","Ability Scores","Combat"],
+    "Basics": {
+        [Symbol.for("okeys")]:["Name","Class","Level"],
+        "__type": "section",
+        "expanded": true,
+        "Name": {
+            "__type": "data",
+            "value": "Bob"
+        },
+        "Class": {
+            "__type": "data",
+            "value": "Warlock"
+        },
+        "Level": {
+            "__type": "data",
+            "value": "1"
+        },
     },
-    content: [
-        {
-            type: "section",
-            label: "Basics", 
-            content: [
-                {
-                    label: "Name",  
-                    type: "text",   
-                    value: "" 
-                },
-                {
-                    label: "Class", 
-                    type: "text",   
-                    value: "" 
-                },
-                {
-                    label: "Level", 
-                    type: "number", 
-                    value: "1" 
-                }
-            ]
+    "Ability Scores": {
+        [Symbol.for("okeys")]:["Strength","Dexterity","Constitution","Intelligence","Wisdom","Charisma"],
+        "__type": "section",
+        "expanded": true,
+        "Strength": {
+            [Symbol.for("okeys")]:["score","mod","save"],
+            "__type": "section",
+            "expanded": false,
+            "score": {
+                "__type": "data",
+                "value": 10,
+                "min": 0,
+                "max": 20
+            },
+            "mod": {
+                "__type": "data",
+                "value": 0
+            },
+            "save": {
+                "__type": "data",
+                "value": 0
+            }
         },
-        {
-            label: "Ability scores", 
-            content: [
-                {
-                    label: "Strength",
-                    expanded: false,
-                    type: "section", 
-                    content: [
-                        {
-                            label:"score",
-                            type:"number",
-                            value:"10"
-                        },
-                        {
-                            label:"mod",
-                            type:"number",
-                            value:"0"
-                        },
-                        {
-                            label:"save",
-                            type:"number",
-                            value:"0"
-                        }
-                    ] 
-                },
-                {
-                    label: "Dexterity",
-                    expanded: false,
-                    type: "section", 
-                    content: [
-                        {
-                            label:"score",
-                            type:"number",
-                            value:"10"
-                        },
-                        {
-                            label:"mod",
-                            type:"number",
-                            value:"0"
-                        },
-                        {
-                            label:"save",
-                            type:"number",
-                            value:"0"
-                        }
-                    ] 
-                },
-                {
-                    label: "Constitution",
-                    expanded: false,
-                    type: "section", 
-                    content: [
-                        {
-                            label:"score",
-                            type:"number",
-                            value:"10"
-                        },
-                        {
-                            label:"mod",
-                            type:"number",
-                            value:"0"
-                        },
-                        {
-                            label:"save",
-                            type:"number",
-                            value:"0"
-                        }
-                    ] 
-                },
-                {
-                    label: "Intelligence",
-                    expanded: false,
-                    type: "section", 
-                    content: [
-                        {
-                            label:"score",
-                            type:"number",
-                            value:"10"
-                        },
-                        {
-                            label:"mod",
-                            type:"number",
-                            value:"0"
-                        },
-                        {
-                            label:"save",
-                            type:"number",
-                            value:"0"
-                        }
-                    ] 
-                },
-                {
-                    label: "Wisdom",
-                    expanded: false,
-                    type: "section", 
-                    content: [
-                        {
-                            label:"score",
-                            type:"number",
-                            value:"10"
-                        },
-                        {
-                            label:"mod",
-                            type:"number",
-                            value:"0"
-                        },
-                        {
-                            label:"save",
-                            type:"number",
-                            value:"0"
-                        }
-                    ] 
-                },
-                {
-                    label: "Charisma",
-                    expanded: false,
-                    type: "section", 
-                    content: [
-                        {
-                            label:"score",
-                            type:"number",
-                            value:"10"
-                        },
-                        {
-                            label:"mod",
-                            type:"number",
-                            value:"0"
-                        },
-                        {
-                            label:"save",
-                            type:"number",
-                            value:"0"
-                        }
-                    ] 
-                }
-            ]
+        "Dexterity": {
+            [Symbol.for("okeys")]:["score","mod","save"],
+            "__type": "section",
+            "expanded": false,
+            "score": {
+                "__type": "data",
+                "value": 15,
+                "min": 0,
+                "max": 20
+            },
+            "mod": {
+                "__type": "data",
+                "value": 0
+            },
+            "save": {
+                "__type": "data",
+                "value": 0
+            }
         },
-        {
-            label: "Combat", 
-            type: "section",
-            content: [
-                {
-                    label: "HP",    
-                    type: "number", 
-                    value: "" 
-                },
-                {
-                    label: "AC",    
-                    type: "number", 
-                    value: "" 
-                },
-                {
-                    label: "Speed", 
-                    type: "text",   
-                    value: "30ft" 
-                }
-            ]
+        "Constitution": {
+            [Symbol.for("okeys")]:["score","mod","save"],
+            "__type": "section",
+            "expanded": false,
+            "score": {
+                "__type": "data",
+                "value": 13,
+                "min": 0,
+                "max": 20
+            },
+            "mod": {
+                "__type": "data",
+                "value": 0
+            },
+            "save": {
+                "__type": "data",
+                "value": 0
+            }
+        },
+        "Intelligence": {
+            [Symbol.for("okeys")]:["score","mod","save"],
+            "__type": "section",
+            "expanded": false,
+            "score": {
+                "__type": "data",
+                "value": 18,
+                "min": 0,
+                "max": 20
+            },
+            "mod": {
+                "__type": "data",
+                "value": 0
+            },
+            "save": {
+                "__type": "data",
+                "value": 0
+            }
+        },
+        "Wisdom": {
+            [Symbol.for("okeys")]:["score","mod","save"],
+            "__type": "section",
+            "expanded": false,
+            "score": {
+                "__type": "data",
+                "value": 11,
+                "min": 0,
+                "max": 20
+            },
+            "mod": {
+                "__type": "data",
+                "value": 0
+            },
+            "save": {
+                "__type": "data",
+                "value": 0
+            }
+        },
+        "Charisma": {
+            [Symbol.for("okeys")]:["score","mod","save"],
+            "__type": "section",
+            "expanded": false,
+            "score": {
+                "__type": "data",
+                "value": 8,
+                "min": 0,
+                "max": 20
+            },
+            "mod": {
+                "__type": "data",
+                "value": 0
+            },
+            "save": {
+                "__type": "data",
+                "value": 0
+            }
         }
-    ]
-
+    },
+    "Combat": {
+        [Symbol.for("okeys")]:["HP","AC","Speed"],
+        "__type": "section",
+        "expanded": true,
+        "HP": {
+            "__type": "data",
+            "value": 20
+        },
+        "AC": {
+            "__type": "data",
+            "value": 12
+        },
+        "Speed": {
+            "__type": "data",
+            "value": "30ft"
+        },
+    }
 };
+
+// Operations for sheet above ////////////////////
+function getItemWithOkey(obj, index){
+    return obj[obj[Symbol.for("okeys")][index]];
+}
+function getItemNameWithOkey(obj, index){
+    return obj[Symbol.for("okeys")][index];
+}
+function getOkeyWithItemName(obj, name){
+    return obj[Symbol.for("okeys")].indexOf(name);
+}
+function moveItemWithOkeys(obj, oldIndex, newIndex){
+    const movingItem = obj[Symbol.for("okeys")].splice(oldIndex,1)[0];
+    obj[Symbol.for("okeys")].splice(newIndex,0,movingItem);
+    return movingItem;
+}
+function moveItemWithItemNames(obj, fromItemName, toItemName){
+    moveItemWithOkeys(
+        obj,
+        getOkeyWithItemName(obj,fromItemName),
+        getOkeyWithItemName(obj,toItemName),
+    )
+}
+function moveItemToOkey(obj, itemName, newIndex){
+    moveItemWithOkeys(
+        obj,
+        getOkeyWithItemName(obj,fromItemName),
+        newIndex,
+    )
+}
+//////////////////////////////////////////////////////
+
+function okeyObjToList(obj){
+    let list = [];
+    for (const okey of obj[Symbol.for("okeys")]){
+        list.push(obj[okey]);
+    }
+    return list;
+}
+
+
 
 /** @type {Object} */
 let dragSrc = null;
