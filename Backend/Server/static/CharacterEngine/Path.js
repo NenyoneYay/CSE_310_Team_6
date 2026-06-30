@@ -1090,7 +1090,7 @@ export class Path {
                     // if override_objs is iterable, then override.
                     if(typeof(decision?.override_objs?.[Symbol.iterator]) === 'function') {
                         nextRoots = decision.override_objs;
-                    } else if (Object.hasOwn(decision,"override_objs")) {
+                    } else if (decision != null && Object.hasOwn(decision,"override_objs")) {
                         console.error("override_objs provided but isn't iterable. Ignoring.");
                         throw new EvalError("throw~~!~~")
                     }

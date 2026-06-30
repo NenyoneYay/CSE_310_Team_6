@@ -3,6 +3,8 @@ import {ExprValue} from "./ExprValue.js";
 import {compareObj, sanatizeKey} from "./helpers.js";
 import { EventBus, Listener } from "./EventBus.js";
 
+const DATA_CHANGE_HANDLER = Symbol("dataChangeHandler");
+
 export class Container {
     static defaultDataObj = {
         direction: "column",
@@ -97,21 +99,16 @@ export class BaseNode {
 
         /** @type {EventBus|undefined} */
         this.evBus = undefined;
-        /** @type {Path[]} */
-        this.emitters = [];
-
-        // dependents and precedents are mapped directly to nodes after
-        // the character data tree is constructed. Maps are used to 
-        /** @type {Map<BaseNode,{[accessor:string]:Number}>} */
-        this.dependents = new Map();
-        /** @type {Map<BaseNode,{[accessor:string]:Number}>} */
-        this.precedents = new Map();
 
         // dependencyModifications defines what changes need to be made in the next
         // dependency evaluation pass. Stores a list of Objects of the form:
         // {type:"add/remove",path:<Path>,amount:<Number>}
-        /** @type {{type:String,path:Path,amount:Number}[]} */
-        this.dependencyModifications = [];
+        /** @type {{type:string,src:string,path:Path}[]} */
+        this.listenerChanges = [];
+
+        /** @type {Map<string,Listener[]>} */
+        this.registeredListeners = new Map()
+        this.updateListener = new Listener(this.update,{thisArg:this});
 
         this.dirty = true;
         this.visited = false;
@@ -142,7 +139,7 @@ export class BaseNode {
             if(document.activeElement === this.renderedElement)
                 this.set({value:newVal});
             else
-                this.evaluate();
+                this.updateRenderedElement();
         }
 
         this.inputFocusHandler = (event) => {
@@ -150,7 +147,7 @@ export class BaseNode {
         }
 
         this.inputBlurHandler = (event) => {
-            this.evaluate();
+            this.updateRenderedElement();
         }
     }
 
@@ -208,29 +205,20 @@ export class BaseNode {
      * 
      * @param {HTMLInputElement} element 
      */
-    attachInput (element) {
-        this.renderedElement = element;
-        element.addEventListener("change",this.inputChangeHandler);
-        this.evaluate();
-    }
-
-    /**
-     * 
-     * @param {HTMLInputElement} element 
-     */
     detachInput () {
-        this.renderedElement?.removeEventListener("change",this.inputChangeHandler)
+        this.renderedElement?.removeEventListener("focus", this.inputFocusHandler);
+        this.renderedElement?.removeEventListener("input",this.inputChangeHandler);
+        this.renderedElement?.removeEventListener("blur", this.inputBlurHandler);
         this.renderedElement = null;
     }
 
     set(value) {
-        this.setDirty();
-        this.evaluate();
+        this.update();
     }
 
     // idea: allow visited to be a loop counter to allow circular 
     // loops and recalculate up to x amount of times.
-    setDirty() {
+    update() {
         if (!this.visited) {
             this.visited = true;
         } else {
@@ -246,21 +234,14 @@ export class BaseNode {
             if(!this.dirty){
                 this.dirty = true;
             }
-            // for (let node of this.dependents.keys()) {
-            //     if (node instanceof BaseNode) {
-            //         node.setDirty()
-            //     }
-            // }
             
-            // // if made async, please await this call so that loops can be
+            // // if made async, please await the emit call so that loops can be
             // // detected.
             const stale_accessors = {...this.accessors}
             this.evaluate();
             if(!compareObj(this.accessors,stale_accessors)) {
                 this.evBus?.emit("change",this);
-                for(const emitPath of this.emitters) {
-                    this.evBus?.emit("modify",emitPath);
-                }
+                if(this[DATA_CHANGE_HANDLER]) this[DATA_CHANGE_HANDLER]();
             }
         } catch (e){
             this.isErrorSrc = false;
@@ -274,19 +255,6 @@ export class BaseNode {
     evaluate() {
         if (this.dirty) {
             this.dirty = false;
-            
-            try {
-                // for(let dependent of this.dependents.keys()) {
-                //     if (dependent instanceof BaseNode)
-                //         dependent.evaluate();
-                // }
-                //this.evBus?.emit("change",this);
-            } catch (e) {
-                this.isErrorSrc = false;
-                this.error = e.message;
-                throw e;
-            }
-
             this.isErrorSrc = false;
             this.error = null;
             this.warning = null;
@@ -299,224 +267,32 @@ export class BaseNode {
 
     evaluateDependencies() {
         this.evBus = Path.findRoot(this)[Symbol.for("EventBus")];
-        const updateListener = new Listener(this.setDirty,{applier: this});
-        const thisPath = Path.pathTo(this).append("#value,max,min").concatenate(Path.pathTo(this));
-        this.evBus.addListener("modify",thisPath,updateListener);
 
-        this.dependencyModifications.forEach((mod) => {
+        this.listenerChanges.forEach((mod) => {
             if(mod == null || mod.path == null || mod.type == null) return;
 
-            
-            if(mod.type == "add precedent")
-                this.evBus.addListener("change",mod.path,updateListener)
-            else if(mod.type === "add dependent")
-                this.emitters.push(mod.path);
-            // implement remove operations as well
+            // TODO: implement remove operations as well
+
+            switch (mod.type) {
+                case "add precedent":
+                    this.evBus.registerListener("change",mod.path,this.updateListener)
+                    break;
+//                 case "add dependent":
+//                     this.registerDependent(node,accessor,mod.amount);
+//                     break;
+//                 case "remove precedent":
+//                     this.unregisterPrecedent(node,accessor,mod.amount);
+//                     break;
+//                 case "remove dependent":
+//                     this.unregisterDependent(node,accessor,mod.amount);
+//                     break;
+            }
             
             return;
-
-            //Update Path
-            // const resolvedPaths = mod.path.resolve({flat:true}) ?? null;
-            
-            // const pathCrawler = (pathResult) => {
-            //     if(pathResult == null) return;
-            //     else if (pathResult?.__type === "pathResult") {
-            //         let node = null, accessor = null;
-
-            //         if(pathResult.result instanceof BaseNode) {
-            //             node = pathResult.result;
-            //         } else if (pathResult.context instanceof BaseNode) {
-            //             node = pathResult.context;
-            //             accessor = pathResult.accessor;
-            //         }
-
-            //         if(node != null) {
-            //             switch (mod.type) {
-            //                 case "add precedent":
-            //                     this.registerPrecedent(node,accessor,mod.amount);
-            //                     break;
-            //                 case "add dependent":
-            //                     this.registerDependent(node,accessor,mod.amount);
-            //                     break;
-            //                 case "remove precedent":
-            //                     this.unregisterPrecedent(node,accessor,mod.amount);
-            //                     break;
-            //                 case "remove dependent":
-            //                     this.unregisterDependent(node,accessor,mod.amount);
-            //                     break;
-            //             }
-            //         }
-            //         return;
-            //     } else if (Array.isArray(pathResult)) {
-            //         pathResult.forEach(item => pathCrawler(item));
-            //     } else if (pathResult instanceof Object) {
-            //         console.error(`${Path.pathTo(this).str}: Encountered unexpected Object in dependency results.`);
-            //     }
-            // }
-            // pathCrawler(resolvedPaths);
         });
 
         // Once connections are made, clear out modifications list
-        this.dependencyModifications = [];
-    }
-
-    /**
-     * @param {BaseNode} node 
-     * @param {string|string[]} accessors 
-     * @param {Number} amount 
-     */
-    registerPrecedent(node, accessors = null, amount = 1) {
-        if (node instanceof BaseNode) {
-            const newPrecedentVal = this.precedents.get(node) ?? {};
-            const newDependentVal = node.dependents.get(this) ?? {};
-            if (accessors == null) {
-                accessors = ["value"];
-            } else if(!Array.isArray(accessors)) {
-                accessors = [accessors];
-            }
-
-            for (const accessor of accessors) {
-                const pCount = newPrecedentVal?.[accessor] ?? 0;
-                const dCount = newDependentVal?.[accessor] ?? 0;
-                newPrecedentVal[accessor] = pCount + amount;
-                newDependentVal[accessor] = dCount + amount;
-            }
-            this.precedents.set(node,newPrecedentVal);
-            node.dependents.set(this,newDependentVal);
-        }
-    }
-
-    /**
-     * @param {BaseNode} node 
-     * @param {string|string[]} accessors 
-     * @param {Number} amount 
-     */
-    registerDependent(node, accessors = null, amount = 1) {
-        if (node instanceof BaseNode) {
-            const newPrecedentVal = node.precedents.get(this) ?? {};
-            const newDependentVal = this.dependents.get(node) ?? {};
-            if (accessors == null) {
-                accessors = ["value"];
-            } else if(!Array.isArray(accessors)) {
-                accessors = [accessors];
-            }
-            
-            for (const accessor of accessors) {
-                const pCount = newPrecedentVal?.[accessor] ?? 0;
-                const dCount = newDependentVal?.[accessor] ?? 0;
-                newPrecedentVal[accessor] = pCount + amount;
-                newDependentVal[accessor] = dCount + amount;
-            }
-
-            this.dependents.set(node,newDependentVal);
-            node.precedents.set(this,newPrecedentVal);
-        }
-    }
-
-    unregisterDependencies() {
-        for(const [node,accessors] of this.precedents) {
-            for (const [accessor,amount] of Object.entries(accessors)) {
-                node.unregisterDependent(this,[accessor],amount);
-            }
-        }
-
-        for(const [node,accessors] of this.dependents) {
-            for (const [accessor,amount] of Object.entries(accessors)){
-                node.unregisterPrecedent(this,[accessor],amount);
-            }
-        }
-    }
-
-    /**
-     * 
-     * @param {BaseNode} node 
-     * @param {string|string[]} accessors 
-     * @param {Number} amount 
-     */
-    unregisterPrecedent(node, accessors = null, amount = 1){
-        if (node instanceof BaseNode) {
-            const newPrecedentVal = this.precedents.get(node) ?? {};
-            const newDependentVal = node.dependents.get(this) ?? {};
-            if (accessors == null) {
-                accessors = ["value"];
-            } else if(!Array.isArray(accessors)) {
-                accessors = [accessors];
-            }
-            
-            for (const accessor of accessors) {
-                const pCount = newPrecedentVal?.[accessor] ?? 0;
-                const dCount = newDependentVal?.[accessor] ?? 0;
-                if(newPrecedentVal?.[accessor] != undefined) {
-                    if(pCount > amount) newPrecedentVal[accessor] = pCount - amount;
-                    else delete newPrecedentVal[accessor];
-                }
-
-                if(newDependentVal?.[accessor] != undefined) {
-                    if(dCount > amount) newDependentVal[accessor] = pCount - amount;
-                    else delete newDependentVal[accessor];
-                }
-            }
-
-            if(Object.keys(newPrecedentVal).length > 0) {
-                this.precedents.set(node,newPrecedentVal);
-            } else {
-                this.precedents.delete(node);
-            }
-
-            if(Object.keys(newDependentVal).length > 0) {
-                node.dependents.set(this,newDependentVal);
-            } else {
-                node.dependents.delete(this);
-            }
-
-            this.evaluate();
-        }
-    }
-
-    /**
-     * 
-     * @param {BaseNode} node 
-     * @param {string|string[]} accessors 
-     * @param {Number} amount 
-     */
-    unregisterDependent(node, accessors = null, amount = 1) {
-        if (node instanceof BaseNode) {
-            const newPrecedentVal = node.precedents.get(this) ?? {};
-            const newDependentVal = this.dependents.get(node) ?? {};
-            if (accessors == null) {
-                accessors = ["value"];
-            } else if(!Array.isArray(accessors)) {
-                accessors = [accessors];
-            }
-            
-            for (const accessor of accessors) {
-                const pCount = newPrecedentVal?.[accessor] ?? 0;
-                const dCount = newDependentVal?.[accessor] ?? 0;
-                if(newPrecedentVal?.[accessor] != undefined) {
-                    if(pCount > amount) newPrecedentVal[accessor] = pCount - amount;
-                    else delete newPrecedentVal[accessor];
-                }
-
-                if(newDependentVal?.[accessor] != undefined) {
-                    if(dCount > amount) newDependentVal[accessor] = pCount - amount;
-                    else delete newDependentVal[accessor];
-                }
-            }
-
-            if(Object.keys(newPrecedentVal).length > 0) {
-                node.precedents.set(this,newPrecedentVal);
-            } else {
-                node.precedents.delete(this);
-            }
-
-            if(Object.keys(newDependentVal).length > 0) {
-                this.dependents.set(node,newDependentVal);
-            } else {
-                this.dependents.delete(node);
-            }
-
-            node.evaluate();
-        }
+        this.listenerChanges = [];
     }
 
     getSaveData() {
@@ -561,13 +337,13 @@ export class DataNode extends BaseNode {
         this.basePath= new Path("#base",this);
 
         this.value.precedentPaths.forEach(depPath => {
-            this.dependencyModifications.push({type:"add precedent",path:depPath,amount:1});
+            this.listenerChanges.push({type:"add precedent",path:depPath,amount:1});
         });
         this.max.precedentPaths.forEach(depPath => {
-            this.dependencyModifications.push({type:"add precedent",path:depPath,amount:1});
+            this.listenerChanges.push({type:"add precedent",path:depPath,amount:1});
         });
         this.min.precedentPaths.forEach(depPath => {
-            this.dependencyModifications.push({type:"add precedent",path:depPath,amount:1});
+            this.listenerChanges.push({type:"add precedent",path:depPath,amount:1});
         });
 
         this.dirty = true;
@@ -591,9 +367,9 @@ export class DataNode extends BaseNode {
             if (this.renderedElement?.type === "text"){
                 this.modify({value:this.renderedElement.value});
             }
-            this.evaluate();
             if(this.renderedElement?.type === "text")
                 this.renderHTML(this.accessors.value);
+            this.updateRenderedElement();
         }
         const baseInputChangeHandler = this.inputChangeHandler;
         this.inputChangeHandler = (event) => {
@@ -636,10 +412,9 @@ export class DataNode extends BaseNode {
             if(min != undefined) if(this.min.set(min)) success = true;
             if(max != undefined) if(this.max.set(max)) success = true;
             if(success) {
-                this.setDirty();
+                this.update();
             }
         }
-        this.evaluate();
     }
 
     /**
@@ -665,249 +440,187 @@ export class DataNode extends BaseNode {
         if(!this[Symbol.for("virtual")]) {
             if(value != undefined && value !== this.value.value) {
                 try {value = JSON.parse(value)} catch (err) {}
-                this.dependencyModifications.push(...getDepMods(this.value,value));
+                this.listenerChanges.push(...getDepMods(this.value,value));
             }
             if(min != undefined && min !== this.min.value) {
                 try {min = JSON.parse(min)} catch (err) {}
-                this.dependencyModifications.push(...getDepMods(this.min,min)); 
+                this.listenerChanges.push(...getDepMods(this.min,min)); 
             }
             if(max != undefined && max !== this.max.value) {
                 try {max = JSON.parse(max)} catch (err) {}
-                this.dependencyModifications.push(...getDepMods(this.max,max)); 
+                this.listenerChanges.push(...getDepMods(this.max,max)); 
             }
 
             this.evaluateDependencies();
-            this.setDirty();
+            this.update();
         }
-        this.evaluate();
     }
 
     evaluate() {
-        if(this.dirty) {
-            try {
-
-                const clamp = (val, min, max) => {
-                    if (min != null) {
-                        val = Math.max(val,min);
-                    }
-
-                    if (max != null) {
-                        val = Math.min(val,max);
-                    }
-                    return val;
+        try {
+            const clamp = (val, min, max) => {
+                if (min != null) {
+                    val = Math.max(val,min);
                 }
 
-                // Evaluate this node
-                // max
-                let result = this.max.evaluate();
-                this.accessors.max = 
-                    (Number.isNaN(result) || result == null)
-                    ? null 
-                    : result;
+                if (max != null) {
+                    val = Math.min(val,max);
+                }
+                return val;
+            }
 
-                // min
-                result = this.min.evaluate();
-                this.accessors.min = 
-                    (Number.isNaN(result) || result == null)
-                    ? null 
-                    : result;
+            // Evaluate this node
+            // max
+            let result = this.max.evaluate();
+            this.accessors.max = 
+                (Number.isNaN(result) || result == null)
+                ? null 
+                : result;
 
-                this.accessors.base = this.value.evaluate();
+            // min
+            result = this.min.evaluate();
+            this.accessors.min = 
+                (Number.isNaN(result) || result == null)
+                ? null 
+                : result;
 
-                // calculate modifiers
-                const modOperations = {}
+            this.accessors.base = this.value.evaluate();
 
-                if(this.evBus != null){
-                    const setupMods = (accessorMods, node) => {
-                        if(!node.accessors.condition) return;
-                        switch(node.operation) {
-                            case "replace":
-                                if(accessorMods?.replace == undefined) {
-                                    accessorMods.replace = {__highest: node.tier}
-                                } else if(node.tier > accessorMods.replace.__highest || accessorMods.replace.__highest === "default") {
-                                    accessorMods.replace.__highest = node.tier; // highest tier takes priority. "default" is lowest tier
-                                }
-                                accessorMods.replace[node.tier] = node.accessors.value;
+            // calculate modifiers
+            const modOperations = {}
+
+            if(this.evBus != null){
+                const setupMods = (accessorMods, node) => {
+                    if(!node.accessors.condition) return;
+                    switch(node.operation) {
+                        case "replace":
+                            if(accessorMods?.replace == undefined) {
+                                accessorMods.replace = {__highest: node.tier}
+                            } else if(node.tier > accessorMods.replace.__highest || accessorMods.replace.__highest === "default") {
+                                accessorMods.replace.__highest = node.tier; // highest tier takes priority. "default" is lowest tier
+                            }
+                            accessorMods.replace[node.tier] = node.accessors.value;
+                            break;
+                        case "multiply":
+                            if(accessorMods.replace != undefined)
                                 break;
-                            case "multiply":
-                                if(accessorMods.replace != undefined)
-                                    break;
-                                if(accessorMods?.multiply == undefined)
-                                    accessorMods.multiply = {}
-                                if(accessorMods.multiply?.[node.tier] == undefined) {
-                                    accessorMods.multiply[node.tier] = node.accessors.value
-                                } else {
-                                    accessorMods.multiply[node.tier] += node.accessors.value; // all multipliers of same tier add
-                                }
+                            if(accessorMods?.multiply == undefined)
+                                accessorMods.multiply = {}
+                            if(accessorMods.multiply?.[node.tier] == undefined) {
+                                accessorMods.multiply[node.tier] = node.accessors.value
+                            } else {
+                                accessorMods.multiply[node.tier] += node.accessors.value; // all multipliers of same tier add
+                            }
+                            break;
+                        case "add":
+                            if(accessorMods.replace != undefined)
                                 break;
-                            case "add":
-                                if(accessorMods.replace != undefined)
-                                    break;
-                                if(accessorMods?.add == undefined)
-                                    accessorMods.add = {}
-                                if(accessorMods.add?.[node.tier] == undefined) {
-                                    accessorMods.add[node.tier] = node.accessors.value;
-                                } else {
-                                    if(node.tier === "default") {               // default tier simply adds addition modifiers together
-                                        accessorMods.add[node.tier] += node.accessors.value;
-                                    } else {                                    // specified tier sets strongest value
-                                        if(Math.abs(node.accessors.value) > accessorMods.add[node.tier]) {
-                                            accessorMods.add[node.tier] = node.accessors.value;
-                                        }
+                            if(accessorMods?.add == undefined)
+                                accessorMods.add = {}
+                            if(accessorMods.add?.[node.tier] == undefined) {
+                                accessorMods.add[node.tier] = node.accessors.value;
+                            } else {
+                                if(node.tier === "default") {               // default tier simply adds addition modifiers together
+                                    accessorMods.add[node.tier] += node.accessors.value;
+                                } else {                                    // specified tier sets strongest value
+                                    if(Math.abs(node.accessors.value) > accessorMods.add[node.tier]) {
+                                        accessorMods.add[node.tier] = node.accessors.value;
                                     }
                                 }
-                                break;
-                            default:
-                                //Skip over node
-                                break;
-                        }
-                    }
-
-                    const valueMods = [...this.evBus.getData("modifiers",this),...this.evBus.getData("modifiers",this.valuePath)];
-                    if(valueMods.length > 0) {
-                        modOperations["value"] = {}
-                        for(const dataobj of valueMods) {
-                            setupMods(modOperations["value"],dataobj.data);
-                        }
-                    }
-                    const maxMods = this.evBus.getData("modifiers",this.maxPath);
-                    if(maxMods.length > 0) {
-                        modOperations["max"] = {}
-                        for(const dataobj of maxMods) {
-                            setupMods(modOperations["max"],dataobj.data);
-                        }
-                    }
-                    const minMods = this.evBus.getData("modifiers",this.minPath);
-                    if(minMods.length > 0) {
-                        modOperations["min"] = {}
-                        for(const dataobj of minMods) {
-                            setupMods(modOperations["min"],dataobj.data);
-                        }
-                    }
-                    const baseMods = this.evBus.getData("modifiers",this.basePath);
-                    if(baseMods.length > 0) {
-                        modOperations["base"] = {}
-                        for(const dataobj of baseMods) {
-                            setupMods(modOperations["base"],dataobj.data);
-                        }
-                    } 
-                }
-
-                // for(const [node,accessors] of this.precedents.entries()) {
-                //     if (node instanceof ModifierNode){
-
-                //         if(!node.accessors.condition) continue;
-
-                //         for (let accessor of Object.keys(accessors)) {
-                //             // do something with the node operation and value
-                //             // priority order: replace first, then multiply, then add
-                //             if(accessor === "node") accessor = "value";
-                //             if(modOperations[accessor] == undefined) {
-                //                 modOperations[accessor] = {};
-                //             }
-                //             const accessorMods = modOperations[accessor];
-                //             switch(node.operation) {
-                //                 case "replace":
-                //                     if(accessorMods?.replace == undefined) {
-                //                         accessorMods.replace = {__highest: node.tier}
-                //                     } else if(node.tier > accessorMods.replace.__highest || accessorMods.replace.__highest === "default") {
-                //                         accessorMods.replace.__highest = node.tier; // highest tier takes priority. "default" is lowest tier
-                //                     }
-                //                     accessorMods.replace[node.tier] = node.accessors.value;
-                //                     break;
-                //                 case "multiply":
-                //                     if(accessorMods.replace != undefined)
-                //                         break;
-                //                     if(accessorMods?.multiply == undefined)
-                //                         accessorMods.multiply = {}
-                //                     if(accessorMods.multiply?.[node.tier] == undefined) {
-                //                         accessorMods.multiply[node.tier] = node.accessors.value
-                //                     } else {
-                //                         accessorMods.multiply[node.tier] += node.accessors.value; // all multipliers of same tier add
-                //                     }
-                //                     break;
-                //                 case "add":
-                //                     if(accessorMods.replace != undefined)
-                //                         break;
-                //                     if(accessorMods?.add == undefined)
-                //                         accessorMods.add = {}
-                //                     if(accessorMods.add?.[node.tier] == undefined) {
-                //                         accessorMods.add[node.tier] = node.accessors.value;
-                //                     } else {
-                //                         if(node.tier === "default") {               // default tier simply adds addition modifiers together
-                //                             accessorMods.add[node.tier] += node.accessors.value;
-                //                         } else {                                    // specified tier sets strongest value
-                //                             if(Math.abs(node.accessors.value) > accessorMods.add[node.tier]) {
-                //                                 accessorMods.add[node.tier] = node.accessors.value;
-                //                             }
-                //                         }
-                //                     }
-                //                     break;
-                //                 default:
-                //                     //Skip over node
-                //                     break;
-                //             }
-                //         }
-                //     }
-                // }
-                
-                // apply modifiers
-                this.accessors.base = clamp(
-                    this.accessors.base,
-                    this.accessors.min,
-                    this.accessors.max
-                );
-
-                const modProcessOrder = [];
-                const {base:modOperationsBase,...modOperationsRest} = modOperations;
-                if(modOperationsBase != undefined)
-                    modProcessOrder.push(['base',modOperationsBase]);
-                else
-                    this.accessors.value = this.accessors.base;
-                modProcessOrder.push(...Object.entries(modOperationsRest))
-
-                for (const [accessor,operations] of modProcessOrder) {
-                    if(this.accessors[accessor] != undefined) {
-                        if(operations.replace != undefined) {                   // replace operations overrule other operations
-                            this.accessors[accessor] = operations.replace[operations.replace.__highest]; // highest tier wins
-                        } else {
-
-                            if(operations.multiply != undefined) {              // TODO: Come back to this and decide if multiply or add comes first
-                                for(const value of Object.values(operations.multiply)) {
-                                    this.accessors[accessor] *= value;
-                                }
                             }
-
-                            if(operations.add != undefined) {                   
-                                for(const value of Object.values(operations.add)) {
-                                    this.accessors[accessor] += value;
-                                }
-                            }
-                        }
-                    }
-                    if(accessor === "base") {
-                        this.accessors.base = clamp(
-                            this.accessors.base,
-                            this.accessors.min,
-                            this.accessors.max
-                        );
-                        this.accessors.value = this.accessors.base;
+                            break;
+                        default:
+                            //Skip over node
+                            break;
                     }
                 }
 
-                this.accessors.value = clamp(
-                    this.accessors.value,
-                    this.accessors.min,
-                    this.accessors.max
-                );
-
-            } catch (e) {
-                this.isErrorSrc = true;
-                this.error = e.message;
-                //Update Path
-                e.message = `Node Source: ${Path.pathTo(this).str} ${e.message}`
-                throw e;
+                const valueMods = [...this.evBus.getData("modifiers",this),...this.evBus.getData("modifiers",this.valuePath)];
+                if(valueMods.length > 0) {
+                    modOperations["value"] = {}
+                    for(const dataobj of valueMods) {
+                        setupMods(modOperations["value"],dataobj);
+                    }
+                }
+                const maxMods = this.evBus.getData("modifiers",this.maxPath);
+                if(maxMods.length > 0) {
+                    modOperations["max"] = {}
+                    for(const dataobj of maxMods) {
+                        setupMods(modOperations["max"],dataobj);
+                    }
+                }
+                const minMods = this.evBus.getData("modifiers",this.minPath);
+                if(minMods.length > 0) {
+                    modOperations["min"] = {}
+                    for(const dataobj of minMods) {
+                        setupMods(modOperations["min"],dataobj);
+                    }
+                }
+                const baseMods = this.evBus.getData("modifiers",this.basePath);
+                if(baseMods.length > 0) {
+                    modOperations["base"] = {}
+                    for(const dataobj of baseMods) {
+                        setupMods(modOperations["base"],dataobj);
+                    }
+                } 
             }
+            
+            // apply modifiers
+            this.accessors.base = clamp(
+                this.accessors.base,
+                this.accessors.min,
+                this.accessors.max
+            );
+
+            const modProcessOrder = [];
+            const {base:modOperationsBase,...modOperationsRest} = modOperations;
+            if(modOperationsBase != undefined)
+                modProcessOrder.push(['base',modOperationsBase]);
+            else
+                this.accessors.value = this.accessors.base;
+            modProcessOrder.push(...Object.entries(modOperationsRest))
+
+            for (const [accessor,operations] of modProcessOrder) {
+                if(this.accessors[accessor] != undefined) {
+                    if(operations.replace != undefined) {                   // replace operations overrule other operations
+                        this.accessors[accessor] = operations.replace[operations.replace.__highest]; // highest tier wins
+                    } else {
+
+                        if(operations.multiply != undefined) {              // TODO: Come back to this and decide if multiply or add comes first
+                            for(const value of Object.values(operations.multiply)) {
+                                this.accessors[accessor] *= value;
+                            }
+                        }
+
+                        if(operations.add != undefined) {                   
+                            for(const value of Object.values(operations.add)) {
+                                this.accessors[accessor] += value;
+                            }
+                        }
+                    }
+                }
+                if(accessor === "base") {
+                    this.accessors.base = clamp(
+                        this.accessors.base,
+                        this.accessors.min,
+                        this.accessors.max
+                    );
+                    this.accessors.value = this.accessors.base;
+                }
+            }
+
+            this.accessors.value = clamp(
+                this.accessors.value,
+                this.accessors.min,
+                this.accessors.max
+            );
+
+        } catch (e) {
+            this.isErrorSrc = true;
+            this.error = e.message;
+            //Update Path
+            e.message = `Node Source: ${Path.pathTo(this).str} ${e.message}`
+            throw e;
         }
         return super.evaluate();
     }
@@ -957,7 +670,6 @@ export class ModifierNode extends DataNode {
             this.target = new Path(target, this);
         else
             this.target = undefined;
-        this.dependencyModifications.push({type:"add dependent",path:this.target,amount:1});
 
         this.operation = operation;
         this.tier = "default";
@@ -969,25 +681,42 @@ export class ModifierNode extends DataNode {
 
         this.condition = new ExprValue(condition ?? true, this);
         this.condition.precedentPaths.forEach(depPath => {
-            this.dependencyModifications.push({type:"add precedent",path:depPath,amount:1});
+            this.listenerChanges.push({type:"add precedent",path:depPath,amount:1});
         })
 
         this.accessors.condition = condition ?? true;
-        this.modifierData = null;
+        this.registeredData = null;
+    }
+
+    [DATA_CHANGE_HANDLER]() {
+        this?.target?.resolve({
+            flat:true,
+            wrapResults:false,
+            forwardHandler: (context) => {
+                const {obj,token} = context;
+                if(obj instanceof BaseNode && obj !== this) {
+                    return {action:"return"}
+                }
+            },
+            resultHandler: (context) => {
+                const {result} = context;
+                if(!(result instanceof BaseNode))
+                    return {action:"discard"};
+            }
+        }).forEach((node) => {
+            node.update();
+        });
     }
 
     evaluateDependencies() {
         super.evaluateDependencies();
-        if(this.evBus != null) {
-            if(this.modifierData == null)
-                this.modifierData = this.evBus.addData('modifiers',this.target,this);
+        if(this.evBus != null && this.registeredData == null) {
+            this.registeredData = this.evBus.registerData('modifiers',this.target,this);
         }
     }
 
     evaluate() {
-        if (this.dirty) {
-            this.accessors.condition = this.condition.evaluate();
-        }
+        this.accessors.condition = this.condition.evaluate();
         super.evaluate();
     }
 
@@ -1015,7 +744,7 @@ export class ModifierNode extends DataNode {
         if(!this[Symbol.for("virtual")]) {
             if(condition != undefined) {
                 try {condition = JSON.parse(condition)} catch (err) {}
-                this.dependencyModifications.push(...getDepMods(this.condition,condition));
+                this.listenerChanges.push(...getDepMods(this.condition,condition));
             }
         }
 
@@ -1046,10 +775,14 @@ export class ModifierNode extends DataNode {
 
     destroy() {
         super.destroy();
-        if(this.modifierData != null) {
-            for(const dataObj of this.modifierData)
-                this.modifierData.destroy();
-            this.modifierData = null;
+        if(this.registeredData != null) {
+            if(Array.isArray(this.registeredData)) {
+                for(const dataObj of this.registeredData)
+                    this.registeredData.destroy();
+            } else {
+                this.registeredData.destroy();
+            }
+            this.registeredData = null;
         }
     }
 }

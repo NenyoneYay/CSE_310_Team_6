@@ -80,19 +80,19 @@ window.downloadSave = function downloadSave() {
 
 // define events before character is created
 const testEvBus = new EventBus();
-testEvBus.addListener("change",new Path("Equipment.items[*].equipped"),() => {
+testEvBus.registerListener("change",new Path("Equipment.items[*].equipped"),() => {
     console.log("item equipped!")
 });
 
-testEvBus.addListener("change",new Path("Some Data.multiNode[-2]"),() => {
+testEvBus.registerListener("change",new Path("Some Data.multiNode[-2]"),() => {
     console.log("node changed!")
 });
 
-testEvBus.addListener("change",new Path("Ability Scores.*.score"),() => {
+testEvBus.registerListener("change",new Path("Ability Scores.*.score"),() => {
     console.log("score changed!")
 });
 
-testEvBus.addListener("change",new Path("Multi_Array_Test.Array1[*][*]"),() => {
+testEvBus.registerListener("change",new Path("Multi_Array_Test.Array1[*][*]"),() => {
     console.log("Array1 changed!")
 });
 window.testEvBus = testEvBus;
