@@ -3,7 +3,7 @@ import { Character } from './CharacterEngine/CharacterEngine.js';
 import { testChar } from './CharacterEngine/test.js';
 import { Path } from './CharacterEngine/Path.js';
 
-let loadedChar = testChar;
+let loadedChar = new Character();
 window.loadedChar = loadedChar;
 
 let sheet = {
@@ -815,7 +815,7 @@ function render(characterData) {
 
 sectionAddBtn.addEventListener("click", () => {
     if(sectionLabelInp == null || sectionList == null) return;
-
+    if(loadedChar == null) return;
     const label = sectionLabelInp.value.trim() || "New section";
     
     const newSecData = {__type:"section"};
@@ -923,7 +923,8 @@ modeBtn.addEventListener("click", () => {
     }
     
     // Re-rendering is probably fine here
-    render(loadedChar.root);
+    if(loadedChar != null)
+        render(loadedChar.root);
 });
 if(previewMode) {
     sectionLabelInp.classList.add("hidden");
@@ -937,5 +938,6 @@ function updatePreview() {
 
 }
 
-render(loadedChar.root);
+if(loadedChar != null)
+    render(loadedChar.root);
         

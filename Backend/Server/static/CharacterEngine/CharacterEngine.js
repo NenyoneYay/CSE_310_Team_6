@@ -20,11 +20,13 @@ import {EventBus} from "./EventBus.js";
  */
 
 export class Character {
-    constructor(fileData) {
+    constructor(fileData = undefined) {
         /** @type {BaseNode[]} */
         this.newNodes = [];
         
         this.root = undefined;
+        if(fileData == undefined)
+            fileData = `{"data":{}}`
         this.parseFile(fileData);
 
         // // here is some prototype data for rules
@@ -218,6 +220,8 @@ export class Character {
 
         this.root = this.buildTree(contextData);
         this.root[Symbol.for("EventBus")] = new EventBus();
+        if(this.root[Symbol.for("okeys")] == undefined)
+            this.root[Symbol.for("okeys")] = [];
 
         this.rules = ruleData;
         this.buildRules(this.rules);

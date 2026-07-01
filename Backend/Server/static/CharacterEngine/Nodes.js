@@ -260,7 +260,7 @@ export class BaseNode {
             // // detected.
             const stale_accessors = {...this.accessors}
             this.evaluate();
-            if(!compareObj(this.accessors,stale_accessors)) {
+            if(!compareObj(this.accessors,stale_accessors,["base"])) {
                 this.evBus?.emit("change",this);
 
                 for(const pathMap of this.dependants.values()) {
