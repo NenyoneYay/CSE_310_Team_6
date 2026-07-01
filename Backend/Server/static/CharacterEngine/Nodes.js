@@ -845,7 +845,7 @@ export class ModifierNode extends DataNode {
 
         const newData = {
             __type: "modifier",
-            target: this.target.raw,
+            target: this.target.str,
             operation: this.operation,
             condition: this.condition.getSaveData(),
             tier: this.tier
