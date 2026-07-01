@@ -187,7 +187,8 @@ let testFileData = `{
     }
 }`
 
-window.testChar = new Character(testFileData);
+export const testChar = new Character(testFileData);
+window.testChar = testChar;
 window.testNode = new Path('Ability Scores.Strength.score',testChar.root).resolve();
 if(testNode?.__type === "pathResult") testNode = testNode.result;
 

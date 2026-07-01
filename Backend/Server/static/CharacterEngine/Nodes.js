@@ -184,6 +184,7 @@ export class BaseNode {
         if(this.renderedElement == null || this.renderedElement.type != this.inputType) {
             const newElement = document.createElement("input");
             newElement.type = this.inputType ?? "text";
+            newElement.classList.add("field-input");
             if(this.renderedElement != null) {
                 const oldElement = this.renderedElement;
                 oldElement.replaceWith(newElement);
@@ -202,6 +203,7 @@ export class BaseNode {
     }
 
     updateRenderedElement(value) {
+        if(value == undefined) value = this.accessors.value;
         if (this.renderedElement != null) {
             switch (this.inputType) {
                 case "checkbox":
@@ -336,10 +338,13 @@ export class BaseNode {
                 case "remove precedent":
                     if(this.listenerRegistrations.has(change.src)) {
                         /** @type {Map<string,TrieRegistration>} */
-                        const regMap = this.listenerChanges.get(change.src);
+                        const regMap = this.listenerRegistrations.get(change.src);
                         if(regMap != undefined) {
-                            const reg = regMap.get(absPath.str);
-                            if(reg != undefined) this.evBus.unregister(reg);
+                            const regList = regMap.get(absPath.str);
+                            if(regList != undefined) {
+                                for(const reg of regList)
+                                    reg.unregister();
+                            }
                             regMap.delete(absPath.str);
                         }
                     }
@@ -368,8 +373,9 @@ export class BaseNode {
         }
         this.dependants.clear();
         for(const regMap of this.listenerRegistrations.values()) {
-            for(const reg of regMap.values()) {
-                reg.unregister();
+            for(const regList of regMap.values()) {
+                for(const reg of regList)
+                    reg.unregister();
             }
             regMap.clear();
         }
@@ -381,6 +387,7 @@ export class BaseNode {
         return null;
     }
 
+    
     destroy() {
         this.detachInput();
         this.unregisterDependencies();
@@ -465,7 +472,7 @@ export class DataNode extends BaseNode {
      * @returns 
      */
     calculateDepMods(src,oldPaths,newPaths,type="precedent") {
-        if(!(["precedent","dependent"].includes(type))) return;
+        if(!(["precedent","dependant"].includes(type))) return;
 
         const dependencyMods = [];
         newPaths.forEach((path, key) => {
@@ -745,10 +752,12 @@ export class ModifierNode extends DataNode {
         const {target,operation,value,max,min,condition,tier=0} = {...ModifierNode.defaultDataObj, ...dataObj};
         super(virtual, parent, {target,operation,value,condition,tier});
         //Update Path
-        if(target != undefined)
+        if(target != undefined) {
             this.target = new Path(target, this);
-        else
+            this.listenerChanges.push({type:"add dependant",path:this.target,src:"target"});
+        } else
             this.target = undefined;
+        
 
         this.operation = operation;
         this.tier = "default";
@@ -767,25 +776,25 @@ export class ModifierNode extends DataNode {
         this.registeredData = null;
     }
 
-    [DATA_CHANGE_HANDLER]() {
-        this?.target?.resolve({
-            flat:true,
-            wrapResults:false,
-            forwardHandler: (context) => {
-                const {obj,token} = context;
-                if(obj instanceof BaseNode && obj !== this) {
-                    return {action:"return"}
-                }
-            },
-            resultHandler: (context) => {
-                const {result} = context;
-                if(!(result instanceof BaseNode))
-                    return {action:"discard"};
-            }
-        }).forEach((node) => {
-            node.update();
-        });
-    }
+    // [DATA_CHANGE_HANDLER]() {
+    //     this?.target?.resolve({
+    //         flat:true,
+    //         wrapResults:false,
+    //         forwardHandler: (context) => {
+    //             const {obj,token} = context;
+    //             if(obj instanceof BaseNode && obj !== this) {
+    //                 return {action:"return"}
+    //             }
+    //         },
+    //         resultHandler: (context) => {
+    //             const {result} = context;
+    //             if(!(result instanceof BaseNode))
+    //                 return {action:"discard"};
+    //         }
+    //     }).forEach((node) => {
+    //         node.update();
+    //     });
+    // }
 
     evaluateDependencies() {
         super.evaluateDependencies();

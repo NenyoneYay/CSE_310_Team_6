@@ -1,3 +1,4 @@
+import { BaseNode, DataNode, ModifierNode } from "./Nodes.js";
 import {Path, PathToken} from "./Path.js";
 import { sanatizeKey } from "./helpers.js";
 
@@ -759,6 +760,19 @@ export class EventBus {
                                 trieMatches.push(...trieNode.getIdx(accessor, prevContext.obj.length));
                             } else {
                                 trieMatches.push(...trieNode.getKey(accessor));
+                            }
+
+                            if(obj instanceof BaseNode) { // grab all node accessors here just cause
+                                const subNodes = trieNode.getKey(accessor);
+                                for(const subNode of subNodes) {
+                                    trieMatches.push(...subNode.getKey("value"))
+                                    if(obj instanceof DataNode) {
+                                        trieMatches.push(...subNode.getKey("max"),...subNode.getKey("min"));
+                                    }
+                                    if(obj instanceof ModifierNode) {
+                                        trieMatches.push(...subNode.getKey("condition"));
+                                    }
+                                }
                             }
                         }
                     }

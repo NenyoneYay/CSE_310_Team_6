@@ -1,5 +1,5 @@
 import {deepCopy, sanatizeKey} from "./helpers.js"
-import {BaseNode, DataNode, ModifierNode} from "./Nodes.js";
+import {BaseNode, DataNode, ModifierNode, Container} from "./Nodes.js";
 import {Path} from "./Path.js";
 import {EventBus} from "./EventBus.js";
 
@@ -183,7 +183,7 @@ export class Character {
             const [baseKey,sigil] = sanatizedKey.split('#');
             let rval = value;
             
-            if(!Array.isArray(this)) {
+            if(!Array.isArray(this) && !baseKey.startsWith("__")) {
                 if(Object.hasOwn(this,Symbol.for("okeys")) && Array.isArray(this[Symbol.for("okeys")])) {
                     this[Symbol.for("okeys")].push(baseKey)
                 } else {
@@ -249,6 +249,8 @@ export class Character {
                 let keys = obj[Symbol.for("okeys")];
                 if (keys == undefined) {
                     keys = Object.keys(obj);
+                } else {
+                    keys = [...keys,...Object.keys(obj).filter(key => key.startsWith("__"))];
                 }
                 const processedKeys = keys
                     .filter((key) => {
@@ -345,7 +347,7 @@ export class Character {
     }
 
     destroy() {
-        const recursor = (treeRoot, level = 0) => {
+        const recursor = (treeRoot) => {
             if (treeRoot == null) return;
             if (treeRoot instanceof BaseNode) {
                 treeRoot.destroy();
@@ -359,7 +361,7 @@ export class Character {
             } else if (treeRoot instanceof Object) {
                 Object.keys(treeRoot).forEach((key) => {
                     if(!key.startsWith("__")) {
-                        recursor(treeRoot[key], level+1);
+                        recursor(treeRoot[key]);
                     }
                 });
                 return;

@@ -1,3 +1,10 @@
+import { BaseNode, DataNode } from './CharacterEngine/Nodes.js';
+import { Character } from './CharacterEngine/CharacterEngine.js';
+import { testChar } from './CharacterEngine/test.js';
+import { Path } from './CharacterEngine/Path.js';
+
+let loadedChar = testChar;
+window.loadedChar = loadedChar;
 
 let sheet = {
     [Symbol.for("okeys")]:["Basics","Ability Scores","Combat"],
@@ -156,6 +163,8 @@ let sheet = {
     }
 };
 
+
+
 // Operations for sheet above ////////////////////
 function getItemWithOkey(obj, index){
     return obj[obj[Symbol.for("okeys")][index]];
@@ -185,6 +194,18 @@ function moveItemToOkey(obj, itemName, newIndex){
         newIndex,
     )
 }
+
+function getName(obj,parent) {
+    if(obj == undefined) return undefined;
+    if(parent == undefined) 
+        return "";
+    if(Array.isArray(parent))
+        return parent.indexOf(obj);
+    else if (obj instanceof Object) {
+        return Object.keys(parent)?.find(key => parent[key] === obj);
+    } else
+        return undefined;
+}
 //////////////////////////////////////////////////////
 
 function okeyObjToList(obj){
@@ -199,7 +220,9 @@ function okeyObjToList(obj){
 
 /** @type {Object} */
 let dragSrc = null;
-/** @type {{type:string,label:string,content:Array}} */
+/** @type {string|number} */
+let dragSrcName = null;
+/** @type {{[okeys:symbol]:string[],[x:string]:any}|Array} */
 let dragSrcParent = null;
 
 /**@type {HTMLElement|null} */
@@ -272,147 +295,148 @@ function makeFieldInput(fieldData) {
     return inp;
 }
 
-/**
- * @param {string|Object} data Container label or object loaded from file
- * @param {string} type 
- * @param {{label:string,type:string,content:Array}} parent 
- * @param {HTMLDivElement} container 
- * @returns {HTMLDivElement}
- */
-function makeContainer(data, type, parent, parentEl) {
-    if(type == null || type === "section") {
-        makeSection(data,parent,parentEl);
-    } else {
-        makeField(data,type,parent,parentEl);
+function makeNode(nodeData, inputType, parent, container) {
+    if(!(nodeData instanceof BaseNode)) {
+        console.error("Node data not of node type");
+        return;
     }
-}
+    const nodeName = getName(nodeData,parent);
+    if(!Array.isArray(parent) && nodeData.__name !== nodeName) {
+        nodeData.__name = nodeName;
+    }
+    if(nodeData[Symbol.for("parent")] == undefined)
+        nodeData[Symbol.for("parent")] = parent;
 
-/**
- * @param {string|{label:string,type:string,value:string|number|boolean}} fieldData Field label or field object loaded from file
- * @param {string} type 
- * @param {{label:string,type:string,content:Array}} parent 
- * @param {HTMLDivElement} container 
- * @returns {HTMLDivElement}
- */
-function makeField(fieldData, type, parent, container) {
-    const fancyFieldData = (() => {
-        let fd = null;
-        if (fieldData instanceof Object) {
-            fd = fieldData;
-        } else if (typeof(fieldData) === "string") {
-            fd = {
-                label: fieldData,
-                type,
-                value:""
-            }
-            parent.content.push(fd);
-        }
-        return fd;
-    })();
-    if (fancyFieldData == null) return;
+    const sepElem = document.createElement("div");
+    sepElem.classList.add("seperator");
 
-    const sepEl = document.createElement("div");
-    sepEl.classList.add("seperator");
-
-    const fEl = document.createElement("div");
-    fEl.className = "field"; fEl.dataset.fid = fancyFieldData.id;
+    const nodeElem = document.createElement("div");
+    nodeElem.className = "field";
 
     if(!previewMode) {
         const handle = document.createElement("i");
-        handle.draggable = !previewMode;
+        handle.draggable = true;
         handle.className = "ti ti-grip-vertical drag-handle";
         handle.setAttribute("aria-hidden","true");
 
-        fEl.appendChild(handle);
+        nodeElem.appendChild(handle);
     }
 
     const inner = document.createElement("div");
     inner.className = "field-inner";
-    if(fancyFieldData.type === "textarea") inner.style.flexDirection="column";
+    if(inputType === "textarea") inner.style.flexDirection="column";
 
-    const lbl = document.createElement("span");
-    lbl.className = "field-label";
-    lbl.textContent = fancyFieldData.label;
+    if(!Array.isArray(parent)) {
+        const lbl = document.createElement("span");
+        lbl.className = "field-label";
+        lbl.textContent = nodeData.__name;
+        inner.appendChild(lbl);
+    }
 
-    const inputEl = makeFieldInput(fancyFieldData);
+    // dummy input element for now
+    const inputEl = nodeData.renderHTML();
+    inputEl.className = "field-input";
 
-    inner.appendChild(lbl);
+    
+    //----------------------------
+
+    
     inner.appendChild(inputEl);
 
-    const badge = document.createElement("span");
-    badge.className = "field-type-badge";
-    badge.textContent = fancyFieldData.type;
+    nodeElem.appendChild(inner);
 
-    fEl.appendChild(inner);
-    fEl.appendChild(badge);
     if(!previewMode) {
-        const delF = document.createElement("button");
-        delF.className = "delete-btn";
-        delF.title = "Remove field";
-        delF.innerHTML = `<i class="ti ti-x"></i>`;
-        delF.addEventListener("click", e => {
+        const delBtn = document.createElement("button");
+        delBtn.className = "delete-btn";
+        delBtn.title = "Remove field";
+        delBtn.innerHTML = `<i class="ti ti-x"></i>`;
+        delBtn.addEventListener("click", e => {
 
             e.stopPropagation();
-            const fIdx = parent.content.indexOf(fancyFieldData);
-            parent.content.splice(fIdx, 1);
             
+            if(Array.isArray(parent)) {
+                const fIdx = parent.indexOf(nodeData);
+                parent.splice(fIdx, 1);
+            } else {
+                const fIdx = parent[Symbol.for("okeys")].indexOf(nodeData.__name);
+                parent[Symbol.for("okeys")].splice(fIdx, 1);
+                delete (parent[nodeData.__name]);
+            }
+            
+            // nodeData.destroy(); // not implemented here, but will be used later
+            if(nodeData instanceof BaseNode) {
+                nodeData.destroy();
+            }
+
             // Update HTML
-            fEl.remove();
-            sepEl.remove();
+            nodeElem.remove();
+            sepElem.remove();
             updatePreview();
 
-            if(parent.content.length <= 0) {
+            if( (Array.isArray(parent) && parent.length <= 0)
+                || (!Array.isArray(parent) && parent[Symbol.for("okeys")].length <= 0)
+            ) {
                 makeEmptyMessage(container);
             }
             
         });
-        fEl.appendChild(delF);
+        nodeElem.appendChild(delBtn);
 
-        fEl.addEventListener("dragstart", e => {
+        nodeElem.addEventListener("dragstart", e => {
 
             if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") 
                 return;
 
-            dragSrc = fancyFieldData; dragSrcParent = parent;
-            dragSrcElem = fEl; dragSrcSepElem = sepEl;
+            dragSrc = nodeData; dragSrcParent = parent;
+            dragSrcElem = nodeElem; dragSrcSepElem = sepElem;
             
-            setTimeout(() => fEl.classList.add("dragging"), 0);
+            setTimeout(() => nodeElem.classList.add("dragging"), 0);
             e.dataTransfer.effectAllowed = "move";
             e.stopPropagation();
             
         });
-        fEl.addEventListener("dragend", () => {
-            fEl.classList.remove("dragging"); 
+        nodeElem.addEventListener("dragend", () => {
+            nodeElem.classList.remove("dragging"); 
         });
-        fEl.addEventListener("dragover", e => {
+        nodeElem.addEventListener("dragover", e => {
 
-            if (dragSrcParent === parent && dragSrc !== fancyFieldData) {
+            if (dragSrcParent === parent && dragSrc !== nodeData) {
 
                 e.preventDefault(); 
                 e.stopPropagation(); 
                 e.dataTransfer.dropEffect = "move";
 
-                fEl.classList.add("drop-indicator");
+                nodeElem.classList.add("drop-indicator");
             }
             
         });
-        fEl.addEventListener("dragleave", () => fEl.classList.remove("drop-indicator"));
-        fEl.addEventListener("drop", e => {
+        nodeElem.addEventListener("dragleave", () => nodeElem.classList.remove("drop-indicator"));
+        nodeElem.addEventListener("drop", e => {
 
             e.preventDefault(); 
             e.stopPropagation();
 
-            if (dragSrcParent === parent && dragSrc !== fancyFieldData) {
-                const fromIdx = dragSrcParent.content.indexOf(dragSrc);
-                const toIdx = dragSrcParent.content.indexOf(fancyFieldData);
-                const [moved] = dragSrcParent.content.splice(fromIdx, 1);
-                parent.content.splice(toIdx, 0, moved);
+            if (dragSrcParent === parent && dragSrc !== nodeData) {
+
+                let fromIdx = 0;
+                let toIdx = 0;
+                if(Array.isArray(parent)) {
+                    fromIdx = parent.indexOf(dragSrc);
+                    toIdx = parent.indexOf(nodeData);
+                    const [moved] = parent.splice(fromIdx, 1);
+                    parent.splice(toIdx, 0, moved);
+                } else if (parent?.[Symbol.for("okeys")] != undefined) {
+                    fromIdx = parent[Symbol.for("okeys")].indexOf(dragSrc.__name);
+                    toIdx = parent[Symbol.for("okeys")].indexOf(nodeData.__name);
+                    const [moved] = parent[Symbol.for("okeys")].splice(fromIdx, 1);
+                    parent[Symbol.for("okeys")].splice(toIdx, 0, moved);
+                }
                 
                 // Update HTML
                 if(fromIdx < toIdx) {
-                    sepEl.insertAdjacentElement('afterend',dragSrcElem);
+                    sepElem.insertAdjacentElement('afterend',dragSrcElem);
                 } else {
-                    fEl.insertAdjacentElement('beforebegin',dragSrcElem);
+                    nodeElem.insertAdjacentElement('beforebegin',dragSrcElem);
                 }
                 dragSrcElem.insertAdjacentElement('afterend', dragSrcSepElem);
                 updatePreview();
@@ -420,93 +444,103 @@ function makeField(fieldData, type, parent, container) {
             dragSrcElem = null;
             dragSrcSepElem = null;
             dragSrcParent = null;
-            dragSrc = null;
-            fEl.classList.remove("drop-indicator");
+            dragSrcName = null;
+            nodeElem.classList.remove("drop-indicator");
         });
     }
 
-    container.appendChild(fEl);
-    container.appendChild(sepEl);
-    return fEl;
+    container.appendChild(nodeElem);
+    container.appendChild(sepElem);
+    return nodeElem;
 }
 
-/**
- * @param {string|{label:string,type:string,content:Array}} secData Section label or section object loaded from file
- * @param {{label:string,type:string,content:Array}} parent 
- * @param {HTMLDivElement} container 
- * @returns @returns {HTMLDivElement}
- */
-function makeSection(secData, parent, container) {
-    const data = (() => {
-        let sd = null;
-        if (secData instanceof Object) {
-            sd = secData;
-        } else if (typeof(secData) === "string") {
-            sd = {
-                label: secData,
-                type:"section",
-                content:[]
-            }
-            parent.content.push(sd);
-        }
-        return sd;
-    })();
-    if (data == null) return;
+function makeContainer(containerData, parent, container) {
+    if(containerData.__direction == undefined)
+        containerData.__direction = "row";
+    if(containerData.__expanded == undefined)
+        containerData.__expanded = false;
+    if(containerData[Symbol.for("okeys")] == undefined)
+        containerData[Symbol.for("okeys")] = [];
+    if(containerData[Symbol.for("parent")] == undefined)
+        containerData[Symbol.for("parent")] = parent;
 
-    const sepEl = document.createElement("div");
-    sepEl.classList.add("seperator");
+    const containerName = getName(containerData,parent);
+    if(containerData.__name !== containerName && !Array.isArray(parent))
+        containerData.__name = containerName;
 
-    const secEl = document.createElement("div");
-    secEl.className = "section";
-    secEl.dataset.sid = data.id;
+    const sepElem = document.createElement("div");
+    sepElem.classList.add("seperator");
+
+    const secElem = document.createElement("div");
+    secElem.className = "section";
 
     const hdr = document.createElement("div");
     hdr.className = "section-header";
 
+    const fieldList = document.createElement("div");
+    fieldList.className = "field-list";
+    if(Array.isArray(containerData)) {
+        fieldList.style.flexDirection = "column";
+    } else {
+        fieldList.style.flexDirection = containerData.__direction ?? "row";
+    }
+
+    if(!(containerData.__expanded ?? false)) {
+        fieldList.classList.add("hidden")
+    }
+
+    if( (Array.isArray(containerData) && containerData.length <= 0)
+        || (!Array.isArray(containerData) && containerData[Symbol.for("okeys")].length <= 0)
+    ) {
+        makeEmptyMessage(fieldList);
+    }
+
     if(!previewMode) {
         const handle = document.createElement("i");
-        handle.draggable = !previewMode;
+        handle.draggable = true;
         handle.className = "ti ti-grip-vertical drag-handle";
         handle.setAttribute("aria-hidden","true");
+        hdr.appendChild(handle);
 
-        const directionBtn = document.createElement("button");
-        directionBtn.className = "direction";
-            if(data.direction === "column"){
+        if(!Array.isArray(containerData)) {
+            const directionBtn = document.createElement("button");
+            directionBtn.className = "direction";
+            if(containerData.__direction === "column"){
                 directionBtn.innerHTML = '<i class="ti ti-layout-rows"></i>';
             }else{
                 directionBtn.innerHTML = '<i class="ti ti-layout-columns"></i>';
             }
+            
+            directionBtn.addEventListener("click", e =>{
+                e.stopPropagation();
+                if(containerData.__direction === "column"){
+                    containerData.__direction = "row";
+                    directionBtn.innerHTML = '<i/ class = "ti ti-layout-rows"></i>';
+                }else{
+                    containerData.__direction = "column";
+                    directionBtn.innerHTML = '<i class="ti ti-layout-columns"></i>';
+                }
+
+                fieldList.style.flexDirection = containerData.__direction;
+                updatePreview();
+
+            });
+            hdr.appendChild(directionBtn);
+        }
         
-        directionBtn.addEventListener("click", e =>{
-            e.stopPropagation();
-           if(data.direction === "column"){
-            data.direction = "row";
-            directionBtn.innerHTML = '<i/ class = "ti ti-layout-rows"></i>';
-
-           }else{
-            data.direction = "column";
-            directionBtn.innerHTML = '<i class="ti ti-layout-columns"></i>';
-           }
-
-        fieldList.style.flexDirection = data.direction;
-        updatePreview();
-
-        });
-
-        hdr.appendChild(handle);
-        hdr.appendChild(directionBtn);
     }
 
     const expander = document.createElement("i");
-    if(data.expanded ?? true) {
+    let addRow = null
+    if(containerData.__expanded ?? true) {
         expander.className = "ti ti-caret-up section-expander";
     } else {
         expander.className = "ti ti-caret-down section-expander";
     }
     expander.addEventListener("click", ev => {
-        data.expanded = !(data.expanded ?? true);
+        containerData.__expanded = !(containerData.__expanded ?? true);
 
-        if(data.expanded) {
+        if(containerData.__expanded) {
             expander.className = "ti ti-caret-up section-expander";
             fieldList.classList.remove("hidden");
             addRow?.classList?.remove("hidden");
@@ -518,15 +552,28 @@ function makeSection(secData, parent, container) {
     });
     hdr.append(expander);
 
-    const titleInp = document.createElement("input");
-    titleInp.className = "section-title";
-    titleInp.value = data.label;
-    titleInp.disabled = previewMode;
-    titleInp.addEventListener("input", e => {
-        data.label = e.target.value; 
-        updatePreview(); 
-    });
-    hdr.appendChild(titleInp);
+    if(!Array.isArray(parent)) {
+        const titleInp = document.createElement("input");
+        titleInp.className = "section-title";
+        titleInp.value = containerName;
+        titleInp.disabled = previewMode;
+        titleInp.addEventListener("change", e => {
+            const newName = e.target.value;
+            if(e.target.value in parent || e.target.value.startsWith("__")) {
+                e.target.value = containerData.__name;
+                return;
+            }
+            
+            const okeyIdx = parent[Symbol.for("okeys")].indexOf(containerData.__name);
+            parent[Symbol.for("okeys")][okeyIdx] = newName;
+            parent[newName] = parent[containerData.__name];
+            delete (parent[containerData.__name])
+            containerData.__name = newName;
+
+            updatePreview();
+        });
+        hdr.appendChild(titleInp);
+    }
 
     if(!previewMode) {
         const delBtn = document.createElement("button");
@@ -535,14 +582,38 @@ function makeSection(secData, parent, container) {
         delBtn.innerHTML = `<i class="ti ti-x"></i>`;
         // delBtn.style.display = editMode ? "none" : "";
         delBtn.addEventListener("click", () => {
-            const secIdx = parent.content.indexOf(data);
-            parent.content.splice(secIdx, 1);
+
+            if(Array.isArray(parent)) {
+                const secIdx = parent.indexOf(containerData);
+                parent.splice(secIdx, 1);
+            } else {
+                const okeyIdx = parent[Symbol.for("okeys")].indexOf(containerData.__name);
+                parent[Symbol.for("okeys")].splice(okeyIdx, 1);
+                delete parent[containerData.__name]
+            }
+
+            // containerData.destroy()
+            (new Path("**",containerData)).resolve({
+                noReturn:true,
+                reverseHandler: (context) => {
+                    if(context.obj instanceof BaseNode) {
+                        context.obj.destroy();
+                    }
+                    if(context.obj instanceof Object) {
+                        context.obj[Symbol.for("parent")] = null;
+                    }
+                }
+            });
+
             // Update HTML
-            secEl.remove();
-            sepEl.remove();
+            secElem.remove();
+            sepElem.remove();
             updatePreview();
 
-            if(parent.content.length <= 0) {
+
+            if( (Array.isArray(parent) && parent.length <= 0)
+                || (!Array.isArray(parent) && parent[Symbol.for("okeys")].length <= 0)
+            ) {
                 makeEmptyMessage(container);
             }
         });
@@ -550,19 +621,19 @@ function makeSection(secData, parent, container) {
 
         hdr.addEventListener("dragstart", e => {
 
-            dragSrc = data; dragSrcParent = parent;
-            dragSrcElem = secEl; dragSrcSepElem = sepEl;
-            setTimeout(() => secEl.classList.add("dragging"), 0);
+            dragSrc = containerData; dragSrcParent = parent;
+            dragSrcElem = secElem; dragSrcSepElem = sepElem;
+            setTimeout(() => secElem.classList.add("dragging"), 0);
             e.dataTransfer.effectAllowed = "move";
                 
         });
         hdr.addEventListener("dragend", () => {
             
-            secEl.classList.remove("dragging"); 
+            secElem.classList.remove("dragging"); 
         });
         hdr.addEventListener("dragover", e => {
 
-            if (dragSrcParent === parent && dragSrc !== data) {
+            if (dragSrcParent === parent && dragSrc !== containerData) {
                 e.preventDefault(); 
                 e.dataTransfer.dropEffect = "move";
 
@@ -574,17 +645,27 @@ function makeSection(secData, parent, container) {
         hdr.addEventListener("drop", e => {
 
             e.preventDefault();
-            if (dragSrcParent === parent && dragSrc !== data) {
-                const fromIdx = dragSrcParent.content.indexOf(dragSrc);
-                const toIdx = dragSrcParent.content.indexOf(data);
-                const [moved] = dragSrcParent.content.splice(fromIdx, 1);
-                parent.content.splice(toIdx, 0, moved);
+            if (dragSrcParent === parent && dragSrc !== containerData) {
+
+                let fromIdx = 0; let toIdx = 0;
+                if(Array.isArray(parent)) {
+                    fromIdx = parent.indexOf(dragSrc);
+                    toIdx = parent.indexOf(containerData);
+                    const [moved] = parent.splice(fromIdx, 1);
+                    parent.splice(toIdx, 0, moved);
+                } else {
+                    fromIdx = parent[Symbol.for("okeys")].indexOf(dragSrc.__name);
+                    toIdx = parent[Symbol.for("okeys")].indexOf(containerData.__name);
+                    const [moved] = parent[Symbol.for("okeys")].splice(fromIdx, 1);
+                    parent[Symbol.for("okeys")].splice(toIdx, 0, moved);
+                }
+               
                 
                 // Update HTML
                 if(fromIdx < toIdx) {
-                    sepEl.insertAdjacentElement('afterend',dragSrcElem);
+                    sepElem.insertAdjacentElement('afterend',dragSrcElem);
                 } else {
-                    secEl.insertAdjacentElement('beforebegin',dragSrcElem);
+                    secElem.insertAdjacentElement('beforebegin',dragSrcElem);
                 }
                 dragSrcElem.insertAdjacentElement('afterend',dragSrcSepElem);
                 updatePreview();
@@ -597,29 +678,32 @@ function makeSection(secData, parent, container) {
         });
     }
 
-    const fieldList = document.createElement("div");
-    fieldList.className = "field-list";
-    fieldList.style.flexDirection = data.direction ?? "row";
-    if(!(data.expanded ?? true)) {
-        fieldList.classList.add("hidden")
+    if(Array.isArray(containerData)) {
+        containerData.forEach((item,idx) => {
+            if (Array.isArray(item) || (item.__type !== "data" && !(item instanceof BaseNode))){
+                makeContainer(item,containerData,fieldList);
+            } else {
+                makeNode(item,"text",containerData,fieldList);
+            }
+        })
+    } else {
+        containerData[Symbol.for("okeys")].forEach((key,idx) => {
+            const item = containerData[key];
+            if (Array.isArray(item) || (item.__type !== "data" && !(item instanceof BaseNode))){
+                makeContainer(item,containerData,fieldList);
+            } else {
+                makeNode(item,"text",containerData,fieldList);
+            } 
+        });
     }
 
-    if (data.content.length === 0) {
-        makeEmptyMessage(fieldList);
-    }
+    secElem.appendChild(hdr);
+    secElem.appendChild(fieldList);
 
-    data.content.forEach((field, fi) => {
-        makeContainer(field,field.type ?? "section",data,fieldList);
-    });
-
-    secEl.appendChild(hdr);
-    secEl.appendChild(fieldList);
-
-    let addRow = null
     if(!previewMode) {
         addRow = document.createElement("div");
         addRow.className = "add-field-row";
-        if(!(data.expanded ?? true)) {
+        if(!(containerData.__expanded ?? true)) {
             addRow.classList.add("hidden");
         }
 
@@ -627,7 +711,7 @@ function makeSection(secData, parent, container) {
         labelInp.placeholder = "Field label…";
 
         const typeSelect = document.createElement("select");
-        ["text","textarea","number","checkbox","section"].forEach(t => {
+        ["data","section"].forEach(t => {
 
             const opt = document.createElement("option");
             opt.value = t; opt.textContent = t;
@@ -645,17 +729,47 @@ function makeSection(secData, parent, container) {
                 return;
 
             // Update HTML: remove empty message
-            const em = secEl.querySelector(":scope > .field-list > .empty-msg");
+            const em = secElem.querySelector(":scope > .field-list > .empty-msg");
             if (em != null) {
                 em.remove();
             }
 
             if(typeSelect.value !== "section") {
                 // Update HTML
-                makeField(label,typeSelect.value,data,fieldList);
+                const newNodeData = new DataNode(false,containerData,{value:"data"});
+                if(Array.isArray(containerData)) {
+                    containerData.push(newNodeData);
+                    makeNode(newNodeData,typeSelect.value,containerData,fieldList);
+                } else {
+                    let newLabel = label;
+                    let labelCount = 0;
+                    while (newLabel in containerData) {
+                        newLabel = `${label} (${++labelCount})`
+                    }
+                    containerData[newLabel] = newNodeData;
+                    containerData[Symbol.for("okeys")].push(newLabel);
+                    newNodeData.__name = newLabel;
+                    makeNode(newNodeData,typeSelect.value,containerData,fieldList);
+                }
+                
             } else {
-                // Update HTML
-                makeSection(label,data,fieldList);
+
+                const newSecData = {__type:"section"};
+                if(Array.isArray(containerData)) {
+                    containerData.push(newSecData);
+                    makeContainer(newSecData,containerData,fieldList);
+                } else {
+                    let newLabel = label;
+                    let labelCount = 0;
+                    while (newLabel in containerData) {
+                        newLabel = `${label} (${++labelCount})`
+                    }
+                    
+                    containerData[newLabel] = newSecData;
+                    containerData[Symbol.for("okeys")].push(newLabel);
+                    newSecData.__name = newLabel;
+                    makeContainer(newSecData,containerData,fieldList);
+                }
             }
 
             labelInp.value = "";
@@ -670,37 +784,51 @@ function makeSection(secData, parent, container) {
         addRow.appendChild(typeSelect);
         addRow.appendChild(addBtn);
 
-        secEl.appendChild(addRow);
+        secElem.appendChild(addRow);
     }
     
-    container.appendChild(secEl);
-    container.appendChild(sepEl);
-    return secEl;
+    container.appendChild(secElem);
+    container.appendChild(sepElem);
+    return secElem;
 }
 
-function render() {
 
-    const list = document.getElementById("section-list");
-    list.innerHTML = "";
+const sectionLabelInp = document.getElementById("new-section-name");
+const sectionList = document.getElementById("section-list");
+const sectionAddBtn = document.getElementById("btn-add-section");
+function render(characterData) {
 
-    sheet.content.forEach((sec, si) => {
-        makeContainer(sec,sec.type ?? "section",sheet,list)
+    sectionList.innerHTML = "";
+
+    characterData[Symbol.for("okeys")].forEach((key, idx) => {
+        const item = characterData[key];
+        if (Array.isArray(item) || (item.__type !== "data" && !(item instanceof BaseNode))){
+            makeContainer(item,characterData,sectionList);
+        } else {
+            makeNode(item,"text",characterData,sectionList);
+        }
     });
 
     updatePreview();
 
 }
 
-const sectionLabelInp = document.getElementById("new-section-name");
-const sectionList = document.getElementById("section-list");
-const sectionAddBtn = document.getElementById("btn-add-section");
 sectionAddBtn.addEventListener("click", () => {
     if(sectionLabelInp == null || sectionList == null) return;
 
     const label = sectionLabelInp.value.trim() || "New section";
+    
+    const newSecData = {__type:"section"};
 
-    // Update HTML
-    makeSection(label,sheet,sectionList);
+    let newLabel = label;
+    let labelCount = 0;
+    while (newLabel in loadedChar.root) {
+        newLabel = `${label} (${++labelCount})`
+    }
+    loadedChar.root[newLabel] = newSecData;
+    loadedChar.root[Symbol.for("okeys")].push(newLabel);
+    newSecData.__name = newLabel;
+    makeContainer(newSecData,loadedChar.root,sectionList);
 
     sectionLabelInp.value = ""; 
 
@@ -715,7 +843,7 @@ document.getElementById("new-section-name").addEventListener("keydown", e => {
 
 document.getElementById("btn-save").addEventListener("click", () => {
 
-    const blob = new Blob([JSON.stringify(sheet, null, 2)], {
+    const blob = new Blob([loadedChar.getSaveData()], {
         type: "application/json" 
     });
     const url = URL.createObjectURL(blob);
@@ -743,11 +871,13 @@ document.getElementById("file-input").addEventListener("change", e => {
 
         try {
 
-            const parsed = JSON.parse(ev.target.result);
-            if (!parsed.content) {
-                alert("Invalid character sheet JSON."); return; 
-            }
-            render();
+            // const parsed = JSON.parse(ev.target.result);
+            // if (!parsed.content) {
+            //     alert("Invalid character sheet JSON."); return; 
+            // }
+            if(loadedChar) loadedChar.destroy();
+            loadedChar = new Character(ev.target.result);
+            render(loadedChar.root);
             
         } catch {
             alert("Could not parse JSON file."); 
@@ -793,7 +923,7 @@ modeBtn.addEventListener("click", () => {
     }
     
     // Re-rendering is probably fine here
-    render();
+    render(loadedChar.root);
 });
 if(previewMode) {
     sectionLabelInp.classList.add("hidden");
@@ -803,9 +933,9 @@ if(previewMode) {
 function updatePreview() {
 
     if (!previewVisible) return;
-        document.getElementById("json-preview").textContent = JSON.stringify(sheet, null, 2);
+        document.getElementById("json-preview").textContent = loadedChar.getSaveData();
 
 }
 
-render();
+render(loadedChar.root);
         

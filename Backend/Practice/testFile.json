@@ -69,7 +69,7 @@
                     30
                 ]
             },
-            "sideNode": "=data('.multiNode.1')",
+            "sideNode": "=data('.multiNode[1]')",
             "accessor": "=data('$Ability Scores.Strength.score#max')"
         },
         "Equipment": {

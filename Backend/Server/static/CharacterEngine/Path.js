@@ -292,7 +292,7 @@ export class Path {
     static pathTo(obj,from = null) {
         if( !(from == null || from instanceof Object) 
             || !(obj instanceof Object)
-        ) return undefined;
+        ) return new Path("");
 
         const rootChain = [];
         if (from != null) {
@@ -356,6 +356,7 @@ export class Path {
                             newGTokens.push(...Path.pathTo(new Path(gtokens,obj),obj).tokens);
                         }
                         context.tokens.push(new PathToken(T_GROUP,newGTokens,token.containerType));
+                        // first fan-out makes token non-concrete.
                         return {action:"skip_token", override_objs:[null]};
                     }
 
@@ -438,7 +439,7 @@ export class Path {
             return undefined;
         }
 
-        const tokens = recursor(obj);
+        const tokens = recursor(obj) ?? [];
         return new Path(tokens,originobj);
     }
 
@@ -996,7 +997,8 @@ export class Path {
      *  resultHandler:  ResolutionResultHandler,
      *  handlerOptions: Object,
      *  startContext: Object,
-     *  flat: boolean
+     *  flat: boolean,
+     *  noReturn: boolean
      * }} options All options are optional
      * @returns {Array<PathResult|undefined|Array>|PathResult|undefined} Always returns an array if 'flat' option is true
      */
@@ -1013,6 +1015,10 @@ export class Path {
             noReturn = false,
         } = options;
         
+
+        // cycle detection for T_DEEP_WILDCARD
+        const deepVisited = new Set();
+
         // Some high scope variables to preserve forward handler control 
         // across recursive function calls.
         let stopResolution = false;
@@ -1382,6 +1388,9 @@ export class Path {
                     case T_DEEP_WILDCARD:
                         if(prevContext?.token !== token)
                             llpushOpen();
+                        if(deepVisited.has(currentRoot)) 
+                            break;
+                        deepVisited.add(_currentRoot);
                         if(Array.isArray(_currentRoot)) {
                             for(const [idx,item] of _currentRoot.entries()) {
                                 recursor(item,tokens,cursor,idx,handlerCtx);
@@ -1393,6 +1402,7 @@ export class Path {
                                 recursor(value,tokens,cursor,key,handlerCtx);
                             }
                         }
+                        deepVisited.delete(_currentRoot);
                         if(prevContext?.token?.type !== T_DEEP_WILDCARD)
                             llpushClose();
                         break;
