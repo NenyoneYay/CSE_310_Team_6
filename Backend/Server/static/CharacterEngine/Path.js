@@ -320,17 +320,19 @@ export class Path {
                 noReturn:true,
                 startContext:{tokens:[]},
                 forwardHandler:(context) => {
-                    let {obj,token} = context;
+                    const {obj,token} = context;
 
                     // make a copy of previous tokens instead of reference 
                     // to them so that token context stack is maintained.
                     context.tokens = [...context.prevContext.tokens];
 
-                    const sharedRootIdx = rootChain.indexOf(obj);
-                    if(sharedRootIdx >= 0) {
-                        context.tokens = [];
-                        for(let i = sharedRootIdx;i > 0;i--) {
-                            context.tokens.push(new PathToken("T_BACK","."))
+                    if(obj != null) {
+                        const sharedRootIdx = rootChain.indexOf(obj);
+                        if(sharedRootIdx >= 0) {
+                            context.tokens = [];
+                            for(let i = sharedRootIdx;i > 0;i--) {
+                                context.tokens.push(new PathToken("T_BACK","."))
+                            }
                         }
                     }
 
@@ -343,9 +345,18 @@ export class Path {
                     // maintain any tokens afterward by skipping token 
                     // resolution and keeping the resolver from quitting 
                     // on null objects.
-                    if(context.obj == null && token.type !== T_GROUP) {
+                    if(obj == null) {
                         context.tokens.push(token);
                         return {action:"skip_token"};
+                    }
+
+                    if(token.type === T_GROUP) {
+                        const newGTokens = [];
+                        for(const gtokens of token.value) {
+                            newGTokens.push(...Path.pathTo(new Path(gtokens,obj),obj).tokens);
+                        }
+                        context.tokens.push(new PathToken(T_GROUP,newGTokens,token.containerType));
+                        return {action:"skip_token", override_objs:[null]};
                     }
 
                     // Follow root tokens and expand group tokens as normal.
@@ -353,7 +364,6 @@ export class Path {
                     switch(token.type) {
                         case T_ROOT:
                         case T_BACK:
-                        case T_GROUP:
                             return {action:"continue"};
                     }
 
