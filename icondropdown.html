@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <link rel="stylesheet" href="styles/testingstuff.css">
+</head>
+<body>
+    <div id="icon_box">
+        <div id="displayed_icon">
+            <img src="images/gnollpointerfinger_icon.png">
+        </div>
+        <button type="button" id="expand_icon_container_button">
+            ►
+        </button>
+        <div id="icon_container">
+            <!--Lots of icons go here-->
+        </div>
+    </div>
+    <script>
+        var expandIconContainerButton = document.getElementById("expand_icon_container_button");
+
+        expandIconContainerButton.addEventListener('click', expandIconContainer);
+
+        function expandIconContainer() {
+            console.log("I've been clicked!");
+            if (expandIconContainerButton.textContent === `▼`) {
+                expandIconContainerButton.textContent = `►`;
+            } else {
+                expandIconContainerButton.textContent = `▼`;
+            }
+        }
+    </script>
+</body>
+</html>
