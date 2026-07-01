@@ -835,8 +835,8 @@ export class ModifierNode extends DataNode {
                 this.listenerChanges.push(...getDepMods("condition",this.condition,condition));
             }
         }
-
-        super.modify(...rest);
+        if(rest != undefined)
+            super.modify(rest);
     }
 
     getSaveData() {

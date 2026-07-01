@@ -172,7 +172,7 @@ export class Character {
         });
         this.newNodes.forEach((newNode) => {
             // evaluate node values
-            newNode.evaluate();
+            newNode.update();
         });
 
         this.newNodes = [];

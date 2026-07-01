@@ -1,0 +1,196 @@
+{
+    "data":{
+        "Player Info": {
+            "Player Name":"Brian",
+            "Character Name":"Lucian Defane",
+            "Race":"Geppetin",
+            "Alignment":"Chaotic Good",
+            "Background":"Vampire Devotee"
+        },
+        "Basics": {
+            "Class":"Warlock",
+            "Level":10,
+            "Proficiency": "=1+ceil(data('.Level')/4)"
+        },
+        "Combat":{
+            "HP":{
+                "__type":"data",
+                "value":110,
+                "min":0,
+                "max":110
+            },
+            "Temp HP": 0,
+            "Hit Die":{ 
+                "count":{"__type":"data","value":10,"min":0,"max":10},
+                "die":"d8"
+            },
+            "Death Saves":{
+                "Successes":0,
+                "Failures":0
+            },
+            "AC": "=10 + data('$Ability Scores.Dexterity.mod')",
+            "Initiative":"=data('$Ability Scores.Dexterity.mod')"
+        },
+        "Ability Scores":{
+            "Strength": {
+                "score":{
+                    "__type":"data", "value":13,"min":0,"max":20
+                }
+            },
+            "Dexterity": {
+                "score":{
+                    "__type":"data", "value":15,"min":0,"max":20
+                }
+            },
+            "Constitution": {
+                "score":{
+                    "__type":"data", "value":14,"min":0,"max":20
+                }
+            },
+            "Intelligence": {
+                "score":{
+                    "__type":"data", "value":10,"min":0,"max":20
+                }
+            },
+            "Wisdom": {
+                "score":{
+                    "__type":"data", "value":12,"min":0,"max":20
+                }
+            },
+            "Charisma": {
+                "score":{
+                    "__type":"data", "value":22,"min":0,"max":22
+                }
+            }
+        },
+        "Skills":{
+            "__direction":"column",
+            "Acrobatics":      "=data('$Ability Scores.Dexterity.mod')",
+            "Animal Handling": "=data('$Ability Scores.Wisdom.mod')",
+            "Arcana":          "=data('$Ability Scores.Intelligence.mod')",
+            "Athletics":       "=data('$Ability Scores.Strength.mod')",
+            "Deception":       "=data('$Ability Scores.Charisma.mod')",
+            "History":         "=data('$Ability Scores.Intelligence.mod')",
+            "Insight":         "=data('$Ability Scores.Wisdom.mod')",
+            "Intimidation":    "=data('$Ability Scores.Charisma.mod')",
+            "Investigation":   "=data('$Ability Scores.Intelligence.mod')",
+            "Medicine":        "=data('$Ability Scores.Wisdom.mod')",
+            "Nature":          "=data('$Ability Scores.Intelligence.mod')",
+            "Perception":      "=data('$Ability Scores.Wisdom.mod')",
+            "Performance":     "=data('$Ability Scores.Charisma.mod')",
+            "Persuasion":      "=data('$Ability Scores.Charisma.mod')",
+            "Religion":        "=data('$Ability Scores.Intelligence.mod')",
+            "Sleight of Hand": "=data('$Ability Scores.Dexterity.mod')",
+            "Stealth":         "=data('$Ability Scores.Dexterity.mod')",
+            "Survival":        "=data('$Ability Scores.Wisdom.mod')"
+        },
+        "Equipment":{
+            "Backpack":[
+                {
+                    "name":"Gold",
+                    "quantity":99,
+                    "weight":2
+                },
+                {
+                    "name":"Leather Armor",
+                    "type":"armor",
+                    "modifier":{
+                        "__type":"modifier",
+                        "target":"$Combat.AC",
+                        "operation":"replace",
+                        "condition":"=data('.equipped')",
+                        "value":"=12 + data('$Ability Scores.Dexterity.mod')",
+                        "tier":1
+                    },
+                    "equipped":false
+                },
+                {
+                    "name":"+2 Rod of the Pact Keeper",
+                    "modifiers":[
+                        {
+                            "__type":"modifier",
+                            "target":"$Spell Casting.Combat.(Spell Save,Spell Attack)",
+                            "operation":"add",
+                            "value":2,
+                            "condition":"..equipped"
+                        }
+                    ],
+                    "equipped":true
+                }
+            ],
+            "capacity":"=data('$Ability Scores.Strength.score') * 15",
+            "carrying":"=sum(data('.Backpack[*].weight',0))"
+        },
+        "Spell Casting":{
+            "Combat":{
+                "Spell Save":"=8 + data('.Spell Attack')",
+                "Spell Attack":"=data('$Basics.Proficiency') + data('$Ability Scores.Charisma.mod')",
+                "Spells":"Comming soon..."
+            }
+        },
+        "Modifiers":{
+            "Feats":{
+                "Proficiencies":{
+                    "__type":"modifier",
+                    "target":"$Skills.(Persuasion)",
+                    "operation":"add",
+                    "value":"=data('$Basics.Proficiency')"
+                },
+                "Blood Lust":{
+                    "description":"When you roll a Hit Point Die to regain Hit Points, you can treat any roll of 1 or 2 as a 3",
+                    "Ability Score Increase - Dex":{
+                        "__type":"modifier",
+                        "target":"$Ability Scores.Dexterity.score",
+                        "operation":"add",
+                        "value":1
+                    }
+                }
+            },
+            "Race Bonuses":{
+                "Proficiencies":{
+                    "__type":"modifier",
+                    "target":"$Skills.(Performance)",
+                    "operation":"add",
+                    "value":"=data('$Basics.Proficiency')"
+                }
+            },
+            "Background Bonuses":{
+                "Vampire Devotee":{
+                    "Constitution":{
+                        "__type":"modifier",
+                        "target":"$Ability Scores.Constitution.score",
+                        "operation":"add",
+                        "value":2
+                    },
+                    "Strength":{
+                        "__type":"modifier",
+                        "target":"$Ability Scores.Strength.score",
+                        "operation":"add",
+                        "value":1
+                    }
+                }
+            },
+            "Class Bonuses":{
+                "Saving Throws":{
+                    "__type":"modifier",
+                    "target":"$Ability Scores.(Wisdom,Charisma).save",
+                    "operation":"add",
+                    "value":"=data('$Basics.Proficiency')"
+                },
+                "Proficiencies":{
+                    "__type":"modifier",
+                    "target":"$Skills.(Deception,Intimidation)",
+                    "operation":"add",
+                    "value":"=data('$Basics.Proficiency')"
+                }
+            }
+        }
+        
+    },
+    "rules":{
+        "Ability Scores.*":{
+            "mod":"=floor(data('.score')/2)-5",
+            "save":"=data('.mod')"
+        }
+    }
+}
