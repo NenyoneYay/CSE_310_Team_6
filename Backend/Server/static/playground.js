@@ -4,7 +4,7 @@ import { testChar } from './CharacterEngine/test.js';
 import { Path } from './CharacterEngine/Path.js';
 
 let loadedChar = new Character();
-window.loadedChar = loadedChar;
+window.getLoadedChar = () => loadedChar;
 
 let sheet = {
     [Symbol.for("okeys")]:["Basics","Ability Scores","Combat"],
