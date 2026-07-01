@@ -313,7 +313,7 @@ export class Path {
             if(obj.origin == null)
                 return new Path(obj,from);
             if(from == null)
-                return new Path(obj,Path.pathTo(obj.origin,from));
+                return new Path(obj,Path.pathTo(obj.origin));
 
             let newTokens = [];
             obj.resolve({
@@ -366,7 +366,7 @@ export class Path {
                         case A_SLICE:
                         case T_DEEP_WILDCARD:
                             return {action:"skip_token",override_objs:[null]};
-                        // special case for negative indicies.
+                        // special case for negative and multiple indicies.
                         case A_LIST:
                             if(token.value.length > 1 || token.value[0] < 0)
                                 return {action:"skip_token",override_objs:[null]};
@@ -1365,7 +1365,6 @@ export class Path {
 
                         for(const _tokens of token.value) {
                             recursor(_currentRoot,[..._tokens,...tokensRest],0,accessor,handlerCtx);
-                            if(stopResolution) break;
                         }
                         llpushClose();
                         break;
