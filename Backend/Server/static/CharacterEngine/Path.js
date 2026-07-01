@@ -57,13 +57,19 @@ export class PathToken {
     }
 
     /**
-     * @param {PathToken} containingToken 
+     * @returns {string|null}
      */
-    setContainer(containingToken = null) {
-        if(this == undefined) return;
-
+    getContainerType() {
         let containerType = null;
-        switch(containingToken.type) {
+        switch(this.type) {
+            case T_GROUP:
+                for(const tokens of /** @type {PathToken[][]} */ (this.value)) {
+                    if(tokens.length > 0) {
+                        containerType = tokens[0].getContainerType();
+                        break;
+                    }
+                }
+                break;
             case T_DEEP_WILDCARD:
                 containerType = "deep";
                 break;
@@ -80,7 +86,15 @@ export class PathToken {
                 containerType = "node";
                 break;
         }
-        this.containerType = containerType;
+        return containerType;
+    }
+
+    /**
+     * @param {PathToken} containingToken 
+     */
+    setContainer(containingToken = null) {
+        if(this == undefined) return;
+        this.containerType = containingToken.getContainerType();
 
         // handle recursive tokens
         switch(this.type) {
@@ -110,11 +124,11 @@ export class PathToken {
             case T_ROOT:
                 return '$';
                 break;
-            case T_BACK:
-                postfix = '';
             case T_DEEP_WILDCARD:
                 tokenStr = '**';
                 break;
+            case T_BACK:
+                postfix = '';
             case O_KEY:
                 tokenStr = this.value;
                 break;
@@ -136,7 +150,7 @@ export class PathToken {
                         (pv,cv,idx,arr) => {
                             return pv + cv.reduce( (_pv,_cv,_idx,_arr) => {
                                 return _pv + _cv.getString(_idx >= _arr.length-1, idx < arr.length-1);
-                            },'');
+                            },(cv.length == 0 && idx < arr.length - 1) ? ',':'');
                         }
                     ,'')
                 })`;
@@ -276,29 +290,108 @@ export class Path {
      * @returns {Path|undefined}
      */
     static pathTo(obj,from = null) {
-        if(!(from == null || from instanceof Object)) return undefined;
+        if( !(from == null || from instanceof Object) 
+            || !(obj instanceof Object)
+        ) return undefined;
+
         const rootChain = [];
         if (from != null) {
             let cur = from;
-            while (cur?.[Symbol.for("parent")] != undefined) {
-                if(cur?.__type === "container" || cur instanceof Container)
-                    continue; // skip containers bc path resolution skips over them too
-                rootChain.push(cur);
+            while (cur != undefined && cur != obj) {
+                // skip containers bc path resolution skips over them too
+                if(cur?.__type !== "container" 
+                    && !(cur instanceof Container)
+                ) {
+                    rootChain.push(cur);
+                }
                 cur = cur[Symbol.for("parent")];
             }
+            if(cur == obj) rootChain.push(obj);
         }
+
+        if(obj instanceof Path) {
+            if(obj.origin == null)
+                return new Path(obj,from);
+            if(from == null)
+                return new Path(obj,Path.pathTo(obj.origin,from));
+
+            let newTokens = [];
+            obj.resolve({
+                noReturn:true,
+                startContext:{tokens:[]},
+                forwardHandler:(context) => {
+                    let {obj,token} = context;
+
+                    // make a copy of previous tokens instead of reference 
+                    // to them so that token context stack is maintained.
+                    context.tokens = [...context.prevContext.tokens];
+
+                    const sharedRootIdx = rootChain.indexOf(obj);
+                    if(sharedRootIdx >= 0) {
+                        context.tokens = [];
+                        for(let i = sharedRootIdx;i > 0;i--) {
+                            context.tokens.push(new PathToken("T_BACK","."))
+                        }
+                    }
+
+                    if(token === Path.END_TOKEN) {
+                        newTokens.push(context.tokens);
+                        return {action:"skip"}
+                    }
+
+                    // non-conctete path tokens will change root to null
+                    // maintain any tokens afterward by skipping token 
+                    // resolution and keeping the resolver from quitting 
+                    // on null objects.
+                    if(context.obj == null && token.type !== T_GROUP) {
+                        context.tokens.push(token);
+                        return {action:"skip_token"};
+                    }
+
+                    // Follow root tokens and expand group tokens as normal.
+                    // Don't push them into the new path tokens.
+                    switch(token.type) {
+                        case T_ROOT:
+                        case T_BACK:
+                        case T_GROUP:
+                            return {action:"continue"};
+                    }
+
+                    context.tokens.push(token);
+
+                    // maintain non-concrete path tokens.
+                    switch(token.type) {
+                        case O_WILDCARD:
+                        case A_WILDCARD:
+                        case A_SLICE:
+                        case T_DEEP_WILDCARD:
+                            return {action:"skip_token",override_objs:[null]};
+                        // special case for negative indicies.
+                        case A_LIST:
+                            if(token.value.length > 1 || token.value[0] < 0)
+                                return {action:"skip_token",override_objs:[null]};
+                    }
+                }
+            });
+            return new Path(newTokens,from);
+        }
+
+        
 
         let originobj = null;
 
+        /**
+         * @param {Object} obj 
+         * @returns {PathToken[]}
+         */
         const recursor = (obj) => {
             if(obj == undefined) return undefined;
 
             if(from != null) {
                 let idx = rootChain.indexOf(obj);
                 if(idx >= 0) {
-                    const isRoot = obj?.[Symbol.for("parent")] == undefined;
                     originobj = from;
-                    const rval = isRoot ? [new PathToken(T_ROOT,"$")] : []
+                    const rval = [];
                     for(let i = idx;i > 0;i--) {
                         rval.push(new PathToken(T_BACK,"."));
                     }
@@ -335,10 +428,8 @@ export class Path {
             return undefined;
         }
 
-        if(obj instanceof Path) {
-            return new Path(obj,Path.pathTo(obj.origin,from));
-        }
-        return new Path(recursor(obj),originobj);
+        const tokens = recursor(obj);
+        return new Path(tokens,originobj);
     }
 
     /**
@@ -352,9 +443,10 @@ export class Path {
             return "";
         if(Array.isArray(obj[Symbol.for("parent")]))
             return obj[Symbol.for("parent")].indexOf(obj);
-        else if (obj instanceof Object)
-            return Object.keys(obj[Symbol.for("parent")])?.find(key => obj[Symbol.for("parent")][key] === obj);
-        else
+        else if (obj instanceof Object) {
+            const parentObj = obj[Symbol.for("parent")];
+            return Object.keys(parentObj)?.find(key => parentObj[key] === obj);
+        } else
             return undefined;
     }
 
@@ -410,20 +502,20 @@ export class Path {
                 case A_LIST:
                 case N_ACCESSORS:
                 if(Array.isArray(token.value))
-                    tokenCopy = new PathToken(token.type,[...token.value]);
+                    tokenCopy = new PathToken(token.type,[...token.value],token.containerType);
                 break;
                 case A_SLICE:
-                    tokenCopy = new PathToken(token.type,{min: token.value.min, max: token.value.max})
+                    tokenCopy = new PathToken(token.type,{min: token.value.min, max: token.value.max},token.containerType)
                     break;
                 case T_GROUP:
-                    tokenCopy = new PathToken(token.type,_copyTokens(token.value));
+                    tokenCopy = new PathToken(token.type,_copyTokens(token.value),token.containerType);
                     break;
                 case T_ROOT:
                 case T_BACK:
                 case O_KEY:
                 case A_WILDCARD:
                 default:
-                    tokenCopy = new PathToken(token.type,token.value);
+                    tokenCopy = new PathToken(token.type,token.value,token.containerType);
                     break;
             }
             return tokenCopy;
@@ -820,7 +912,7 @@ export class Path {
         return this.tokens.reduce((pv,cv,idx,arr) => {
             return pv + cv.reduce( (_pv,_cv,_idx,_arr) => {
                 return _pv + _cv.getString(_idx >= _arr.length-1, idx < arr.length-1);
-            },'');
+            },(cv.length == 0 && idx < arr.length - 1) ? ',':'');
         },'');
     }
 
@@ -893,6 +985,7 @@ export class Path {
      *  reverseHandler: ResolutionReverseHandler, 
      *  resultHandler:  ResolutionResultHandler,
      *  handlerOptions: Object,
+     *  startContext: Object,
      *  flat: boolean
      * }} options All options are optional
      * @returns {Array<PathResult|undefined|Array>|PathResult|undefined} Always returns an array if 'flat' option is true
@@ -904,8 +997,10 @@ export class Path {
             reverseHandler = null,
             resultHandler = null,
             handlerOptions = {},
+            startContext = {},
             flat = false,
             wrapResults = true,
+            noReturn = false,
         } = options;
         
         // Some high scope variables to preserve forward handler control 
@@ -918,7 +1013,7 @@ export class Path {
 
         // called on every path leaf to append result to list
         function llpush (value) {
-            if(flat && value == undefined) return;
+            if((flat && value == undefined) || noReturn) return;
             const newNode = {value:value,next:null,count:0}
             if(llhead == null) {
                 llhead = newNode
@@ -936,7 +1031,7 @@ export class Path {
         // pushes special "ctxOPEN" node to specify entry into a deeper 
         // result context depth. Does nothing in 'flat' mode.
         function llpushOpen(keepArr = false) {
-            if(flat && ctxStack.length > 0) return;
+            if((flat && ctxStack.length > 0) || noReturn) return;
             const newNode = llpush({[Symbol.for("ctxOPEN")]: keepArr || flat});
             ctxStack.push(newNode);
         }
@@ -944,7 +1039,7 @@ export class Path {
         // pushes special "ctxCLOSE" node to specify exit from a deeper 
         // result context depth. Does nothing in 'flat' mode.
         function llpushClose(keepArr = false) {
-            if(flat && ctxStack.length <= 1) return;
+            if((flat && ctxStack.length <= 1) || noReturn) return;
             // used to tell if resulting array can be discarded for 
             // single element lists.
             if(ctxStack.length > 0) {
@@ -1065,7 +1160,9 @@ export class Path {
             }
         }
 
-        const recursor = (currentRoot,tokens = this.tokens, cursor=0, accessor = null, prevContext = {obj:null,token:null,isLeaf:false,accessor:null}) => {
+        Object.assign({obj:null,token:null,isLeaf:false,accessor:null})
+
+        const recursor = (currentRoot,tokens = this.tokens, cursor=0, accessor = null, prevContext = startContext) => {
             if(stopResolution) return;
 
             const handlerCtx = {
@@ -1104,7 +1201,8 @@ export class Path {
                             returnEarly = true;
                             break;
                         case "collect":
-                            buildResult(true,currentRoot,handlerCtx);
+                            for(const obj of nextRoots)
+                                buildResult(true,obj,handlerCtx);
                             break;
 
                         case "skip_token":
@@ -1172,7 +1270,7 @@ export class Path {
                         break;
                 }
 
-                if(_currentRoot == null) {
+                if(_currentRoot == null && token.type !== T_GROUP) {
                     return buildResult(false,undefined,handlerCtx);
                 }
 
@@ -1262,16 +1360,14 @@ export class Path {
                         break;
                     
                     case T_GROUP:
-                        if (_currentRoot != null) {
-                            const tokensRest = tokens.slice(cursor+1);
-                            llpushOpen();
+                        const tokensRest = tokens.slice(cursor+1);
+                        llpushOpen();
 
-                            for(const _tokens of token.value) {
-                                recursor(_currentRoot,[..._tokens,...tokensRest],0,accessor,handlerCtx);
-                                if(stopResolution) break;
-                            }
-                            llpushClose();
+                        for(const _tokens of token.value) {
+                            recursor(_currentRoot,[..._tokens,...tokensRest],0,accessor,handlerCtx);
+                            if(stopResolution) break;
                         }
+                        llpushClose();
                         break;
                     
                     case T_DEEP_WILDCARD:

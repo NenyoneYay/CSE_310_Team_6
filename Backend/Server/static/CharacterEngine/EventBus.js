@@ -2,6 +2,12 @@ import {Path, PathToken} from "./Path.js";
 import { sanatizeKey } from "./helpers.js";
 
 
+/**
+ * @typedef {"listener"|"data"} TrieRegistrationType
+ */
+
+const regTypePropMap = new Map([["listener","listeners"],["data","data"]])
+
 export class Listener {
     /**
      * 
@@ -40,17 +46,24 @@ export class Listener {
     }
 }
 
-class TrieRegistration {
+export class TrieRegistration {
+    /**
+     * 
+     * @param {TrieNode} trieNode 
+     * @param {TrieRegistrationType} type 
+     * @param {string} channel 
+     * @param {*} payload 
+     */
     constructor (trieNode, type, channel, payload) {
-        this.trieNodes = trieNode;
+        if(trieNode instanceof TrieNode)
+            this.trieNode = trieNode;
         this.type = type;
         this.channel = channel;
         this.payload = payload;
     }
 
     destroy() {
-        for(const trieNode of this.trieNodes)
-            this.trieNode.unregister(this);
+        if(this.trieNode instanceof TrieNode) this.trieNode.unregister(this);
         this.payload = null;
         this.trieNode = null;
     }
@@ -139,8 +152,6 @@ function matchIdxPattern(pattern, key, arrlen = null) {
     return false;
 }
 
-const regTypePropMap = new Map([["listener","listeners"],["data","data"]])
-
 class TrieNode {
 
     static WildcardSym = Symbol("wildcard");
@@ -170,7 +181,7 @@ class TrieNode {
 
     /**
      * 
-     * @param {"listener"|"data"} type 
+     * @param {TrieRegistrationType} type 
      * @param {string} key 
      * @param {TrieRegistration|any} payload 
      * @returns {TrieRegistration|undefined} 
@@ -605,7 +616,7 @@ export class EventBus {
 
     /**
      * 
-     * @param {"listener"|"data"} type 
+     * @param {TrieRegistrationType} type 
      * @param {string} channel 
      * @param {Path|Object} target 
      * @param {TrieRegistration|*} payload 
@@ -639,7 +650,7 @@ export class EventBus {
 
     /**
      * 
-     * @param {"listener"|"data"} type 
+     * @param {TrieRegistrationType} type 
      * @param {string} channel 
      * @param {Path|Object} target 
      * @returns {TrieRegistration[]}

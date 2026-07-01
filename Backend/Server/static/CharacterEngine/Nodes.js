@@ -1,7 +1,7 @@
 import {Path} from "./Path.js";
 import {ExprValue} from "./ExprValue.js";
 import {compareObj, sanatizeKey} from "./helpers.js";
-import { EventBus, Listener } from "./EventBus.js";
+import { EventBus, Listener , TrieRegistration } from "./EventBus.js";
 
 const DATA_CHANGE_HANDLER = Symbol("dataChangeHandler");
 
@@ -106,9 +106,23 @@ export class BaseNode {
         /** @type {{type:string,src:string,path:Path}[]} */
         this.listenerChanges = [];
 
-        /** @type {Map<string,Listener[]>} */
+        // Map: (source => Map( relPathStr => TrieRegistration ))
+        /** @type {Map<string,Map<string,TrieRegistration>>} */
         this.listenerRegistrations = new Map()
-        this.updateListener = new Listener(this.update,{thisArg:this});
+
+        // Map: (source => Map( relPathStr => Path ))
+        /** @type {Map<string,Map<string, Path>>} */
+        this.dependants = new Map();
+
+        // readonly property: updateListener
+        Object.defineProperty(this,'updateListener',{
+            value:new Listener(this.update,{thisArg:this}),
+            writable:false,
+            configurable:false,
+            enumerable:true
+        });
+
+        
 
         this.dirty = true;
         this.visited = false;
@@ -212,8 +226,13 @@ export class BaseNode {
         this.renderedElement = null;
     }
 
-    set(value) {
-        this.update();
+    set({value = null}) {
+        let success = false;
+        if(value != null) {
+            this.accessors.value = value;
+            success = true;
+        }
+        if(success) this.update();
     }
 
     // idea: allow visited to be a loop counter to allow circular 
@@ -241,6 +260,28 @@ export class BaseNode {
             this.evaluate();
             if(!compareObj(this.accessors,stale_accessors)) {
                 this.evBus?.emit("change",this);
+
+                for(const pathMap of this.dependants.values()) {
+                    for(const path of pathMap.values()) {
+                        /** @type {BaseNode[]} */
+                        const nodes = path.resolve({
+                            flat:true,
+                            wrapResults:false,
+                            forwardHandler: (context) => {
+                                if(context.obj instanceof BaseNode && context.obj !== this) {
+                                    return {action:"return"};
+                                }
+                            },
+                            resultHandler:(context) => {
+                                if(!(context.result instanceof BaseNode))
+                                    return {action:"discard"};
+                            }
+                        });
+                        for(const node of nodes) {
+                            node.update();
+                        }
+                    }
+                }
                 if(this[DATA_CHANGE_HANDLER]) this[DATA_CHANGE_HANDLER]();
             }
         } catch (e){
@@ -267,30 +308,51 @@ export class BaseNode {
 
     evaluateDependencies() {
         this.evBus = Path.findRoot(this)[Symbol.for("EventBus")];
-
+        if(this.evBus == null) return;
         this.listenerChanges.forEach((change) => {
             if(change == null || change.path == null || change.type == null) return;
-
+            const absPath = Path.pathTo(change.path);
             // TODO: implement remove operations as well
 
             switch (change.type) {
                 case "add listener":
                 case "add precedent":
                     if(!this.listenerRegistrations.has(change.src))
-                        this.listenerRegistrations.set(change.src,new Set());
-                    this.listenerRegistrations.get(change.src).add(
-                        this.evBus.registerListener("change",change.path,this.updateListener)
-                    );
+                        this.listenerRegistrations.set(change.src,new Map());
+                    const regMap = this.listenerRegistrations.get(change.src)
+                    if(!regMap.has(absPath.str)) {
+                        regMap.set(
+                            absPath.str,
+                            this.evBus.registerListener("change",change.path,this.updateListener)
+                        );
+                    }
                     break;
-//                 case "add dependent":
-//                     this.registerDependent(node,accessor,mod.amount);
-//                     break;
-//                 case "remove precedent":
-//                     this.unregisterPrecedent(node,accessor,mod.amount);
-//                     break;
-//                 case "remove dependent":
-//                     this.unregisterDependent(node,accessor,mod.amount);
-//                     break;
+                case "add dependant":
+                    if(!this.dependants.has(change.src))
+                        this.dependants.set(change.src,new Map());
+                    this.dependants.get(change.src).set(absPath.str,absPath);
+                    break;
+                case "remove listener":
+                case "remove precedent":
+                    if(this.listenerRegistrations.has(change.src)) {
+                        /** @type {Map<string,TrieRegistration>} */
+                        const regMap = this.listenerChanges.get(change.src);
+                        if(regMap != undefined) {
+                            const reg = regMap.get(absPath.str);
+                            if(reg != undefined) this.evBus.unregister(reg);
+                            regMap.delete(absPath.str);
+                        }
+                    }
+                    break;
+                case "remove dependant":
+                    if(this.dependants.has(change.src)) {
+                        /** @type {Map<string,TrieRegistration>} */
+                        const pathMap = this.dependants.get(change.src);
+                        if(pathMap != undefined) {
+                            pathMap.delete(absPath.str);
+                        }
+                    }
+                    break;
             }
             
             return;
@@ -298,6 +360,20 @@ export class BaseNode {
 
         // Once connections are made, clear out modifications list
         this.listenerChanges = [];
+    }
+
+    unregisterDependencies() {
+        for(const pathMap of this.dependants.values()) {
+            pathMap.clear();
+        }
+        this.dependants.clear();
+        for(const regMap of this.listenerRegistrations.values()) {
+            for(const reg of regMap.values()) {
+                reg.unregister();
+            }
+            regMap.clear();
+        }
+        this.listenerRegistrations.clear();
     }
 
     getSaveData() {
@@ -350,8 +426,6 @@ export class DataNode extends BaseNode {
         this.min.precedentPaths.forEach(depPath => {
             this.listenerChanges.push({type:"add precedent",src:"min",path:depPath,amount:1});
         });
-
-        this.dirty = true;
 
         this.accessors = {
             base: 0,
