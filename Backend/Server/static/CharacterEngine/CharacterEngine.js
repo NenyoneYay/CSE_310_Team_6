@@ -245,8 +245,10 @@ export class Character {
                     })
                     .map((val) => objSerializer(val,spaces,depth+1));
                 return `[${spaceInsertB}${processedArr.join("," + spaceInsertB)}${spaceInsertA}]`;
+            } else if (obj instanceof ModifierNode) {
+                return JSON.stringify(obj.getSaveData(),undefined,spaces).replaceAll("\n",spaceInsertA);
             } else if (obj instanceof BaseNode) {
-                return JSON.stringify(obj.getSaveData(),undefined,spaces).replaceAll("\n",spaceInsertA);;
+                return JSON.stringify(obj.getSaveData(),undefined);
             } else if (obj instanceof Container) {
                 return objSerializer(obj.getSaveData());
             } else if (obj instanceof Object) {

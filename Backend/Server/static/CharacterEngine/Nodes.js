@@ -52,7 +52,7 @@ export class Container {
             content: this.content
         }
 
-        const isDefault = compareObj(rval,Container.defaultDataObj,["__type","content"]);
+        const isDefault = compareObj(rval,Container.defaultDataObj,{keyBlacklist:["__type","content"]}) == undefined;
 
         if(Array.isArray(this.content) || (this.content instanceof BaseNode) 
             || !(this.content instanceof Object)
@@ -165,13 +165,12 @@ export class BaseNode {
         }
     }
 
-    renderHTML(value = null) {
-        if(value == null) value = this.accessors.value;
-        switch (typeof(value)) {
+    renderHTML(value = undefined) {
+        switch (typeof(value ?? this.accessors.value)) {
+            case "number":
             case "string":
                 this.inputType = "text";
                 break;
-            case "number":
                 this.inputType = "number";
                 break;
             case "boolean":
@@ -204,6 +203,10 @@ export class BaseNode {
 
     updateRenderedElement(value) {
         if(value == undefined) value = this.accessors.value;
+        if(Number.isNaN(value)) {
+            this.renderHTML("NaN");
+            return;
+        }
         if (this.renderedElement != null) {
             switch (this.inputType) {
                 case "checkbox":
@@ -213,6 +216,7 @@ export class BaseNode {
                 case "number":
                 default:
                     this.renderedElement.value = value;
+                    this.renderedElement.style.width = Math.min(String(value).length,25) + "ch"
             }
         }
     }
@@ -260,7 +264,7 @@ export class BaseNode {
             // // detected.
             const stale_accessors = {...this.accessors}
             this.evaluate();
-            if(!compareObj(this.accessors,stale_accessors,["base"])) {
+            if(compareObj(this.accessors,stale_accessors,{keyBlacklist:["base"]}) != undefined) {
                 this.evBus?.emit("change",this);
 
                 for(const pathMap of this.dependants.values()) {
@@ -304,7 +308,7 @@ export class BaseNode {
         }
 
         if(document.activeElement !== this.renderedElement || this.inputType === "checkbox")
-            this.updateRenderedElement(this.accessors.value);
+            this.updateRenderedElement();
         return this.accessors.value;
     }
 
@@ -401,6 +405,8 @@ export class DataNode extends BaseNode {
         value:0,
         min:undefined,
         max:undefined,
+        prefix: '',
+        postfix: ''
     }
     /**
      * @param {boolean} virtual 
@@ -412,12 +418,16 @@ export class DataNode extends BaseNode {
      *   }?} dataObj
      */
     constructor(virtual, parent, dataObj) {
-        let {value,min,max} = {...DataNode.defaultDataObj,...dataObj};
-        super(virtual, parent,{value:value, min:min, max:max});
+        let {value,min,max,prefix,postfix} = {...DataNode.defaultDataObj,...dataObj};
+        super(virtual, parent,{value:value});
         //Update Pathes
         this.value = new ExprValue(value,this);
         this.max = new ExprValue(max,this);
         this.min = new ExprValue(min,this);
+        /** @type {string} */
+        this.prefix = String(prefix ?? '');
+        /** @type {string} */
+        this.postfix = String(postfix ?? '');
 
         this.valuePath = new Path("#value",this);
         this.maxPath = new Path("#max",this);
@@ -446,15 +456,15 @@ export class DataNode extends BaseNode {
             if (this.value.isExpr && this.renderedElement.type !== "text") {
                 this.renderHTML(this.value.value);
                 this.renderedElement.focus();
+            } else {
+                this.updateRenderedElement(this.value.value);
             }
-            this.updateRenderedElement(this.value.value);
         }
         this.inputBlurHandler = (event) => {
             if (this.renderedElement?.type === "text"){
                 this.modify({value:this.renderedElement.value});
-            }
-            if(this.renderedElement?.type === "text")
                 this.renderHTML(this.accessors.value);
+            }
             this.updateRenderedElement();
         }
         const baseInputChangeHandler = this.inputChangeHandler;
@@ -462,6 +472,25 @@ export class DataNode extends BaseNode {
             if(!this.value.isExpr)
                 baseInputChangeHandler(event);
         }
+    }
+
+    updateRenderedElement(value = undefined) {
+        if(value == undefined) {
+            let currentValue = this.accessors.value;
+            if(typeof(currentValue) === "number") {
+                currentValue = currentValue.toFixed(2);
+            }
+            let prefixCalc = this.prefix;
+            if(typeof(currentValue) === "number" && currentValue < 0) {
+                prefixCalc = this.prefix.replace(/\+(\s*)$/," $1");
+            }
+            if(["number","string"].includes(typeof(currentValue))) {
+                value = prefixCalc + currentValue + this.postfix;
+            } else if(typeof(currentValue) == "boolean") {
+                value = currentValue;
+            }
+        }
+        super.updateRenderedElement(value);
     }
 
     /**
@@ -716,13 +745,19 @@ export class DataNode extends BaseNode {
         if (rval === undefined) return rval;
         
         rval = {
-            __type: "data",
+            __type:"data",
+            prefix: this.prefix,
             value: this.value.getSaveData(),
             min: this.min.getSaveData(),
-            max: this.max.getSaveData()
+            max: this.max.getSaveData(),
+            postfix: this.postfix
         }
-        if(compareObj(DataNode.defaultDataObj, rval, ["__type","value"]))
+        const compareResult = compareObj(DataNode.defaultDataObj, rval, {keyWhitelist:["__type","value"]})
+
+        if(Object.keys(compareResult).length <= 2)
             rval = rval.value;
+        else 
+            rval = compareResult;
 
         return rval;
     }
@@ -730,7 +765,6 @@ export class DataNode extends BaseNode {
 
 export class ModifierNode extends DataNode {
     static defaultDataObj = {
-        ...super.defaultDataObj,
         target: undefined,
         operation:"add",
         condition: true,
@@ -749,8 +783,8 @@ export class ModifierNode extends DataNode {
      * }} dataObj
      */
     constructor(virtual, parent, dataObj) {
-        const {target,operation,value,max,min,condition,tier=0} = {...ModifierNode.defaultDataObj, ...dataObj};
-        super(virtual, parent, {target,operation,value,condition,tier});
+        const {target,operation,condition,tier=0,...rest} = {...ModifierNode.defaultDataObj, ...dataObj};
+        super(virtual, parent, rest);
         //Update Path
         if(target != undefined) {
             this.target = new Path(target, this);
@@ -775,26 +809,6 @@ export class ModifierNode extends DataNode {
         this.accessors.condition = condition ?? true;
         this.registeredData = null;
     }
-
-    // [DATA_CHANGE_HANDLER]() {
-    //     this?.target?.resolve({
-    //         flat:true,
-    //         wrapResults:false,
-    //         forwardHandler: (context) => {
-    //             const {obj,token} = context;
-    //             if(obj instanceof BaseNode && obj !== this) {
-    //                 return {action:"return"}
-    //             }
-    //         },
-    //         resultHandler: (context) => {
-    //             const {result} = context;
-    //             if(!(result instanceof BaseNode))
-    //                 return {action:"discard"};
-    //         }
-    //     }).forEach((node) => {
-    //         node.update();
-    //     });
-    // }
 
     evaluateDependencies() {
         super.evaluateDependencies();
@@ -851,11 +865,13 @@ export class ModifierNode extends DataNode {
             tier: this.tier
         }
 
+        const compareResult = compareObj(ModifierNode.defaultDataObj, newData, {keyWhitelist: ["__type","target","operation"]})
+
         if(rval instanceof Object) {
-            Object.assign(rval,newData);
+            Object.assign(rval,compareResult);
         } else {
-            newData.value = rval;
-            rval = newData;
+            compareResult.value = rval;
+            rval = compareResult;
         }
 
         return rval;

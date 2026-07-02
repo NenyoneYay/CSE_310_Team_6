@@ -204,7 +204,7 @@ export class Path {
      *     (i.e. object, arrray, node) as well.
      *   - Tokens are recursively parsed inside.
      */
-    static tokensRegex = /(?<=^|[\(;,])\s*(\$)\s*|(?<=^|[\(;,\.])\s*(\.+)|(?:(?<=^|[\.;,\($])\s*(?:(\*)|(\*\*)|(\\?[\w~\*][\w: ~\-\*]*?|\\\*))\s*(?=$|[\.\[;#,\)]))|(?<!(?<!^|[\(;,\.])\.)\[\s*(?:(-?\d+(?:\s*,\s*-?\d+)*)|(-?\d*\s*:\s*-?\d*)|(\*))\s*\]\s*(?=$|[\.\[#,;\)])|(?<!(?<!^|[\(;,\.])\.)#(\w+(?:,\w+)*)\s*(?=$|[;\)])|(;|,)|\.|(\()|(\))/y;
+    static tokensRegex = /(?<=^|[(;,])\s*(\$)\s*|(?<=^|[(;,\.])\s*(\.+)|(?:(?<=^|[.;,($])\s*(?:(\*)|(\*\*)|(\\?[\w~*](?:[\w: ~\-*]|\([^)]*\))*?|\\\*))\s*(?=$|[.\[;,#)]))|(?<!(?<!^|[(;,.])\.)\[\s*(?:(-?\d+(?:\s*,\s*-?\d+)*)|(-?\d*\s*:\s*-?\d*)|(\*))\s*\]\s*(?=$|[.\[#,;)])|(?<!(?<!^|[(;,.])\.)#(\w+(?:,\w+)*)\s*(?=$|[;)])|(;|,)|\.|(?<=^|[.;,(])(\()|(\))/y;
     /* 
     Test Syntax string:
     $~Key Value.(Key[47],Key,key)[5][5:][*].Key[5,789,-6]#accessor1,accessor2;Key:morekey.Key.Key[:-1].*#accessor1,accessor3,accessor4
@@ -670,7 +670,7 @@ export class Path {
                     let key = m[5];
                     if(key === '\\*') key = '*'; // replace escaped \* with *
                     else if(key === '\\**') key = '**';
-                    tokens.push(new PathToken(O_KEY,sanatizeKey(key)));
+                    tokens.push(new PathToken(O_KEY,sanatizeKey(key.trim())));
                     prevToken?.setContainer(tokens.at(-1));
                 }
 

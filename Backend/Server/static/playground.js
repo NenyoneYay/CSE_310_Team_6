@@ -206,6 +206,38 @@ function getName(obj,parent) {
     } else
         return undefined;
 }
+
+function rename(obj,parent,newName) {
+    if(Array.isArray(parent)){
+        return undefined;
+    } else {
+        let oldKey = getName(obj,parent);
+        if(oldKey == undefined) return undefined;
+        if(newName === oldKey || newName.startsWith("__")) return oldKey;
+
+        let newKey = newName;
+        let keyCount = 0;
+        while (newKey in parent) {
+            newKey = `${newName} (${++keyCount})`
+        }
+        
+        parent[newKey] = parent[oldKey];
+        delete parent[oldKey];
+        obj.__name = newKey;
+
+        if(parent[Symbol.for("okeys")] == undefined) 
+            parent[Symbol.for("okeys")] = [newKey];
+        else {
+            const okeyIdx = parent[Symbol.for("okeys")].indexOf(oldKey);
+            if(okeyIdx >= 0)
+                parent[Symbol.for("okeys")][okeyIdx] = newKey;
+            else 
+                parent[Symbol.for("okeys")].push(newKey);
+        }
+        
+        return newKey;
+    }
+}
 //////////////////////////////////////////////////////
 
 function okeyObjToList(obj){
@@ -333,12 +365,8 @@ function makeNode(nodeData, inputType, parent, container) {
         inner.appendChild(lbl);
     }
 
-    // dummy input element for now
     const inputEl = nodeData.renderHTML();
     inputEl.className = "field-input";
-
-    
-    //----------------------------
 
     
     inner.appendChild(inputEl);
@@ -559,17 +587,7 @@ function makeContainer(containerData, parent, container) {
         titleInp.disabled = previewMode;
         titleInp.addEventListener("change", e => {
             const newName = e.target.value;
-            if(e.target.value in parent || e.target.value.startsWith("__")) {
-                e.target.value = containerData.__name;
-                return;
-            }
-            
-            const okeyIdx = parent[Symbol.for("okeys")].indexOf(containerData.__name);
-            parent[Symbol.for("okeys")][okeyIdx] = newName;
-            parent[newName] = parent[containerData.__name];
-            delete (parent[containerData.__name])
-            containerData.__name = newName;
-
+            e.target.value = rename(containerData,parent,newName) ?? containerData.__name;
             updatePreview();
         });
         hdr.appendChild(titleInp);
