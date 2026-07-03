@@ -1,7 +1,7 @@
 import {Path} from "./Path.js";
 import {ExprValue} from "./ExprValue.js";
 import {compareObj, sanatizeKey} from "./helpers.js";
-import { EventBus, Listener , TrieRegistration } from "./EventBus.js";
+import { EventManager, Listener , TrieRegistration } from "./EventManager.js";
 
 const DATA_CHANGE_HANDLER = Symbol("dataChangeHandler");
 
@@ -97,7 +97,7 @@ export class BaseNode {
         };
         this.passThrough = undefined;
 
-        /** @type {EventBus|undefined} */
+        /** @type {EventManager|undefined} */
         this.evBus = undefined;
 
         // dependencyModifications defines what changes need to be made in the next
@@ -317,7 +317,7 @@ export class BaseNode {
         if(this.evBus == null) return;
         this.listenerChanges.forEach((change) => {
             if(change == null || change.path == null || change.type == null) return;
-            const absPath = Path.pathTo(change.path);
+            //const absPath = Path.pathTo(change.path);
             // TODO: implement remove operations as well
 
             switch (change.type) {
@@ -326,9 +326,9 @@ export class BaseNode {
                     if(!this.listenerRegistrations.has(change.src))
                         this.listenerRegistrations.set(change.src,new Map());
                     const regMap = this.listenerRegistrations.get(change.src)
-                    if(!regMap.has(absPath.str)) {
+                    if(!regMap.has(change.path.str)) {
                         regMap.set(
-                            absPath.str,
+                            change.path.str,
                             this.evBus.registerListener("change",change.path,this.updateListener)
                         );
                     }
@@ -336,7 +336,7 @@ export class BaseNode {
                 case "add dependant":
                     if(!this.dependants.has(change.src))
                         this.dependants.set(change.src,new Map());
-                    this.dependants.get(change.src).set(absPath.str,absPath);
+                    this.dependants.get(change.src).set(change.path.str,change.path);
                     break;
                 case "remove listener":
                 case "remove precedent":
@@ -344,12 +344,12 @@ export class BaseNode {
                         /** @type {Map<string,TrieRegistration>} */
                         const regMap = this.listenerRegistrations.get(change.src);
                         if(regMap != undefined) {
-                            const regList = regMap.get(absPath.str);
+                            const regList = regMap.get(change.path.str);
                             if(regList != undefined) {
                                 for(const reg of regList)
                                     reg.unregister();
                             }
-                            regMap.delete(absPath.str);
+                            regMap.delete(change.path.str);
                         }
                     }
                     break;
@@ -358,7 +358,7 @@ export class BaseNode {
                         /** @type {Map<string,TrieRegistration>} */
                         const pathMap = this.dependants.get(change.src);
                         if(pathMap != undefined) {
-                            pathMap.delete(absPath.str);
+                            pathMap.delete(change.path.str);
                         }
                     }
                     break;
@@ -377,9 +377,8 @@ export class BaseNode {
         }
         this.dependants.clear();
         for(const regMap of this.listenerRegistrations.values()) {
-            for(const regList of regMap.values()) {
-                for(const reg of regList)
-                    reg.unregister();
+            for(const reg of regMap.values()) {
+                reg.unregister();
             }
             regMap.clear();
         }
@@ -477,7 +476,7 @@ export class DataNode extends BaseNode {
     updateRenderedElement(value = undefined) {
         if(value == undefined) {
             let currentValue = this.accessors.value;
-            if(typeof(currentValue) === "number") {
+            if(typeof(currentValue) === "number" && !Number.isInteger(currentValue)) {
                 currentValue = currentValue.toFixed(2);
             }
             let prefixCalc = this.prefix;

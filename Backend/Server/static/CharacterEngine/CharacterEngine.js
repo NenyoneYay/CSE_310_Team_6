@@ -1,7 +1,7 @@
 import {deepCopy, sanatizeKey} from "./helpers.js"
 import {BaseNode, DataNode, ModifierNode, Container} from "./Nodes.js";
 import {Path} from "./Path.js";
-import {EventBus} from "./EventBus.js";
+import {EventManager} from "./EventManager.js";
 
 /* Future features
  * actions:
@@ -219,7 +219,7 @@ export class Character {
             delete ruleData[Symbol.for("parent")];
 
         this.root = this.buildTree(contextData);
-        this.root[Symbol.for("EventBus")] = new EventBus();
+        this.root[Symbol.for("EventBus")] = new EventManager(this.root);
         if(this.root[Symbol.for("okeys")] == undefined)
             this.root[Symbol.for("okeys")] = [];
 

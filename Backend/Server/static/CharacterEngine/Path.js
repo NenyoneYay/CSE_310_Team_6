@@ -16,28 +16,30 @@ var  N_ACCESSORS     = 'N_ACCESSORS';
 /* Helpful switch skeleton for comparing tokens
 
 switch(token.type) {
-    case 'T_ROOT'     :
+    case 'T_ROOT'         :
         break;
-    case 'T_BACK'     :
+    case 'T_BACK'         :
         break;
-    case 'O_WILDCARD' :
+    case 'T_DEEP_WILDCARD':
         break;
-    case 'O_KEY'      :
+    case 'O_WILDCARD'     :
         break;
-    case 'A_LIST'     :
+    case 'O_KEY'          :
         break;
-    case 'A_SLICE'    :
+    case 'A_LIST'         :
         break;
-    case 'A_WILDCARD' :
+    case 'A_SLICE'        :
         break;
-    case 'T_GROUP'    :
+    case 'A_WILDCARD'     :
         break;
-    case 'N_ACCESSORS':
+    case 'T_GROUP'        :
         break;
-    case 'END'        :
+    case 'N_ACCESSORS'    :
+        break;
+    case 'END'            :
         break;
     default:
-
+        return {action:"continue"};
 }
 
 */
@@ -247,7 +249,7 @@ export class Path {
      *  isLeaf: boolean,
      *  accessor: Symbol|string|number,
      *  prevContext: {obj:(Object|Array),token:PathToken,isLeaf:boolean,accessor:Symbol|string|number}
-     * }} handlerContext
+     * }} context
      * @param {Object} options
      * @returns {ResolutionHandlerDecision} 
      */
@@ -260,7 +262,7 @@ export class Path {
      *  isLeaf: boolean,
      *  accessor: Symbol|string|number,
      *  prevContext: {obj:(Object|Array),token:PathToken,isLeaf:boolean,accessor:Symbol|string|number}
-     * }} handlerContext
+     * }} context
      * 
      * @param {Object} options
      * @returns {void}

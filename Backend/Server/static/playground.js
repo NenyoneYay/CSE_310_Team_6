@@ -897,8 +897,9 @@ document.getElementById("file-input").addEventListener("change", e => {
             loadedChar = new Character(ev.target.result);
             render(loadedChar.root);
             
-        } catch {
-            alert("Could not parse JSON file."); 
+        } catch (err) {
+            throw(err)
+            //alert("Could not parse JSON file.");
         }
         
     };

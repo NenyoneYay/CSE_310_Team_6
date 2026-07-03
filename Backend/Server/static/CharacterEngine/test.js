@@ -1,5 +1,5 @@
 import {Character} from "./CharacterEngine.js";
-import {EventBus, Listener} from "./EventBus.js";
+import {EventManager, Listener} from "./EventManager.js";
 import {Path} from "./Path.js";
 
 //Bind useful classes to the Window for development
@@ -78,24 +78,7 @@ window.downloadSave = function downloadSave() {
 };
 
 
-// define events before character is created
-const testEvBus = new EventBus();
-testEvBus.registerListener("change",new Path("Equipment.items[*].equipped"),() => {
-    console.log("item equipped!")
-});
 
-testEvBus.registerListener("change",new Path("Some Data.multiNode[-2]"),() => {
-    console.log("node changed!")
-});
-
-testEvBus.registerListener("change",new Path("Ability Scores.*.score"),() => {
-    console.log("score changed!")
-});
-
-testEvBus.registerListener("change",new Path("Multi_Array_Test.Array1[*][*]"),() => {
-    console.log("Array1 changed!")
-});
-window.testEvBus = testEvBus;
 
 
 
@@ -191,6 +174,26 @@ export const testChar = new Character(testFileData);
 window.testChar = testChar;
 window.testNode = new Path('Ability Scores.Strength.score',testChar.root).resolve();
 if(testNode?.__type === "pathResult") testNode = testNode.result;
+
+
+// define events
+const testEvBus = new EventManager(testChar.root);
+testEvBus.registerListener("change",new Path("Equipment.items[*].equipped"),new Listener(() => {
+    console.log("item equipped!")
+}));
+
+testEvBus.registerListener("change",new Path("Some Data.multiNode[-2]"),new Listener(() => {
+    console.log("node changed!")
+}));
+
+testEvBus.registerListener("change",new Path("..*.score",testNode),new Listener(() => {
+    console.log("score changed!")
+}));
+
+testEvBus.registerListener("change",new Path("Multi_Array_Test.Array1[*][*]"),new Listener(() => {
+    console.log("Array1 changed!")
+}));
+window.testEvBus = testEvBus;
 
 // fire events after character creation
 testEvBus.emit("change",testNode);
