@@ -187,8 +187,6 @@ class TrieNode {
             data: new Map()
         }
         this[TrieNode.RegistrationsSym] = new Map();
-        this[TrieNode.RegistrationsSym].set("listener",new Map());
-        this[TrieNode.RegistrationsSym].set("data",new Map());
     }
 
     getAnchor() {
@@ -247,7 +245,7 @@ class TrieNode {
                 if(_checkMap(regMap)) return true;
             }
         } else {
-            const regMap = registrations.get(regMap);
+            const regMap = registrations.get(type);
             if(_checkMap(regMap)) return true;
         }
         return false;
@@ -299,17 +297,7 @@ class TrieNode {
         }
         return rval;
     }
-
-    /**
-     * 
-     * @param {string} type 
-     * @param {string} key 
-     * @returns {Set<TrieRegistration>|undefined}
-     */
-    getRegistrations(type,channel) {
-        return this.getRegistrationSet(type,channel);
-    }
-
+    
     /**
      * @returns {TrieMatch[]}
      */

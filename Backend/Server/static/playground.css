@@ -155,7 +155,7 @@ body{
     
 }
 .sheet{
-    padding:1rem 0
+    padding:1rem 0;
 }
 .toolbar{
     display:flex;
@@ -180,8 +180,7 @@ body{
     border:0.5px solid var(--color-border-secondary);
     border-radius:var(--border-radius-lg);
     overflow:hidden;
-    min-width: min-content;
-    flex: 1 1 min-content;
+    flex: 1 1 auto;
     height: max-content;
 }
 
@@ -256,8 +255,8 @@ body{
     border-radius:var(--border-radius-md);
     padding:8px 10px;
     user-select:none;
-    min-width: min-content;
-    flex:1 1 min-content;
+    flex:1 1 0;
+    max-width: 100%;
 }
 
 
@@ -292,7 +291,7 @@ body{
     min-width:2ch;
     width:100%;
     text-align: right;
-    flex: 1 1 min-content;
+    flex: 1 1 0;
 }
 .field-input:focus{
     outline:none;
@@ -312,7 +311,10 @@ body{
     width:16px;
     height:16px;
     cursor:pointer;
-    accent-color:var(--color-text-info)
+    accent-color:var(--color-text-info);
+    justify-self: right;
+    flex-grow: 0;
+    margin-left: auto;
 }
 textarea.field-input {
     min-width:5ch;
