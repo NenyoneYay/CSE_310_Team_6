@@ -223,7 +223,7 @@ body{
     outline:none;
     border-bottom:1px solid var(--color-border-primary)
 }
-.section-expander {
+.section-icon-button {
     cursor: pointer;
     color:var(--color-text-primary);
 }

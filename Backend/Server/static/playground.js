@@ -338,6 +338,10 @@ function makeNode(nodeData, inputType, parent, container) {
     }
     if(nodeData[Symbol.for("parent")] == undefined)
         nodeData[Symbol.for("parent")] = parent;
+    if(nodeData.__visible == undefined)
+        nodeData.__visible = true;
+
+    if(previewMode && !nodeData.__visible) return;
 
     const sepElem = document.createElement("div");
     sepElem.classList.add("seperator");
@@ -352,6 +356,24 @@ function makeNode(nodeData, inputType, parent, container) {
         handle.setAttribute("aria-hidden","true");
 
         nodeElem.appendChild(handle);
+
+        const eyeBtn = document.createElement("i");
+        if(nodeData.__visible ?? true) {
+            eyeBtn.className = "ti ti-eye section-icon-button";
+        } else {
+            eyeBtn.className = "ti ti-eye-closed section-icon-button";
+        }
+
+        eyeBtn.addEventListener("click", ev => {
+            nodeData.__visible = !(nodeData.__visible ?? true);
+
+            if(nodeData.__visible) {
+                eyeBtn.className = "ti ti-eye section-icon-button";
+            } else {
+                eyeBtn.className = "ti ti-eye-closed section-icon-button";
+            }
+        });
+        nodeElem.append(eyeBtn);
     }
 
     const inner = document.createElement("div");
@@ -487,10 +509,14 @@ function makeContainer(containerData, parent, container) {
         containerData.__direction = "row";
     if(containerData.__expanded == undefined)
         containerData.__expanded = false;
+    if(containerData.__visible == undefined)
+        containerData.__visible = true;
     if(containerData[Symbol.for("okeys")] == undefined)
         containerData[Symbol.for("okeys")] = [];
     if(containerData[Symbol.for("parent")] == undefined)
         containerData[Symbol.for("parent")] = parent;
+
+    if(previewMode && !containerData.__visible) return;
 
     const containerName = getName(containerData,parent);
     if(containerData.__name !== containerName && !Array.isArray(parent))
@@ -554,6 +580,25 @@ function makeContainer(containerData, parent, container) {
 
             });
             hdr.appendChild(directionBtn);
+
+            const eyeBtn = document.createElement("i");
+            if(containerData.__visible ?? true) {
+                eyeBtn.className = "ti ti-eye section-icon-button";
+            } else {
+                eyeBtn.className = "ti ti-eye-closed section-icon-button";
+            }
+
+            eyeBtn.addEventListener("click", ev => {
+                containerData.__visible = !(containerData.__visible ?? true);
+
+                if(containerData.__visible) {
+                    eyeBtn.className = "ti ti-eye section-icon-button";
+                } else {
+                    eyeBtn.className = "ti ti-eye-closed section-icon-button";
+                }
+            });
+
+            hdr.appendChild(eyeBtn);
         }
         
     }
@@ -561,19 +606,19 @@ function makeContainer(containerData, parent, container) {
     const expander = document.createElement("i");
     let addRow = null
     if(containerData.__expanded ?? true) {
-        expander.className = "ti ti-caret-up section-expander";
+        expander.className = "ti ti-caret-up section-icon-button";
     } else {
-        expander.className = "ti ti-caret-down section-expander";
+        expander.className = "ti ti-caret-down section-icon-button";
     }
     expander.addEventListener("click", ev => {
         containerData.__expanded = !(containerData.__expanded ?? true);
 
         if(containerData.__expanded) {
-            expander.className = "ti ti-caret-up section-expander";
+            expander.className = "ti ti-caret-up section-icon-button";
             fieldList.classList.remove("hidden");
             addRow?.classList?.remove("hidden");
         } else {
-            expander.className = "ti ti-caret-down section-expander";
+            expander.className = "ti ti-caret-down section-icon-button";
             fieldList.classList.add("hidden");
             addRow?.classList?.add("hidden");
         }

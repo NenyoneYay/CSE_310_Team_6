@@ -297,7 +297,7 @@ class TrieNode {
         }
         return rval;
     }
-    
+
     /**
      * @returns {TrieMatch[]}
      */
@@ -634,6 +634,8 @@ export class EventManager {
     }
 
     getRegistrations(type,channel,target,resultHandler = undefined) {
+        // Data retrieval always starts from root in order to get all data
+        if(target.origin == null) target.origin = this.anchor;
         target = Path.pathTo(target);
         if(!(target instanceof Path)) return undefined;
 
@@ -696,9 +698,7 @@ export class EventManager {
     }
 
     getData(channel,target) {
-        // Data retrieval always starts from root in order to get all data
-        target = Path.pathTo(target);
-        if(!(target instanceof Path)) return undefined;
+        
         return this.getRegistrations("data",channel,target,(context) => {
             if(context.result instanceof TrieRegistration) {
                 return {action:"override", value:context.result.payload};
@@ -718,7 +718,7 @@ export class EventManager {
         // registrations, not just relative ones.
         target = Path.pathTo(target);
 
-        console.log(`Emitting '${channel}' event to '${target.str}' from '${Path.pathTo(target.origin).str}'`)
+        console.log(`Emitting '${channel}' event to '${target.str}'`)
 
         /** @type {Set<Listener>} */
         const listenerTriggers = new Set();

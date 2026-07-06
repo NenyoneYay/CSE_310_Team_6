@@ -166,7 +166,7 @@ export class BaseNode {
     }
 
     renderHTML(value = undefined) {
-        switch (typeof(value ?? this.accessors.value)) {
+        switch (typeof(value)) {
             case "number":
             case "string":
                 this.inputType = "text";
@@ -177,7 +177,7 @@ export class BaseNode {
                 this.inputType = "checkbox";
                 break;
             default:
-                this.inputType = null;
+                this.inputType = "text";
         }
 
         if(this.renderedElement == null || this.renderedElement.type != this.inputType) {
@@ -458,13 +458,15 @@ export class DataNode extends BaseNode {
             } else {
                 this.updateRenderedElement(this.value.value);
             }
+            // this.renderHTML(this.value.value);
+            // this.renderedElement.focus();
         }
         this.inputBlurHandler = (event) => {
             if (this.renderedElement?.type === "text"){
                 this.modify({value:this.renderedElement.value});
-                this.renderHTML(this.accessors.value);
+                this.renderHTML()
             }
-            this.updateRenderedElement();
+            this.updateRenderedElement()
         }
         const baseInputChangeHandler = this.inputChangeHandler;
         this.inputChangeHandler = (event) => {
@@ -490,6 +492,7 @@ export class DataNode extends BaseNode {
             }
         }
         super.updateRenderedElement(value);
+        return value;
     }
 
     /**

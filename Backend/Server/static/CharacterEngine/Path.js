@@ -1031,7 +1031,7 @@ export class Path {
 
         // called on every path leaf to append result to list
         function llpush (value) {
-            if((flat && value == undefined) || noReturn) return;
+            if(flat && value == undefined) return;
             const newNode = {value:value,next:null,count:0}
             if(llhead == null) {
                 llhead = newNode
@@ -1049,7 +1049,7 @@ export class Path {
         // pushes special "ctxOPEN" node to specify entry into a deeper 
         // result context depth. Does nothing in 'flat' mode.
         function llpushOpen(keepArr = false) {
-            if((flat && ctxStack.length > 0) || noReturn) return;
+            if(flat && ctxStack.length > 0) return;
             const newNode = llpush({[Symbol.for("ctxOPEN")]: keepArr || flat});
             ctxStack.push(newNode);
         }
@@ -1125,6 +1125,7 @@ export class Path {
         }
 
         function buildResult(collected = false, result = null,finalContext = null) {
+            if(noReturn) return;
             let finalResult;
 
             if(wrapResults) 
@@ -1254,9 +1255,10 @@ export class Path {
                 if(reverseHandler) { // call reverse handler on end token
                     reverseHandler(handlerCtx,handlerOptions);
                 }
-
-                for(const rval of nextRoots) {
-                    buildResult(returnEarly,rval,handlerCtx);
+                if(!noReturn) {
+                    for(const rval of nextRoots) {
+                        buildResult(returnEarly,rval,handlerCtx);
+                    }
                 }
                 return;
             }
