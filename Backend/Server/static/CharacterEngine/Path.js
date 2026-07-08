@@ -16,28 +16,30 @@ var  N_ACCESSORS     = 'N_ACCESSORS';
 /* Helpful switch skeleton for comparing tokens
 
 switch(token.type) {
-    case 'T_ROOT'     :
+    case 'T_ROOT'         :
         break;
-    case 'T_BACK'     :
+    case 'T_BACK'         :
         break;
-    case 'O_WILDCARD' :
+    case 'T_DEEP_WILDCARD':
         break;
-    case 'O_KEY'      :
+    case 'O_WILDCARD'     :
         break;
-    case 'A_LIST'     :
+    case 'O_KEY'          :
         break;
-    case 'A_SLICE'    :
+    case 'A_LIST'         :
         break;
-    case 'A_WILDCARD' :
+    case 'A_SLICE'        :
         break;
-    case 'T_GROUP'    :
+    case 'A_WILDCARD'     :
         break;
-    case 'N_ACCESSORS':
+    case 'T_GROUP'        :
         break;
-    case 'END'        :
+    case 'N_ACCESSORS'    :
+        break;
+    case 'END'            :
         break;
     default:
-
+        return {action:"continue"};
 }
 
 */
@@ -204,7 +206,7 @@ export class Path {
      *     (i.e. object, arrray, node) as well.
      *   - Tokens are recursively parsed inside.
      */
-    static tokensRegex = /(?<=^|[\(;,])\s*(\$)\s*|(?<=^|[\(;,\.])\s*(\.+)|(?:(?<=^|[\.;,\($])\s*(?:(\*)|(\*\*)|(\\?[\w~\*][\w: ~\-\*]*?|\\\*))\s*(?=$|[\.\[;#,\)]))|(?<!(?<!^|[\(;,\.])\.)\[\s*(?:(-?\d+(?:\s*,\s*-?\d+)*)|(-?\d*\s*:\s*-?\d*)|(\*))\s*\]\s*(?=$|[\.\[#,;\)])|(?<!(?<!^|[\(;,\.])\.)#(\w+(?:,\w+)*)\s*(?=$|[;\)])|(;|,)|\.|(\()|(\))/y;
+    static tokensRegex = /(?<=^|[(;,])\s*(\$)\s*|(?<=^|[(;,\.])\s*(\.+)|(?:(?<=^|[.;,($])\s*(?:(\*)|(\*\*)|(\\?[\w~*](?:.|\([^)]*\))*?))\s*(?=$|[.\[;,#)]))|(?<!(?<!^|[(;,.])\.)\[\s*(?:(-?\d+(?:\s*,\s*-?\d+)*)|(-?\d*\s*:\s*-?\d*)|(\*))\s*\]\s*(?=$|[.\[#,;)])|(?<!(?<!^|[(;,.])\.)#(\w+(?:,\w+)*)\s*(?=$|[;)])|(;|,)|\.|(?<=^|[.;,(])(\()|(\))/y;
     /* 
     Test Syntax string:
     $~Key Value.(Key[47],Key,key)[5][5:][*].Key[5,789,-6]#accessor1,accessor2;Key:morekey.Key.Key[:-1].*#accessor1,accessor3,accessor4
@@ -247,7 +249,7 @@ export class Path {
      *  isLeaf: boolean,
      *  accessor: Symbol|string|number,
      *  prevContext: {obj:(Object|Array),token:PathToken,isLeaf:boolean,accessor:Symbol|string|number}
-     * }} handlerContext
+     * }} context
      * @param {Object} options
      * @returns {ResolutionHandlerDecision} 
      */
@@ -260,7 +262,7 @@ export class Path {
      *  isLeaf: boolean,
      *  accessor: Symbol|string|number,
      *  prevContext: {obj:(Object|Array),token:PathToken,isLeaf:boolean,accessor:Symbol|string|number}
-     * }} handlerContext
+     * }} context
      * 
      * @param {Object} options
      * @returns {void}
@@ -670,7 +672,7 @@ export class Path {
                     let key = m[5];
                     if(key === '\\*') key = '*'; // replace escaped \* with *
                     else if(key === '\\**') key = '**';
-                    tokens.push(new PathToken(O_KEY,sanatizeKey(key)));
+                    tokens.push(new PathToken(O_KEY,sanatizeKey(key.trim())));
                     prevToken?.setContainer(tokens.at(-1));
                 }
 
@@ -1029,7 +1031,7 @@ export class Path {
 
         // called on every path leaf to append result to list
         function llpush (value) {
-            if((flat && value == undefined) || noReturn) return;
+            if(flat && value == undefined) return;
             const newNode = {value:value,next:null,count:0}
             if(llhead == null) {
                 llhead = newNode
@@ -1047,7 +1049,7 @@ export class Path {
         // pushes special "ctxOPEN" node to specify entry into a deeper 
         // result context depth. Does nothing in 'flat' mode.
         function llpushOpen(keepArr = false) {
-            if((flat && ctxStack.length > 0) || noReturn) return;
+            if(flat && ctxStack.length > 0) return;
             const newNode = llpush({[Symbol.for("ctxOPEN")]: keepArr || flat});
             ctxStack.push(newNode);
         }
@@ -1123,6 +1125,7 @@ export class Path {
         }
 
         function buildResult(collected = false, result = null,finalContext = null) {
+            if(noReturn) return;
             let finalResult;
 
             if(wrapResults) 
@@ -1252,9 +1255,10 @@ export class Path {
                 if(reverseHandler) { // call reverse handler on end token
                     reverseHandler(handlerCtx,handlerOptions);
                 }
-
-                for(const rval of nextRoots) {
-                    buildResult(returnEarly,rval,handlerCtx);
+                if(!noReturn) {
+                    for(const rval of nextRoots) {
+                        buildResult(returnEarly,rval,handlerCtx);
+                    }
                 }
                 return;
             }

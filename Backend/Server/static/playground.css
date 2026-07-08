@@ -147,526 +147,6 @@ background: var(--color-border-tertiary);
 transform: scale(0.98);
 }
 
-/* ===== Elicitation form — EA-878 =====
-* Inert unless Claude writes <form class="elicit">.
-* Figma: AaGSDTRrOCNVhNa7LZaJVr node 5340:3930
-* Conversational question prompts ("Which side are you on?"),
-* pills for all choices.
-*/
-
-form.elicit {
-background: var(--color-background-primary, #fff);
-border: 0.5px solid var(--color-border-tertiary, rgba(31, 30, 29, 0.15));
-border-radius: 16px;
-/* Figma 5340:3930 — soft diffuse shadow, lighter than DS --shadow-md.
-* Margin keeps the shadow from clipping at #vis-container's overflow:hidden
-* edge: y-offset 4px + blur 20px ≈ 24px below, 20px sides. */
-box-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.04);
-margin: 4px 20px 24px;
-overflow: hidden;
-/* font-base = 14/1.4 sans — descendants inherit; only .elicit-question
-* (serif 16/1.5), .name (12), .badge (9) override. */
-font-family: var(--font-sans, system-ui, sans-serif);
-font-size: 14px;
-line-height: 1.4;
-/* Match host rendering — without this the iframe uses subpixel AA and
-* everything (notably weight-500 buttons) reads ~100 heavier on Retina
-* than the same tokens outside the iframe. */
--webkit-font-smoothing: antialiased;
--moz-osx-font-smoothing: grayscale;
-/* Chrome props animate on the form→submitted-summary swap. */
-transition:
-    background-color 200ms ease-out,
-    box-shadow 200ms ease-out,
-    border-radius 200ms ease-out,
-    padding 200ms ease-out,
-    margin 200ms ease-out;
-/* Shared FileThumbnail tokens (border-border-300/25, shadow-sm/5). */
---elicit-border-faint: color-mix(
-    in srgb,
-    var(--color-border-tertiary, rgba(31, 30, 29, 0.15)) 25%,
-    transparent
-);
---elicit-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-}
-/* Form controls don't inherit font props from the UA sheet — pull from root.
-* `font: inherit` shorthand so font-weight comes too; the individual-prop
-* version left weight at the UA <button> default (bold-ish on some
-* platforms) for any control that doesn't set its own weight. */
-form.elicit :is(button, input, textarea) {
-font: inherit;
-}
-
-/* Header title and question prompts share Claude's chat-output voice —
-* must track the p.font-claude-response-body composite (Anthropic Serif
-* 16 / 400 / 1.5) so both read as Claude speaking, not form chrome. */
-form.elicit .elicit-header,
-form.elicit .elicit-question {
-font-family: var(--font-serif, "Anthropic Serif", Georgia, serif);
-font-size: 16px;
-font-weight: 400;
-line-height: 1.5;
-color: var(--color-text-primary, #131313);
-}
-
-/* 44px total to match the suggested-connector widget spec.
-* Fixed height + zero vertical padding lets align-items:center handle the rest;
-* avoids the icon/text line-height arithmetic. */
-form.elicit .elicit-header {
-display: flex;
-align-items: center;
-gap: 8px;
-height: 44px;
-padding: 0 16px;
-border-bottom: 0.5px solid
-    var(--color-border-tertiary, rgba(31, 30, 29, 0.15));
-}
-form.elicit .elicit-header > svg {
-/* IconBase vectorSizeMap[16] = 20 — anthropicons render in a 20px box. */
-width: 20px;
-height: 20px;
-flex-shrink: 0;
-fill: currentColor;
-}
-form.elicit .elicit-header > span {
-flex: 1;
-}
-
-form.elicit .elicit-body {
-padding: 32px 24px;
-display: flex;
-flex-direction: column;
-gap: 40px;
-}
-
-form.elicit .elicit-group {
-display: flex;
-flex-direction: column;
-gap: 16px;
-}
-
-form.elicit .elicit-question {
-margin: 0;
-}
-
-/* Pills container — no horizontal padding. Previously had 0 8px which pushed
-* pills 8px right of the question/textarea/date in the same .elicit-group. */
-form.elicit .elicit-pills {
-display: flex;
-flex-wrap: wrap;
-gap: 12px;
-}
-form.elicit .elicit-pill {
-/* Fully rounded + tighter padding — visually distinct from the rectangular
-* text inputs (textarea/other/date stay at 8-12px radius). Pills and inputs
-* don't match in height so the shape difference reads as intentional. */
-padding: 8px 12px;
-border: 0.5px solid var(--color-border-tertiary, rgba(31, 30, 29, 0.15));
-border-radius: 9999px;
-background: transparent;
-color: var(--color-text-secondary, #383835);
-cursor: pointer;
-transition:
-    border-color 120ms ease,
-    background-color 120ms ease;
-}
-form.elicit .elicit-pill:hover {
-border-color: var(--color-border-secondary, rgba(30, 30, 29, 0.3));
-}
-/* Semantic accents — same light-fill+soft-border recipe as the blue selected
-* state, applied via attribute so inline style doesn't fight aria-pressed.
-* Single-attr specificity; the [aria-pressed="true"] rule below wins on
-* border+bg so selection remains visible on accented pills. */
-form.elicit .elicit-pill[data-accent="warning"] {
-border-color: var(--color-text-warning, #5a4815);
-background: color-mix(
-    in srgb,
-    var(--color-text-warning, #5a4815) 15%,
-    transparent
-);
-color: var(--color-text-warning, #5a4815);
-}
-form.elicit .elicit-pill[data-accent="danger"] {
-border-color: var(--color-text-danger, #7f2c28);
-background: color-mix(
-    in srgb,
-    var(--color-text-danger, #7f2c28) 15%,
-    transparent
-);
-color: var(--color-text-danger, #7f2c28);
-}
-form.elicit .elicit-pill[data-accent="success"] {
-border-color: var(--color-text-success, #265b19);
-background: color-mix(
-    in srgb,
-    var(--color-text-success, #265b19) 15%,
-    transparent
-);
-color: var(--color-text-success, #265b19);
-}
-form.elicit .elicit-pill[aria-pressed="true"] {
-/* Figma: 0.5px #184f95 border + rgba(205,226,251,0.5) fill (approx via color-mix). */
-border: 0.5px solid var(--color-text-info, #184f95);
-background: color-mix(
-    in srgb,
-    var(--color-text-info, #184f95) 15%,
-    transparent
-);
-/* accent-000 — host bridge maps DS accent to --color-text-info (no
-* --accent-* var injected into the iframe). Matches border + fill. */
-color: var(--color-text-info, #184f95);
-}
-
-/* "Other" conditional text input.
-* background/color explicit — generic input rule no longer provides
-* these post-specificity-fix, UA Canvas/CanvasText mismatch in dark mode. */
-form.elicit .elicit-other {
-margin-top: 8px;
-height: 40px;
-padding: 0 12px;
-border: 0.5px solid var(--color-border-tertiary, rgba(31, 30, 29, 0.15));
-border-radius: 8px;
-background: var(--color-background-primary, #fff);
-color: var(--color-text-primary, #131313);
-width: 100%;
-box-sizing: border-box;
-}
-form.elicit .elicit-other[hidden] {
-display: none;
-}
-
-/* Textarea.
-* background/color explicit — generic textarea rule no longer provides
-* these post-specificity-fix, UA Canvas/CanvasText mismatch in dark mode. */
-form.elicit .elicit-textarea {
-min-height: 84px;
-padding: 12px;
-border: 0.5px solid var(--color-border-tertiary, rgba(31, 30, 29, 0.15));
-border-radius: 8px;
-background: var(--color-background-primary, #fff);
-color: var(--color-text-primary, #131313);
-resize: vertical;
-box-sizing: border-box;
-width: 100%;
-}
-form.elicit .elicit-textarea::placeholder {
-color: var(--color-text-tertiary, #7b7974);
-}
-
-/* Date input — pill-shaped, hugs content */
-form.elicit .elicit-date {
-padding: 12px 16px;
-border: 0.5px solid var(--color-border-tertiary, rgba(31, 30, 29, 0.15));
-border-radius: 12px;
-background: transparent;
-color: var(--color-text-primary, #131313);
-width: fit-content;
-cursor: pointer;
-}
-/* Shared focus ring for all text inputs — info-blue border + soft glow */
-form.elicit .elicit-other:focus,
-form.elicit .elicit-textarea:focus,
-form.elicit .elicit-date:focus {
-outline: none;
-border-color: var(--color-border-info, #2a78d6);
-box-shadow: 0 0 0 3px var(--color-background-info, rgba(42, 120, 214, 0.2));
-}
-
-/* File upload — dashed dropzone + filled tiles.
-* Tile styling mirrors packages/chat/components/FileThumbnail.tsx (the
-* thumbnail users already see in the chat input row) so a file picked here
-* reads as the same object it becomes once attached. Dropzone is the first
-* flex child; tiles append after it (flow right). */
-form.elicit .elicit-files {
-display: flex;
-flex-wrap: wrap;
-align-items: flex-start;
-gap: 12px;
-}
-form.elicit .elicit-dropzone {
-/* 120×120 = FileThumbnail SIZE_MAP.normal. Dashed stays 1px — 0.5px
-* dashed rasterizes to invisible gaps on non-retina. */
-width: 120px;
-height: 120px;
-border: 1px dashed var(--color-border-tertiary, rgba(31, 30, 29, 0.15));
-border-radius: 10px;
-box-shadow: var(--elicit-shadow-sm);
-display: flex;
-flex-direction: column;
-align-items: center;
-justify-content: center;
-gap: 8px;
-cursor: pointer;
-/* Figma 5340:4071 — 2% text-000 wash over bg-000 */
-background: color-mix(
-    in srgb,
-    var(--color-text-primary, #131313) 2%,
-    var(--color-background-primary, #fff)
-);
-color: var(--color-text-tertiary, #7b7974);
-transition:
-    border-color 120ms ease,
-    background-color 120ms ease;
-}
-form.elicit .elicit-dropzone:hover {
-border-color: var(--color-text-info, #184f95);
-background: color-mix(
-    in srgb,
-    var(--color-text-info, #184f95) 4%,
-    transparent
-);
-}
-form.elicit .elicit-dropzone svg {
-width: 24px;
-height: 24px;
-fill: currentColor;
-}
-form.elicit .elicit-dropzone input[type="file"] {
-display: none;
-}
-
-form.elicit .elicit-file-tile {
-/* FileThumbnail ThumbnailInteractionContainer:
-* rounded-lg border-0.5 border-border-300/25 shadow-sm shadow-always-black/5
-* bg-bg-000 px-2.5 py-2 gap-2.5 → 8px radius, 0.5px border, 8/10px pad */
-width: 120px;
-height: 120px;
-border: 0.5px solid var(--elicit-border-faint);
-border-radius: 8px;
-padding: 8px 10px;
-display: flex;
-flex-direction: column;
-justify-content: space-between;
-gap: 10px;
-background: var(--color-background-primary, #fff);
-box-shadow: var(--elicit-shadow-sm);
-box-sizing: border-box;
-position: relative;
-}
-form.elicit .elicit-file-tile .name {
-/* FileThumbnail title: text-[12px] text-text-100 break-words line-clamp-3 */
-font-size: 12px;
-color: var(--color-text-primary, #131313);
-word-break: break-word;
-overflow: hidden;
-display: -webkit-box;
--webkit-line-clamp: 3;
--webkit-box-orient: vertical;
-}
-form.elicit .elicit-file-tile .badge {
-/* FileThumbnail ThumbnailTagContainer:
-* h-[18px] px-1 border-0.5 border-border-300/25 shadow-sm rounded
-* bg-bg-000/70 font-medium + inner text-[9px] uppercase font-bold */
-align-self: flex-start;
-height: 18px;
-padding: 0 4px;
-display: inline-flex;
-align-items: center;
-border: 0.5px solid var(--elicit-border-faint);
-border-radius: 4px;
-background: color-mix(
-    in srgb,
-    var(--color-background-primary, #fff) 70%,
-    transparent
-);
-box-shadow: var(--elicit-shadow-sm);
-font-size: 9px;
-font-weight: 700;
-color: var(--color-text-tertiary, #7b7974);
-text-transform: uppercase;
-}
-/* FileThumbnail RemoveButton: w-5 h-5 -top-2 -left-2 rounded-full
-* border-0.5 border-border-300/25 bg-bg-000/90 backdrop-blur-sm.
-* Always visible (no group-hover in iframe — touch + no Tailwind group). */
-form.elicit .elicit-file-tile .remove {
-position: absolute;
-top: -8px;
-left: -8px;
-width: 20px;
-height: 20px;
-padding: 0;
-border: 0.5px solid var(--elicit-border-faint);
-border-radius: 9999px;
-background: color-mix(
-    in srgb,
-    var(--color-background-primary, #fff) 90%,
-    transparent
-);
-backdrop-filter: blur(4px);
-cursor: pointer;
-font-size: 14px;
-line-height: 1;
-color: var(--color-text-tertiary, #7b7974);
-display: flex;
-align-items: center;
-justify-content: center;
-transition:
-    color 120ms ease,
-    background-color 120ms ease;
-}
-form.elicit .elicit-file-tile .remove:hover {
-color: var(--color-text-secondary, #383835);
-background: color-mix(
-    in srgb,
-    var(--color-background-primary, #fff) 50%,
-    transparent
-);
-}
-
-/* Footer — DS Button tokens transcribed (variant=secondary / variant=primary,
-* size=default: h-9 px-4 rounded-lg min-w-[5rem] font-base-bold). */
-form.elicit .elicit-footer {
-display: flex;
-align-items: center;
-justify-content: flex-end;
-gap: 12px;
-/* Explicit height (mirrors .elicit-header) so the submitted-state height:0
-* transition can interpolate — auto→0 snaps. 36px buttons + 32px breathing room. */
-height: 68px;
-padding: 0 24px;
-border-top: 0.5px solid var(--color-border-tertiary, rgba(31, 30, 29, 0.15));
-}
-form.elicit .elicit-skip,
-form.elicit .elicit-submit {
-display: inline-flex;
-align-items: center;
-justify-content: center;
-height: 36px;
-min-width: 80px;
-padding: 0 16px;
-border-radius: 8px;
-/* DS Button primary/secondary = font-base-bold (tw-typography.js:26) */
-font-weight: 500;
-white-space: nowrap;
-cursor: pointer;
-user-select: none;
-transition:
-    background-color 100ms ease-out,
-    border-color 100ms ease-out,
-    transform 150ms cubic-bezier(0.165, 0.85, 0.45, 1);
-}
-form.elicit .elicit-skip:active,
-form.elicit .elicit-submit:active {
-transform: scale(0.96);
-}
-/* secondary */
-form.elicit .elicit-skip {
-border: 0.5px solid
-    color-mix(
-    in srgb,
-    var(--color-border-secondary, rgba(30, 30, 29, 0.3)) 30%,
-    transparent
-    );
-background: transparent;
-color: var(--color-text-primary, #131313);
-}
-form.elicit .elicit-skip:hover {
-background: var(--color-background-secondary, #f9f9f7);
-border-color: transparent;
-}
-/* primary */
-form.elicit .elicit-submit {
-border: none;
-background: var(--color-text-primary, #131313);
-color: var(--color-background-primary, #fff);
-}
-form.elicit .elicit-submit:hover {
-transform: scaleX(1.005) scaleY(1.015);
-}
-/* :hover and :active are both true during a mouse click; equal specificity →
-* source order wins, so without this the hover-grow above masks the press-down. */
-form.elicit .elicit-submit:hover:active {
-transform: scale(0.96);
-}
-
-/* Post-submit — submitElicitation() adds .elicit-transitioning (body fades
-* out), then after 150ms swaps the body for the Q/A summary and adds
-* .elicit-submitted (chrome transitions to the bare card while body fades
-* back in). Mirrors AskUserQuestion: outer card = AskUserQuestionToolUseCell
-* .tsx:177 (rounded-xl border-0.5 border-border-300 p-4, no bg-bg-000 when
-* submitted), rows = SubmittedResponses.tsx:14-36. */
-form.elicit .elicit-body {
-transition: opacity 150ms ease-out;
-}
-form.elicit.elicit-transitioning .elicit-body {
-opacity: 0;
-}
-form.elicit.elicit-submitted {
-background: transparent;
-border-radius: 12px;
-box-shadow: none;
-padding: 16px;
-margin: 4px;
-}
-/* `display: none` can't transition — collapse to zero so the chrome animates
-* away with the form's 200ms transition instead of snapping. */
-form.elicit .elicit-header,
-form.elicit .elicit-footer {
-transition:
-    opacity 200ms ease-out,
-    height 200ms ease-out,
-    padding 200ms ease-out,
-    border-width 200ms ease-out,
-    /* step to hidden after the collapse so Skip/Submit leave the tab order +
-    * a11y tree (pointer-events:none alone doesn't). */
-    visibility 0s linear 200ms;
-}
-form.elicit.elicit-submitted .elicit-header,
-form.elicit.elicit-submitted .elicit-footer {
-opacity: 0;
-height: 0;
-padding-top: 0;
-padding-bottom: 0;
-border-width: 0;
-overflow: hidden;
-pointer-events: none;
-visibility: hidden;
-}
-form.elicit.elicit-submitted .elicit-body {
-padding: 0;
-}
-/* Quota-fallback "1" sentinel restore: shape check skips renderSubmittedSummary
-* so the body still has live inputs — dim them so the locked state reads. */
-form.elicit.elicit-submitted .elicit-body:not(:has(.elicit-summary)) {
-pointer-events: none;
-opacity: 0.5;
-}
-/* sessionStorage restore path adds this alongside .elicit-submitted so
-* scroll-back/reload shows the summary immediately (no replayed crossfade). */
-form.elicit.elicit-restored,
-form.elicit.elicit-restored .elicit-body,
-form.elicit.elicit-restored .elicit-header,
-form.elicit.elicit-restored .elicit-footer {
-transition: none;
-}
-form.elicit .elicit-summary {
-display: flex;
-flex-direction: column;
-gap: 12px;
-}
-form.elicit .elicit-summary-row {
-display: flex;
-flex-direction: column;
-gap: 4px;
-}
-/* SubmittedResponses question: text-text-300 font-claude-response-small-bold
-* (serif 14 / 600 / 1.5) */
-form.elicit .elicit-summary-q {
-font-family: var(--font-serif, "Anthropic Serif", Georgia, serif);
-font-size: 14px;
-font-weight: 600;
-line-height: 1.5;
-color: var(--color-text-secondary, #383835);
-}
-/* SubmittedResponses answer: text-text-500 font-base (sans 14 / 430 / 1.4) */
-form.elicit .elicit-summary-a {
-font-weight: 430;
-color: var(--color-text-tertiary, #7b7974);
-white-space: pre-wrap;
-word-break: break-word;
-}
-
-
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 
 body{
@@ -675,7 +155,7 @@ body{
     
 }
 .sheet{
-    padding:1rem 0
+    padding:1rem 0;
 }
 .toolbar{
     display:flex;
@@ -700,8 +180,7 @@ body{
     border:0.5px solid var(--color-border-secondary);
     border-radius:var(--border-radius-lg);
     overflow:hidden;
-    min-width: min-content;
-    flex: 1 1 min-content;
+    flex: 1 1 auto;
     height: max-content;
 }
 
@@ -712,10 +191,6 @@ body{
 .seperator:last-child {
     border: none;
 }
-
-
-/*.section:has(> .field-list:not(.hidden)) + .seperator:has(+ .section > .field-list.hidden),
-.section:has(> .field-list.hidden) + .seperator:has(+ .section > .field-list:not(.hidden)),*/
 
 .field:not(:has(textarea.field-input)) + .seperator:has(+ .field textarea.field-input),
 .field:has(textarea.field-input) + .seperator:has(+ .field),
@@ -748,7 +223,7 @@ body{
     outline:none;
     border-bottom:1px solid var(--color-border-primary)
 }
-.section-expander {
+.section-icon-button {
     cursor: pointer;
     color:var(--color-text-primary);
 }
@@ -780,8 +255,8 @@ body{
     border-radius:var(--border-radius-md);
     padding:8px 10px;
     user-select:none;
-    min-width: min-content;
-    flex:1 1 min-content;
+    flex:1 1 0;
+    max-width: 100%;
 }
 
 
@@ -796,7 +271,7 @@ body{
     font-size:11px;
     color:var(--color-text-secondary);
     font-weight:500;
-    text-transform:uppercase;
+    /* text-transform:uppercase; */
     letter-spacing:0.04em
 }
 .field-label::after {
@@ -810,11 +285,13 @@ body{
     border:none;
     border-bottom:0.5px solid transparent;
     color:var(--color-text-primary);
-    font-family:var(--font-sans);
+    font-family:var(--font-mono);
     padding:0;
     cursor:text;
     min-width:2ch;
     width:100%;
+    text-align: right;
+    flex: 1 1 0;
 }
 .field-input:focus{
     outline:none;
@@ -825,7 +302,6 @@ body{
 }
 .field-input[type=number]{
     -moz-appearance:textfield;
-    max-width:5ch;
 }
 .field-input[type=number]::-webkit-outer-spin-button,
 .field-input[type=number]::-webkit-inner-spin-button{
@@ -835,7 +311,10 @@ body{
     width:16px;
     height:16px;
     cursor:pointer;
-    accent-color:var(--color-text-info)
+    accent-color:var(--color-text-info);
+    justify-self: right;
+    flex-grow: 0;
+    margin-left: auto;
 }
 textarea.field-input {
     min-width:5ch;
