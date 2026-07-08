@@ -3,6 +3,7 @@
 {% block head %}
     {{super()}}
     <link rel="stylesheet" href="{{ url_for('static', filename='style_page.css') }}" >
+    <script type="module" src="{{ url_for('static', filename='styleChange.js')}}" defer></script>
 {% endblock %}
 
 {% block content %}
