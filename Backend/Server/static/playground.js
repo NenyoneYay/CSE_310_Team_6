@@ -206,6 +206,38 @@ function getName(obj,parent) {
     } else
         return undefined;
 }
+
+function rename(obj,parent,newName) {
+    if(Array.isArray(parent)){
+        return undefined;
+    } else {
+        let oldKey = getName(obj,parent);
+        if(oldKey == undefined) return undefined;
+        if(newName === oldKey || newName.startsWith("__")) return oldKey;
+
+        let newKey = newName;
+        let keyCount = 0;
+        while (newKey in parent) {
+            newKey = `${newName} (${++keyCount})`
+        }
+        
+        parent[newKey] = parent[oldKey];
+        delete parent[oldKey];
+        obj.__name = newKey;
+
+        if(parent[Symbol.for("okeys")] == undefined) 
+            parent[Symbol.for("okeys")] = [newKey];
+        else {
+            const okeyIdx = parent[Symbol.for("okeys")].indexOf(oldKey);
+            if(okeyIdx >= 0)
+                parent[Symbol.for("okeys")][okeyIdx] = newKey;
+            else 
+                parent[Symbol.for("okeys")].push(newKey);
+        }
+        
+        return newKey;
+    }
+}
 //////////////////////////////////////////////////////
 
 function okeyObjToList(obj){
@@ -306,6 +338,10 @@ function makeNode(nodeData, inputType, parent, container) {
     }
     if(nodeData[Symbol.for("parent")] == undefined)
         nodeData[Symbol.for("parent")] = parent;
+    if(nodeData.__visible == undefined)
+        nodeData.__visible = true;
+
+    if(previewMode && !nodeData.__visible) return;
 
     const sepElem = document.createElement("div");
     sepElem.classList.add("seperator");
@@ -320,6 +356,24 @@ function makeNode(nodeData, inputType, parent, container) {
         handle.setAttribute("aria-hidden","true");
 
         nodeElem.appendChild(handle);
+
+        const eyeBtn = document.createElement("i");
+        if(nodeData.__visible ?? true) {
+            eyeBtn.className = "ti ti-eye section-icon-button";
+        } else {
+            eyeBtn.className = "ti ti-eye-closed section-icon-button";
+        }
+
+        eyeBtn.addEventListener("click", ev => {
+            nodeData.__visible = !(nodeData.__visible ?? true);
+
+            if(nodeData.__visible) {
+                eyeBtn.className = "ti ti-eye section-icon-button";
+            } else {
+                eyeBtn.className = "ti ti-eye-closed section-icon-button";
+            }
+        });
+        nodeElem.append(eyeBtn);
     }
 
     const inner = document.createElement("div");
@@ -333,12 +387,8 @@ function makeNode(nodeData, inputType, parent, container) {
         inner.appendChild(lbl);
     }
 
-    // dummy input element for now
     const inputEl = nodeData.renderHTML();
     inputEl.className = "field-input";
-
-    
-    //----------------------------
 
     
     inner.appendChild(inputEl);
@@ -459,10 +509,14 @@ function makeContainer(containerData, parent, container) {
         containerData.__direction = "row";
     if(containerData.__expanded == undefined)
         containerData.__expanded = false;
+    if(containerData.__visible == undefined)
+        containerData.__visible = true;
     if(containerData[Symbol.for("okeys")] == undefined)
         containerData[Symbol.for("okeys")] = [];
     if(containerData[Symbol.for("parent")] == undefined)
         containerData[Symbol.for("parent")] = parent;
+
+    if(previewMode && !containerData.__visible) return;
 
     const containerName = getName(containerData,parent);
     if(containerData.__name !== containerName && !Array.isArray(parent))
@@ -526,6 +580,25 @@ function makeContainer(containerData, parent, container) {
 
             });
             hdr.appendChild(directionBtn);
+
+            const eyeBtn = document.createElement("i");
+            if(containerData.__visible ?? true) {
+                eyeBtn.className = "ti ti-eye section-icon-button";
+            } else {
+                eyeBtn.className = "ti ti-eye-closed section-icon-button";
+            }
+
+            eyeBtn.addEventListener("click", ev => {
+                containerData.__visible = !(containerData.__visible ?? true);
+
+                if(containerData.__visible) {
+                    eyeBtn.className = "ti ti-eye section-icon-button";
+                } else {
+                    eyeBtn.className = "ti ti-eye-closed section-icon-button";
+                }
+            });
+
+            hdr.appendChild(eyeBtn);
         }
         
     }
@@ -533,19 +606,19 @@ function makeContainer(containerData, parent, container) {
     const expander = document.createElement("i");
     let addRow = null
     if(containerData.__expanded ?? true) {
-        expander.className = "ti ti-caret-up section-expander";
+        expander.className = "ti ti-caret-up section-icon-button";
     } else {
-        expander.className = "ti ti-caret-down section-expander";
+        expander.className = "ti ti-caret-down section-icon-button";
     }
     expander.addEventListener("click", ev => {
         containerData.__expanded = !(containerData.__expanded ?? true);
 
         if(containerData.__expanded) {
-            expander.className = "ti ti-caret-up section-expander";
+            expander.className = "ti ti-caret-up section-icon-button";
             fieldList.classList.remove("hidden");
             addRow?.classList?.remove("hidden");
         } else {
-            expander.className = "ti ti-caret-down section-expander";
+            expander.className = "ti ti-caret-down section-icon-button";
             fieldList.classList.add("hidden");
             addRow?.classList?.add("hidden");
         }
@@ -559,17 +632,7 @@ function makeContainer(containerData, parent, container) {
         titleInp.disabled = previewMode;
         titleInp.addEventListener("change", e => {
             const newName = e.target.value;
-            if(e.target.value in parent || e.target.value.startsWith("__")) {
-                e.target.value = containerData.__name;
-                return;
-            }
-            
-            const okeyIdx = parent[Symbol.for("okeys")].indexOf(containerData.__name);
-            parent[Symbol.for("okeys")][okeyIdx] = newName;
-            parent[newName] = parent[containerData.__name];
-            delete (parent[containerData.__name])
-            containerData.__name = newName;
-
+            e.target.value = rename(containerData,parent,newName) ?? containerData.__name;
             updatePreview();
         });
         hdr.appendChild(titleInp);
@@ -879,8 +942,9 @@ document.getElementById("file-input").addEventListener("change", e => {
             loadedChar = new Character(ev.target.result);
             render(loadedChar.root);
             
-        } catch {
-            alert("Could not parse JSON file."); 
+        } catch (err) {
+            throw(err)
+            //alert("Could not parse JSON file.");
         }
         
     };

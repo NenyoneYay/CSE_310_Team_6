@@ -97,42 +97,57 @@ export function deepCopy (obj, filterFunc = null) {
     return recursor(obj);
 }
 
-export function compareObj(obj1, obj2, keyWhitelist = []) {
-    if(!(obj1 instanceof Object) || !(obj2 instanceof Object)) {
-        if(!(obj1 instanceof Object) && !(obj2 instanceof Object)) {
-            return obj1 === obj2;
+/**
+ * 
+ * @param {*} oldObj 
+ * @param {*} newObj 
+ * @param {string[]} keyBlacklist 
+ * @returns {boolean}
+ */
+export function compareObj(oldObj, newObj, {keyBlacklist = [], keyWhitelist = []} = {}) {
+    if(!(oldObj instanceof Object) || !(newObj instanceof Object)) {
+        if(oldObj === newObj) {
+            return undefined;
         }
-        return false;
+        return newObj;
     }
     
-    if(obj1?.[Symbol.for("compareObj_visited")] != undefined || obj2?.[Symbol.for("compareObj_visited")] != undefined) {
-        const rval = obj1?.[Symbol.for("compareObj_visited")] != undefined && obj2?.[Symbol.for("compareObj_visited")] != undefined;
-        delete obj1[Symbol.for("compareObj_visited")];
-        delete obj2[Symbol.for("compareObj_visited")];
-        return rval;
+    if(oldObj?.[Symbol.for("compareObj_visited")] != undefined || newObj?.[Symbol.for("compareObj_visited")] != undefined) {
+        const equal = oldObj?.[Symbol.for("compareObj_visited")] != undefined && newObj?.[Symbol.for("compareObj_visited")] != undefined;
+        delete oldObj[Symbol.for("compareObj_visited")];
+        delete newObj[Symbol.for("compareObj_visited")];
+        
+        if(equal) return undefined;
+        return newObj;
     }
 
-    if(obj1 === obj2) {
-        return true;
-    }
+    let rval = {};
+    let foundChange = false;
+    oldObj[Symbol.for("compareObj_visited")] = true;
+    newObj[Symbol.for("compareObj_visited")] = true;
+    for(const key of Object.keys({...newObj,...oldObj})) {
+        if(keyWhitelist.includes(key)) {
+            rval[key] = newObj[key];
+            foundChange = true;
+            continue;
+        }
+        if(keyBlacklist.includes(key)) continue;
 
-    let rval = true;
-    obj1[Symbol.for("compareObj_visited")] = true;
-    obj2[Symbol.for("compareObj_visited")] = true;
-    for(const key of Object.keys({...obj1,...obj2})) {
-        if(keyWhitelist.includes(key)) continue;
-
-        if(obj1?.[key] !== undefined && obj2?.[key] !== undefined) {
-            if(!compareObj(obj1[key], obj2[key])) {
-                rval = false;
-                break;
+        if(oldObj[key] !== undefined && newObj[key] !== undefined) {
+            if(oldObj[key] !== newObj[key]) {
+                const result = compareObj(oldObj[key],newObj[key]);
+                if(result != undefined) {
+                    rval[key] = result;
+                    foundChange = true;
+                }
             }
-        } else if (!(obj1?.[key] === undefined && obj2?.[key] === undefined)){
-            rval = false;
-            break;
+        } else if (oldObj[key] !== undefined || newObj[key] !== undefined){
+            rval[key] = newObj[key];
+            foundChange = true;
         }
     }
-    delete obj1[Symbol.for("compareObj_visited")];
-    delete obj2[Symbol.for("compareObj_visited")];
+    delete oldObj[Symbol.for("compareObj_visited")];
+    delete newObj[Symbol.for("compareObj_visited")];
+    if(!foundChange) return undefined;
     return rval;
 }
