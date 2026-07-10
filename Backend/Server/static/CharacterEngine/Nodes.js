@@ -418,7 +418,8 @@ export class DataNode extends BaseNode {
         min:undefined,
         max:undefined,
         prefix: '',
-        postfix: ''
+        postfix: '',
+        __visible:true
     }
     /**
      * @param {boolean} virtual 
@@ -430,9 +431,10 @@ export class DataNode extends BaseNode {
      *   }?} dataObj
      */
     constructor(virtual, parent, dataObj) {
-        let {value,min,max,prefix,postfix} = {...DataNode.defaultDataObj,...dataObj};
+        let {value,min,max,prefix,postfix,__visible} = {...DataNode.defaultDataObj,...dataObj};
         super(virtual, parent,{value:value});
         //Update Pathes
+        this.__visible = __visible;
         this.value = new ExprValue(value,this);
         this.max = new ExprValue(max,this);
         this.min = new ExprValue(min,this);
@@ -828,7 +830,8 @@ export class DataNode extends BaseNode {
             value: this.value.getSaveData(),
             min: this.min.getSaveData(),
             max: this.max.getSaveData(),
-            postfix: this.postfix
+            postfix: this.postfix,
+            __visible: this.__visible
         }
         const compareResult = compareObj(DataNode.defaultDataObj, rval, {keyWhitelist:["__type","value"]})
 
