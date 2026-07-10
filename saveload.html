@@ -6,6 +6,7 @@
     <title>Testing</title>
 </head>
 <body>
+    <!-- Begin Save/Load Module -->
     <div id="save_load_box">
         <img id="save_load_background" src="images\save_load.png">
         <p id="save_load_header">CHARACTERS</p>
@@ -40,113 +41,96 @@
         
     </div>
 
-<style>
-    body { /* TODO: Delete me, I'm for testing */
-        background-color: aqua;
-    }
-    #save_load_box {
-        max-width: 200px;
-        height: 300px;
-        display: grid;
-        grid-template-columns: 20px auto auto 20px;
-        grid-template-rows: 50px 1fr 30px;
-    }
-    #save_load_header {
-        grid-row: 1/2;
-        grid-column: 2/4;
-        /* color: white; */
-        font-size: 1.5em;
-        justify-self: center;
-        align-self: center;
-    }
-    #save_load_background {
-        max-width: 100%;
-        grid-column: 1/5;
-        grid-row: 1/4;        
-    }
-    #save_button {
-        grid-column: 2/3;
-        grid-row: 3/4;
-        width: 90%;
-        justify-self: center;
-    }
-    #load_button {
-        grid-column: 3/4;
-        grid-row: 3/4;
-        width: 90%;
-        justify-self: center;
-    }
-    #character_name_box {
-        align-self: center;
-        max-height: 90%;
-        grid-row: 2/3;
-        grid-column: 2/4;
-        overflow-y: scroll;
-    }
-    /* .character_name_subbox {
-        background-color: blue;
-    } */
-    .selected {
-        background-color: blue;
-        color: white;
-    }
-</style>
+    <style>
+        body { /* TODO: Delete me, I'm for testing */
+            background-color: aqua;
+        }
+        #save_load_box {
+            max-width: 200px;
+            height: 300px;
+            display: grid;
+            grid-template-columns: 20px auto auto 20px;
+            grid-template-rows: 50px 1fr 30px;
+        }
+        #save_load_header {
+            grid-row: 1/2;
+            grid-column: 2/4;
+            /* color: white; */
+            font-size: 1.5em;
+            justify-self: center;
+            align-self: center;
+        }
+        #save_load_background {
+            max-width: 100%;
+            grid-column: 1/5;
+            grid-row: 1/4;        
+        }
+        #save_button {
+            grid-column: 2/3;
+            grid-row: 3/4;
+            width: 90%;
+            justify-self: center;
+        }
+        #load_button {
+            grid-column: 3/4;
+            grid-row: 3/4;
+            width: 90%;
+            justify-self: center;
+        }
+        #character_name_box {
+            align-self: center;
+            max-height: 90%;
+            grid-row: 2/3;
+            grid-column: 2/4;
+            overflow-y: scroll;
+        }
+        /* .character_name_subbox {
+            background-color: blue;
+        } */
+        .selected {
+            background-color: blue;
+            color: white;
+        }
+    </style>
 
-<script>
-    var characterNameBox = document.getElementById("character_name_box");
-    var characterNameSubBoxes = characterNameBox.querySelectorAll(".character_name_subbox");
-    var characterNames = characterNameBox.querySelectorAll("p");
+    <script>
+        var characterNameBox = document.getElementById("character_name_box");
+        var characterNameSubBoxes = characterNameBox.querySelectorAll(".character_name_subbox");
+        var characterNames = characterNameBox.querySelectorAll("p");
 
-    console.log("Character names: " + characterNames.entries());
+        console.log("Character names: " + characterNames.entries());
 
-    // Lets test something
-    for (const p of characterNames.entries()){
-        console.log("Testing");
-    }
-
-    characterNameBox.addEventListener('click', selectName);
-
-    function selectName(event) {
-            // Ignore clicks that aren't on a <p>
-        console.log(event.target)
-        if (event.target.tagName === "P") {
-            console.log("I'm a div!");
-            //First, remove the selected tag from all items
-            for (const p of characterNames){
-                // console.log("Testing");
-                p.classList.remove("selected");
-                console.log("Class list: " + p.classList)
-            }
-
-            //Add the selected tag to highlight the clicked item
-            // console.log("Event.Target: " + event.target.classList)
-            event.target.classList.add("selected");
-
-            console.log("Selected:", event.target.textContent);
-            console.log("I'm about to return: " + event.target.textContent);
-            return event.target;
+        // Lets test something
+        for (const p of characterNames.entries()){
+            console.log("Testing");
         }
 
-    }
+        characterNameBox.addEventListener('click', selectName);
 
+        function selectName(event) {
+                // Ignore clicks that aren't on a <p>
+            console.log(event.target)
+            if (event.target.tagName === "P") {
+                console.log("I'm a div!");
+                //First, remove the selected tag from all items
+                for (const p of characterNames){
+                    // console.log("Testing");
+                    p.classList.remove("selected");
+                    console.log("Class list: " + p.classList)
+                }
 
+                //Add the selected tag to highlight the clicked item
+                // console.log("Event.Target: " + event.target.classList)
+                event.target.classList.add("selected");
 
-    // characterNameList.addEventListener('click', selectName);
+                console.log("Selected:", event.target.textContent);
+                console.log("I'm about to return: " + event.target.textContent);
+                return event.target;
+            }
 
-    // function selectName() {
-    //     // goob.classList.add("selected");
-    //     console.log("I've been clicked!");
-    // }
+        }
 
-    // characterNameList.forEach(testing);
-    // function testing(item) {
-    //     console.log("Testing");
-    // }
-    // testing.addEventListener('click', testFunction);
-    // function testFunction(){
-    //     console.log("I've been clicked!");
-    //     testing.classList.add("selected");
-    // }
-</script>
+    </script>
+    <!-- End Save/Load Module -->
 </body>
 </html>

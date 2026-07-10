@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <link rel="stylesheet" href="styles/testingstuff.css">
+</head>
+<body>
+    <div id="icon_box">
+        <div id="displayed_icon">
+            <img src="images/gnollpointerfinger_icon.png">
+        </div>
+        <button type="button" id="expand_icon_container_button">
+            ►
+        </button>
+        <div id="icon_container" class="hidden">
+            <!--Lots of icons go here-->
+            <img class="icon_sprite" src="character_sheet_icons\sheet_icons_0_0.png">
+            <img class="icon_sprite" src="character_sheet_icons\sheet_icons_0_1.png">
+            <img class="icon_sprite" src="character_sheet_icons\sheet_icons_0_2.png">
+            <img class="icon_sprite" src="character_sheet_icons\sheet_icons_0_3.png">
+            <img class="icon_sprite" src="character_sheet_icons\sheet_icons_1_0.png">
+            <img class="icon_sprite" src="character_sheet_icons\sheet_icons_1_1.png">
+            <img class="icon_sprite" src="character_sheet_icons\sheet_icons_1_2.png">
+            <img class="icon_sprite" src="character_sheet_icons\sheet_icons_1_3.png">
+            <img class="icon_sprite" src="character_sheet_icons\sheet_icons_2_0.png">
+            <img class="icon_sprite" src="character_sheet_icons\sheet_icons_2_1.png">
+            <img class="icon_sprite" src="character_sheet_icons\sheet_icons_2_2.png">
+            <img class="icon_sprite" src="character_sheet_icons\sheet_icons_2_3.png">
+            
+        </div>
+    </div>
+    <style>
+        #icon_container {
+            background-color: rgb(61, 61, 61);
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .icon_sprite {
+
+        }
+    </style>
+    <script>
+        var expandIconContainerButton = document.getElementById("expand_icon_container_button");
+        var iconContainer = document.getElementById("icon_container");
+        
+
+        expandIconContainerButton.addEventListener('click', expandIconContainer);
+
+        function expandIconContainer() {
+            console.log("I've been clicked!");
+            if (expandIconContainerButton.textContent === `▼`) {
+                expandIconContainerButton.textContent = `►`;
+                iconContainer.classList.add("hidden");
+            } else {
+                expandIconContainerButton.textContent = `▼`;
+                iconContainer.classList.remove("hidden");
+            }
+        }
+    </script>
+</body>
+</html>
