@@ -342,6 +342,7 @@ function makeNode(nodeData, inputType, parent, container) {
         nodeData.__visible = true;
 
     if(previewMode && !nodeData.__visible) return;
+    if(!previewMode && nodeData[Symbol.for("virtual")]) return;
 
     const sepElem = document.createElement("div");
     sepElem.classList.add("seperator");
@@ -387,6 +388,8 @@ function makeNode(nodeData, inputType, parent, container) {
         inner.appendChild(lbl);
     }
 
+    nodeData.unrenderHTML();
+    nodeData.editMode = !previewMode;
     const inputEl = nodeData.renderHTML();
     inputEl.className = "field-input";
 
@@ -559,7 +562,7 @@ function makeContainer(containerData, parent, container) {
         if(!Array.isArray(containerData)) {
             const directionBtn = document.createElement("button");
             directionBtn.className = "direction";
-            if(containerData.__direction === "column"){
+            if(containerData.__direction === "row"){
                 directionBtn.innerHTML = '<i class="ti ti-layout-rows"></i>';
             }else{
                 directionBtn.innerHTML = '<i class="ti ti-layout-columns"></i>';

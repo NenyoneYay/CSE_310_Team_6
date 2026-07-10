@@ -180,7 +180,7 @@ body{
     border:0.5px solid var(--color-border-secondary);
     border-radius:var(--border-radius-lg);
     overflow:hidden;
-    flex: 1 1 auto;
+    flex: 1 1 min-content;
     height: max-content;
 }
 
@@ -288,8 +288,6 @@ body{
     font-family:var(--font-mono);
     padding:0;
     cursor:text;
-    min-width:2ch;
-    width:100%;
     text-align: right;
     flex: 1 1 0;
 }

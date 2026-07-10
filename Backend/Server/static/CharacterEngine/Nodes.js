@@ -122,7 +122,7 @@ export class BaseNode {
             enumerable:true
         });
 
-        
+        this.editMode = false;
 
         this.dirty = true;
         this.visited = false;
@@ -131,29 +131,27 @@ export class BaseNode {
         this.warning = null;
         this.isErrorSrc = false;
 
-        this.inputType = null;
         this.renderedElement = null;
 
         this.inputChangeHandler = (event) => {
-            let newVal = this.accessors.value;
-            switch (this.inputType) {
-                case "number":
-                    if (this.renderedElement != null)
+            if (this.renderedElement != null) {
+                let newVal = this.accessors.value;
+                switch (this.renderedElement.type) {
+                    case "number":
                         newVal = Number(this.renderedElement.value);
-                    break;
-                case "checkbox":
-                    if (this.renderedElement != null)
+                        break;
+                    case "checkbox":
                         newVal = Boolean(this.renderedElement.checked);
-                    break; 
-                case "text":
-                default:
-                    if (this.renderedElement != null)
+                        break; 
+                    case "text":
+                    default:
                         newVal = this.renderedElement.value;
+                }
+                if(document.activeElement === this.renderedElement)
+                    this.set({value:newVal});
+                else
+                    this.updateRenderedElement();
             }
-            if(document.activeElement === this.renderedElement)
-                this.set({value:newVal});
-            else
-                this.updateRenderedElement();
         }
 
         this.inputFocusHandler = (event) => {
@@ -165,31 +163,45 @@ export class BaseNode {
         }
     }
 
-    renderHTML(value = undefined) {
-        switch (typeof(value)) {
-            case "number":
-            case "string":
-                this.inputType = "text";
-                break;
-                this.inputType = "number";
-                break;
-            case "boolean":
-                this.inputType = "checkbox";
-                break;
-            default:
-                this.inputType = "text";
+    getDisplayValue(value = undefined) {
+        if(value == undefined) value = this.accessors.value;
+        return value;
+    }
+
+    renderHTML() {
+        let value = this.accessors.value;
+        if(Number.isNaN(value)) {
+            value = "NaN";
         }
 
-        if(this.renderedElement == null || this.renderedElement.type != this.inputType) {
+        let inputType = "text";
+        if(!this.editMode) {
+            switch (typeof(value)) {
+                case "string":
+                    inputType = "text";
+                    break;
+                case "number":
+                    inputType = "number";
+                    break;
+                case "boolean":
+                    inputType = "checkbox";
+                    break;
+                default:
+                    inputType = "text";
+            }
+        }
+
+        if(this.renderedElement == null || this.renderedElement.type != inputType) {
             const newElement = document.createElement("input");
-            newElement.type = this.inputType ?? "text";
+            newElement.type = inputType ?? "text";
             newElement.classList.add("field-input");
             if(this.renderedElement != null) {
                 const oldElement = this.renderedElement;
+                // remove event listeners to avoid triggering extra events.
+                this.unrenderHTML();
                 oldElement.replaceWith(newElement);
             }
             this.renderedElement = newElement;
-            this.updateRenderedElement(value);
             if(this[Symbol.for("virtual")]) {
                 this.renderedElement.disabled = true;
             } else {
@@ -198,17 +210,22 @@ export class BaseNode {
                 this.renderedElement.addEventListener("blur", this.inputBlurHandler);
             }
         }
+        this.updateRenderedElement(value);
         return this.renderedElement;
+    }
+
+    unrenderHTML() {
+        if(this.renderedElement == null) return;
+        this.renderedElement.removeEventListener("focus",this.inputFocusHandler);
+        this.renderedElement.removeEventListener("input",this.inputChangeHandler);
+        this.renderedElement.removeEventListener("blur",this.inputBlurHandler);
+        this.renderedElement = null;
     }
 
     updateRenderedElement(value) {
         if(value == undefined) value = this.accessors.value;
-        if(Number.isNaN(value)) {
-            this.renderHTML("NaN");
-            return;
-        }
         if (this.renderedElement != null) {
-            switch (this.inputType) {
+            switch (this.renderedElement.type) {
                 case "checkbox":
                     this.renderedElement.checked = !!value;
                     break; 
@@ -260,7 +277,7 @@ export class BaseNode {
                 this.dirty = true;
             }
             
-            // // if made async, please await the emit call so that loops can be
+            // // if made async, please await the emit call so that cycles can be
             // // detected.
             const stale_accessors = {...this.accessors}
             this.evaluate();
@@ -307,7 +324,7 @@ export class BaseNode {
             this.warning = null;
         }
 
-        if(document.activeElement !== this.renderedElement || this.inputType === "checkbox")
+        if(document.activeElement !== this.renderedElement || this.renderedElement.type === "checkbox")
             this.updateRenderedElement();
         return this.accessors.value;
     }
@@ -317,8 +334,6 @@ export class BaseNode {
         if(this.evBus == null) return;
         this.listenerChanges.forEach((change) => {
             if(change == null || change.path == null || change.type == null) return;
-            //const absPath = Path.pathTo(change.path);
-            // TODO: implement remove operations as well
 
             switch (change.type) {
                 case "add listener":
@@ -344,10 +359,9 @@ export class BaseNode {
                         /** @type {Map<string,TrieRegistration>} */
                         const regMap = this.listenerRegistrations.get(change.src);
                         if(regMap != undefined) {
-                            const regList = regMap.get(change.path.str);
-                            if(regList != undefined) {
-                                for(const reg of regList)
-                                    reg.unregister();
+                            const reg = regMap.get(change.path.str);
+                            if(reg != undefined) {
+                                reg.unregister();
                             }
                             regMap.delete(change.path.str);
                         }
@@ -392,10 +406,9 @@ export class BaseNode {
 
     
     destroy() {
-        this.detachInput();
         this.unregisterDependencies();
-        delete this.raw;
-        delete this.accessors;
+        this.detachInput();
+        this[Symbol.for("parent")] = null;
     }
 }
 
@@ -446,27 +459,19 @@ export class DataNode extends BaseNode {
         this.accessors = {
             base: 0,
             value: value,
-            max: max, 
+            max: max,
             min: min
         }
 
         const baseInputFocusHandler = this.inputFocusHandler;
         this.inputFocusHandler = (event) => {
-            if (this.value.isExpr && this.renderedElement.type !== "text") {
-                this.renderHTML(this.value.value);
-                this.renderedElement.focus();
-            } else {
-                this.updateRenderedElement(this.value.value);
-            }
-            // this.renderHTML(this.value.value);
-            // this.renderedElement.focus();
+            this.renderHTML();
         }
         this.inputBlurHandler = (event) => {
             if (this.renderedElement?.type === "text"){
                 this.modify({value:this.renderedElement.value});
-                this.renderHTML()
             }
-            this.updateRenderedElement()
+            this.renderHTML();
         }
         const baseInputChangeHandler = this.inputChangeHandler;
         this.inputChangeHandler = (event) => {
@@ -475,23 +480,94 @@ export class DataNode extends BaseNode {
         }
     }
 
-    updateRenderedElement(value = undefined) {
-        if(value == undefined) {
-            let currentValue = this.accessors.value;
-            if(typeof(currentValue) === "number" && !Number.isInteger(currentValue)) {
-                currentValue = currentValue.toFixed(2);
-            }
-            let prefixCalc = this.prefix;
-            if(typeof(currentValue) === "number" && currentValue < 0) {
-                prefixCalc = this.prefix.replace(/\+(\s*)$/," $1");
-            }
-            if(["number","string"].includes(typeof(currentValue))) {
-                value = prefixCalc + currentValue + this.postfix;
-            } else if(typeof(currentValue) == "boolean") {
-                value = currentValue;
+    renderHTML() {
+        const focused = (document.activeElement === this.renderedElement);
+        let value = this.accessors.value;
+        if(focused || this.editMode) {
+            value = this.value.value;
+        } else {
+            value = this.getDisplayValue(value);
+        }
+
+        if(Number.isNaN(value))
+            value = "NaN";
+
+        let inputType = "text";
+        if(!this.editMode){
+            switch (typeof(value)) {
+                case "string":
+                    inputType = "text";
+                    break;
+                case "number":
+                    inputType = "number";
+                    break;
+                case "boolean":
+                    inputType = "checkbox";
+                    break;
+                default:
+                    inputType = "text";
             }
         }
-        super.updateRenderedElement(value);
+
+        if(this.renderedElement == null || this.renderedElement.type != inputType) {
+            const newElement = document.createElement("input");
+            newElement.type = inputType;
+            newElement.classList.add("field-input");
+            if(this.renderedElement != null) {
+                // remove event listeners to avoid triggering extra events.
+                this.renderedElement.removeEventListener("focus",this.inputFocusHandler);
+                this.renderedElement.removeEventListener("input",this.inputChangeHandler);
+                this.renderedElement.removeEventListener("blur",this.inputBlurHandler);
+                this.renderedElement.replaceWith(newElement);
+            }
+            this.renderedElement = newElement;
+            if(focused) this.renderedElement.focus();
+            if(this[Symbol.for("virtual")]) {
+                this.renderedElement.disabled = true;
+            } else {
+                this.renderedElement.addEventListener("focus", this.inputFocusHandler);
+                this.renderedElement.addEventListener("input",this.inputChangeHandler);
+                this.renderedElement.addEventListener("blur", this.inputBlurHandler);
+            }
+        }
+        
+        this.updateRenderedElement(value);
+        if(focused) this.renderedElement.scrollIntoView({behavior:"smooth",block:"nearest"});
+        return this.renderedElement;
+    }
+
+    getDisplayValue(value = undefined) {
+        if(value == undefined) value = this.accessors.value;
+        let currentValue = value;
+        let prefixCalc = this.prefix;
+        if(typeof(currentValue) === "number") {
+            if(currentValue < 0)
+                prefixCalc = this.prefix.replace(/\+(\s*)$/," $1");
+            if(!Number.isInteger(currentValue))
+                currentValue = currentValue.toFixed(2);
+        }
+        if(["number","string"].includes(typeof(currentValue))) {
+            value = prefixCalc + currentValue + this.postfix;
+        }
+        return value;
+    }
+
+    updateRenderedElement(value = undefined) {
+        if(value == undefined) {
+            value = this.accessors.value;
+        }
+        
+        if(this.renderedElement != null) {
+            switch(this.renderedElement.type) {
+                case "checkbox":
+                    this.renderedElement.value = !!value;
+                    break;
+                default:
+                    this.renderedElement.value = value;
+                    this.renderedElement.style.width = this.renderedElement.value.length + "ch";
+            }
+        }
+
         return value;
     }
 

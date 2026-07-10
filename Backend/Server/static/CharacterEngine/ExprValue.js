@@ -8,11 +8,7 @@ export class ExprValue {
         rule_reroll: /(?:rr|ro)(?:\d+|\[\s*(?:\d+(?:\s*,\s*\d+)*|\d+:\d*|\d*:\d+)\s*\])/
     }
 
-    static parser = new exprEval.Parser({
-        operators: {
-            assignment: false
-        }
-    })
+    static parser = new exprEval.Parser();
 
     /**
      * 
