@@ -37,6 +37,9 @@ export class ExprValue {
             this.expr = this.isExpr ? this.processExpr(newValue,origin) : undefined;
             if(newValue.startsWith("r="))
                 this.value = newValue.slice(1);
+        } else {
+            this.isExpr = false;
+            this.precedentPaths.clear();
         }
         return oldPaths;
     }
@@ -182,13 +185,23 @@ ExprValue.parser.functions.roll = function (number, sides, rules='') {
 ExprValue.parser.functions.sum = function (arr) {
     return arr.reduce((pv,cv) => pv + cv,0);
 }
-ExprValue.parser.functions.asum = function (arr1, arr2) {
-    const rval = new Array(max(arr1.length,arr2.length));
+ExprValue.parser.functions.asum = function (...args) {
+    if(args.length <= 0) return [];
+    
+    let minlen = args[0].length;
+    let maxlen = args[0].length;
+    for(const arr of args){
+        if(!Array.isArray(arr)) throw(EvalError("'asum' only works on arrays"));
+        if(arr.length < minlen) minlen = arr.length;
+        if(arr.length > maxlen) maxlen = arr.length;
+    }
+    const rval = new Array(maxlen);
     for(let i = 0;i < rval.length;i++) {
-        if(i < arr1.length && i<arr2.length) rval[i] = arr1[i] + arr2[i];
-        else if (i < arr1.length)            rval[i] = arr1[i];
-        else if (i < arr2.length)            rval[i] = arr2[i];
-        else rval[i] = 0;
+        if(i < minlen) {
+            rval[i] = args[0][i];
+            for(let j = 1;j < args.length;j++) 
+                rval[i] += args[j][i];
+        } else rval[i] = 0;
     }
     return rval;
 }
@@ -207,13 +220,23 @@ ExprValue.parser.functions.every = function (arr) {
 ExprValue.parser.functions.prod = function (arr) {
     return arr.reduce((pv,cv) => pv * cv,0);
 }
-ExprValue.parser.functions.aprod = function (arr1, arr2) {
-    const rval = new Array(Math.max(arr1.length,arr2.length));
+ExprValue.parser.functions.aprod = function (...args) {
+    if(args.length <= 0) return [];
+    
+    let minlen = args[0].length;
+    let maxlen = args[0].length;
+    for(const arr of args){
+        if(!Array.isArray(arr)) throw(EvalError("'aprod' only works on arrays"));
+        if(arr.length < minlen) minlen = arr.length;
+        if(arr.length > maxlen) maxlen = arr.length;
+    }
+    const rval = new Array(maxlen);
     for(let i = 0;i < rval.length;i++) {
-        if(i < arr1.length && i<arr2.length) rval[i] = arr1[i] * arr2[i];
-        else if (i < arr1.length)            rval[i] = arr1[i];
-        else if (i < arr2.length)            rval[i] = arr2[i];
-        else rval[i] = 0;
+        if(i < minlen) {
+            rval[i] = args[0][i];
+            for(let j = 1;j < args.length;j++) 
+                rval[i] *= args[j][i];
+        } else rval[i] = 0;
     }
     return rval;
 }

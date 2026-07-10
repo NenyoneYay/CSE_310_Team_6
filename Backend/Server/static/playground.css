@@ -396,6 +396,7 @@ textarea.field-input {
     gap:8px;
     align-items:center;
     margin-top:4px;
+    grid-column:1;
 }
 .add-section-row input{
     font-size:13px;

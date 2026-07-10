@@ -477,7 +477,7 @@ export class DataNode extends BaseNode {
         }
         const baseInputChangeHandler = this.inputChangeHandler;
         this.inputChangeHandler = (event) => {
-            if(!this.value.isExpr)
+            if(!(this.value.isExpr || this.editMode))
                 baseInputChangeHandler(event);
         }
     }
@@ -509,6 +509,8 @@ export class DataNode extends BaseNode {
                 default:
                     inputType = "text";
             }
+        } else {
+            value = String(value);
         }
 
         if(this.renderedElement == null || this.renderedElement.type != inputType) {
@@ -530,6 +532,11 @@ export class DataNode extends BaseNode {
                 this.renderedElement.addEventListener("focus", this.inputFocusHandler);
                 this.renderedElement.addEventListener("input",this.inputChangeHandler);
                 this.renderedElement.addEventListener("blur", this.inputBlurHandler);
+                if(this.renderedElement.tagName !== "TEXTAREA") {
+                    this.renderedElement.addEventListener("keydown",(ev) => {
+                        if(ev.key === "Enter") this.renderedElement.blur();
+                    });
+                }
             }
         }
         
@@ -562,7 +569,7 @@ export class DataNode extends BaseNode {
         if(this.renderedElement != null) {
             switch(this.renderedElement.type) {
                 case "checkbox":
-                    this.renderedElement.value = !!value;
+                    this.renderedElement.checked = !!value;
                     break;
                 default:
                     this.renderedElement.value = value;
