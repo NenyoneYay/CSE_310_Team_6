@@ -554,7 +554,7 @@ export class DataNode extends BaseNode {
 
     updateRenderedElement(value = undefined) {
         if(value == undefined) {
-            value = this.accessors.value;
+            value = this.getDisplayValue();
         }
         
         if(this.renderedElement != null) {
