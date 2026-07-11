@@ -8,167 +8,139 @@
             "Background": "Vampire Devotee",
             "__direction": "row",
             "__expanded": true,
-            "__name": "Player Info"
+            "__name": "Player Info",
+            "__visible": true
         },
         "Basics": {
             "Class": "Warlock",
             "Level": 10,
             "Proficiency": "=1+ceil(data('.Level')/4)",
-            "Speed":{"__type":"data","value":30,"postfix":"ft"},
+            "Speed": {"__type":"data","value":30,"postfix":"ft"},
             "__direction": "row",
             "__expanded": true,
-            "__name": "Basics"
+            "__name": "Basics",
+            "__visible": true
         },
         "Stats": {
             "Combat": {
-                "HP": {
-                    "__type": "data",
-                    "value": 110,
-                    "min": 0,
-                    "max": 110
-                },
+                "HP": {"__type":"data","value":110,"min":0,"max":110},
                 "Temp HP": 0,
                 "Hit Die": {
-                    "count": {
-                        "__type": "data",
-                        "value": 10,
-                        "min": 0,
-                        "max": 10
-                    },
-                    "die": {
-                        "__type":"data",
-                        "value":8,
-                        "prefix":"d"
-                    },
+                    "count": {"__type":"data","value":10,"min":0,"max":10},
+                    "die": {"__type":"data","prefix":"d","value":8},
                     "__direction": "row",
                     "__expanded": true,
-                    "__name": "Hit Die"
+                    "__name": "Hit Die",
+                    "__visible": true
                 },
                 "Death Saves": {
                     "Successes": 0,
                     "Failures": 0,
                     "__direction": "row",
                     "__expanded": true,
-                    "__name": "Death Saves"
+                    "__name": "Death Saves",
+                    "__visible": true
                 },
                 "AC": "=10 + data('..Ability Scores.Dexterity.mod')",
                 "Initiative": "=data('..Ability Scores.Dexterity.mod')",
                 "__direction": "column",
-                "__expanded": true,
-                "__name": "Combat"
+                "__expanded": false,
+                "__name": "Combat",
+                "__visible": true
             },
             "Ability Scores": {
                 "Strength": {
-                    "score": {
-                        "__type": "data",
-                        "value": 13,
-                        "min": 0,
-                        "max": 20
-                    },
+                    "score": {"__type":"data","value":13,"min":0,"max":20},
                     "__direction": "row",
                     "__expanded": true,
-                    "__name": "Strength"
+                    "__name": "Strength",
+                    "__visible": true
                 },
                 "Dexterity": {
-                    "score": {
-                        "__type": "data",
-                        "value": 15,
-                        "min": 0,
-                        "max": 20
-                    },
+                    "score": {"__type":"data","value":15,"min":0,"max":20},
                     "__direction": "row",
                     "__expanded": true,
-                    "__name": "Dexterity"
+                    "__name": "Dexterity",
+                    "__visible": true
                 },
                 "Constitution": {
-                    "score": {
-                        "__type": "data",
-                        "value": 14,
-                        "min": 0,
-                        "max": 20
-                    },
+                    "score": {"__type":"data","value":14,"min":0,"max":20},
                     "__direction": "row",
                     "__expanded": true,
-                    "__name": "Constitution"
+                    "__name": "Constitution",
+                    "__visible": true
                 },
                 "Intelligence": {
-                    "score": {
-                        "__type": "data",
-                        "value": 10,
-                        "min": 0,
-                        "max": 20
-                    },
+                    "score": {"__type":"data","value":10,"min":0,"max":20},
                     "__direction": "row",
                     "__expanded": true,
-                    "__name": "Intelligence"
+                    "__name": "Intelligence",
+                    "__visible": true
                 },
                 "Wisdom": {
-                    "score": {
-                        "__type": "data",
-                        "value": 12,
-                        "min": 0,
-                        "max": 20
-                    },
+                    "score": {"__type":"data","value":12,"min":0,"max":20},
                     "__direction": "row",
                     "__expanded": true,
-                    "__name": "Wisdom"
+                    "__name": "Wisdom",
+                    "__visible": true
                 },
                 "Charisma": {
-                    "score": {
-                        "__type": "data",
-                        "value": 22,
-                        "min": 0,
-                        "max": 22
-                    },
+                    "score": {"__type":"data","value":22,"min":0,"max":22},
                     "__direction": "row",
                     "__expanded": true,
-                    "__name": "Charisma"
+                    "__name": "Charisma",
+                    "__visible": true
                 },
                 "__direction": "column",
-                "__expanded": true,
-                "__name": "Ability Scores"
+                "__expanded": false,
+                "__name": "Ability Scores",
+                "__visible": true
             },
             "Skills": {
-                "Acrobatics"      : {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Dexterity.mod')"},
-                "Animal Handling" : {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Wisdom.mod')"},
-                "Arcana"          : {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Intelligence.mod')"},
-                "Athletics"       : {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Strength.mod')"},
-                "Deception"       : {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Charisma.mod')"},
-                "History"         : {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Intelligence.mod')"},
-                "Insight"         : {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Wisdom.mod')"},
-                "Intimidation"    : {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Charisma.mod')"},
-                "Investigation"   : {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Intelligence.mod')"},
-                "Medicine"        : {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Wisdom.mod')"},
-                "Nature"          : {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Intelligence.mod')"},
-                "Perception"      : {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Wisdom.mod')"},
-                "Performance"     : {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Charisma.mod')"},
-                "Persuasion"      : {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Charisma.mod')"},
-                "Religion"        : {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Intelligence.mod')"},
-                "Sleight of Hand" : {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Dexterity.mod')"},
-                "Stealth"         : {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Dexterity.mod')"},
-                "Survival"        : {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Wisdom.mod')"},
+                "Acrobatics": {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Dexterity.mod')"},
+                "Animal Handling": {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Wisdom.mod')"},
+                "Arcana": {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Intelligence.mod')"},
+                "Athletics": {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Strength.mod')"},
+                "Deception": {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Charisma.mod')"},
+                "History": {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Intelligence.mod')"},
+                "Insight": {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Wisdom.mod')"},
+                "Intimidation": {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Charisma.mod')"},
+                "Investigation": {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Intelligence.mod')"},
+                "Medicine": {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Wisdom.mod')"},
+                "Nature": {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Intelligence.mod')"},
+                "Perception": {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Wisdom.mod')"},
+                "Performance": {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Charisma.mod')"},
+                "Persuasion": {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Charisma.mod')"},
+                "Religion": {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Intelligence.mod')"},
+                "Sleight of Hand": {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Dexterity.mod')"},
+                "Stealth": {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Dexterity.mod')"},
+                "Survival": {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Wisdom.mod')"},
                 "__direction": "column",
-                "__expanded": true,
-                "__name": "Skills"
+                "__expanded": false,
+                "__name": "Skills",
+                "__visible": true
             },
             "__direction": "row",
             "__expanded": false,
-            "__name": "Stats"
+            "__name": "Stats",
+            "__visible": true
         },
         "Equipment": {
             "capacity": "=data('$Stats.Ability Scores.Strength.score') * 15",
-            "carrying": "=sum(aprod(data('.Backpack[*].weight',0),data('.Backpack[*].quantity',1)))",
-            "Backpack": [
-                {
-                    "name": "Gold",
-                    "quantity": 98,
+            "carrying": "=sum(aprod(data('.Backpack.*.weight',0),data('.Backpack.*.quantity',1)))",
+            "Backpack": {
+                "Gold": {
                     "weight": 0.021,
+                    "quantity": 98,
+                    "__type": "section",
+                    "__name": "Gold",
                     "__direction": "row",
-                    "__expanded": true
+                    "__expanded": false,
+                    "__visible": true
                 },
-                {
-                    "name": "Leather Armor",
-                    "type": "armor",
+                "Leather Armor": {
+                    "weight": 0.1,
+                    "equipped": true,
                     "modifier": {
                         "__type": "modifier",
                         "target": "$Stats.Combat.AC",
@@ -177,38 +149,47 @@
                         "tier": 1,
                         "value": "=12 + data('$Stats.Ability Scores.Dexterity.mod')"
                     },
-                    "equipped": false,
+                    "__type": "section",
+                    "__name": "Leather Armor",
                     "__direction": "row",
-                    "__expanded": true
+                    "__expanded": false,
+                    "__visible": true
                 },
-                {
-                    "name": "+2 Rod of the Pact Keeper",
+                "+2 Rod of  the Pact Keeper": {
+                    "weight": 0.15,
                     "equipped": true,
-                    "modifiers": [
-                        {
-                            "__type": "modifier",
-                            "target": "$Spell Casting.(Spell Save,Spell Attack)",
-                            "operation": "add",
-                            "condition": "=data('..equipped')",
-                            "tier": "default",
-                            "value": 2
-                        }
-                    ],
+                    "modifier": {
+                        "__type": "modifier",
+                        "target": "$Spell Casting.(Spell Save,Spell Attack)",
+                        "operation": "add",
+                        "condition": "=data('.equipped')",
+                        "value": 2
+                    },
+                    "__type": "section",
+                    "__name": "+2 Rod of  the Pact Keeper",
                     "__direction": "row",
-                    "__expanded": true
-                }
-            ],
+                    "__expanded": false,
+                    "__visible": true
+                },
+                "__type": "section",
+                "__name": "Backpack",
+                "__direction": "column",
+                "__expanded": true,
+                "__visible": true
+            },
             "__direction": "row",
-            "__expanded": false,
-            "__name": "Equipment"
+            "__expanded": true,
+            "__name": "Equipment",
+            "__visible": true
         },
         "Spell Casting": {
             "Spell Save": "=8 + data('$Stats.Ability Scores.Charisma.mod') + data('$Basics.Proficiency')",
             "Spell Attack": "=data('$Basics.Proficiency') + data('$Stats.Ability Scores.Charisma.mod')",
             "Spells": "Comming soon...",
             "__direction": "row",
-            "__expanded": false,
-            "__name": "Spell Casting"
+            "__expanded": true,
+            "__name": "Spell Casting",
+            "__visible": true
         },
         "Modifiers": {
             "Feats": {
@@ -216,8 +197,6 @@
                     "__type": "modifier",
                     "target": "$Stats.Skills.Persuasion",
                     "operation": "add",
-                    "condition": true,
-                    "tier": "default",
                     "value": "=data('$Basics.Proficiency')"
                 },
                 "Blood Lust": {
@@ -226,30 +205,29 @@
                         "__type": "modifier",
                         "target": "$Stats.Ability Scores.Dexterity.score",
                         "operation": "add",
-                        "condition": true,
-                        "tier": "default",
                         "value": 1
                     },
                     "__direction": "row",
                     "__expanded": false,
-                    "__name": "Blood Lust"
+                    "__name": "Blood Lust",
+                    "__visible": true
                 },
                 "__direction": "row",
                 "__expanded": false,
-                "__name": "Feats"
+                "__name": "Feats",
+                "__visible": true
             },
             "Race Bonuses": {
                 "Proficiencies": {
                     "__type": "modifier",
                     "target": "$Stats.Skills.Performance",
                     "operation": "add",
-                    "condition": true,
-                    "tier": "default",
                     "value": "=data('$Basics.Proficiency')"
                 },
                 "__direction": "row",
                 "__expanded": false,
-                "__name": "Race Bonuses"
+                "__name": "Race Bonuses",
+                "__visible": true
             },
             "Background Bonuses": {
                 "Vampire Devotee": {
@@ -257,56 +235,60 @@
                         "__type": "modifier",
                         "target": "$Stats.Ability Scores.Constitution.score",
                         "operation": "add",
-                        "condition": true,
-                        "tier": "default",
                         "value": 2
                     },
                     "Strength": {
                         "__type": "modifier",
                         "target": "$Stats.Ability Scores.Strength.score",
                         "operation": "add",
-                        "condition": true,
-                        "tier": "default",
                         "value": 1
                     },
                     "__direction": "row",
                     "__expanded": false,
-                    "__name": "Vampire Devotee"
+                    "__name": "Vampire Devotee",
+                    "__visible": true
                 },
                 "__direction": "row",
                 "__expanded": false,
-                "__name": "Background Bonuses"
+                "__name": "Background Bonuses",
+                "__visible": true
             },
             "Class Bonuses": {
                 "Saving Throws": {
                     "__type": "modifier",
                     "target": "$Stats.Ability Scores.(Wisdom,Charisma).save",
                     "operation": "add",
-                    "condition": true,
-                    "tier": "default",
                     "value": "=data('$Basics.Proficiency')"
                 },
                 "Proficiencies": {
                     "__type": "modifier",
                     "target": "$Stats.Skills.(Deception,Intimidation)",
                     "operation": "add",
-                    "condition": true,
-                    "tier": "default",
                     "value": "=data('$Basics.Proficiency')"
                 },
                 "__direction": "row",
                 "__expanded": false,
-                "__name": "Class Bonuses"
+                "__name": "Class Bonuses",
+                "__visible": true
             },
             "__direction": "row",
             "__expanded": false,
-            "__name": "Modifiers"
+            "__name": "Modifiers",
+            "__visible": true
         }
     },
     "rules":{
         "Stats.Ability Scores.*": {
-            "mod": {"__type":"data","value":"=floor(data('.score')/2)-5","prefix":"+"},
-            "save": {"__type":"data","value":"=data('.mod')","prefix":"+"}
+            "mod": {
+                "value": "=floor(data('.score')/2)-5",
+                "prefix": "+",
+                "__type": "data"
+            },
+            "save": {
+                "value": "=data('.mod')",
+                "prefix": "+",
+                "__type": "data"
+            }
         }
     }
 }

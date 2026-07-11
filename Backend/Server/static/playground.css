@@ -165,10 +165,9 @@ body{
     flex-direction:column;
     gap:8px;
     margin-bottom:1rem;
-    flex-wrap:wrap;
     align-items:center;
     grid-column: 3/4;
-    grid-row: 1/2;
+    grid-row: 1;
     background-color: var(--color-border-inverse);
     border-radius: 15px;
     font-family: var(--font-sans);
