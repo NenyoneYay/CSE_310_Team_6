@@ -128,7 +128,7 @@
                 "__visible": true
             },
             "__direction": "row",
-            "__expanded": false,
+            "__expanded": true,
             "__name": "Stats",
             "__visible": true
         },
@@ -146,15 +146,17 @@
                     "__visible": true
                 },
                 "Leather Armor": {
+                    "desc": "While wearing this armor your AC becomes equal to 12 plus your Dexterity modifier.",
                     "weight": 0.1,
                     "equipped": true,
                     "modifier": {
                         "__type": "modifier",
+                        "__visible": false,
+                        "value": "=12 + data('$Stats.Ability Scores.Dexterity.mod')",
                         "target": "$Stats.Combat.AC",
                         "operation": "replace",
                         "condition": "=data('.equipped')",
-                        "tier": 1,
-                        "value": "=12 + data('$Stats.Ability Scores.Dexterity.mod')"
+                        "tier": 1
                     },
                     "__type": "section",
                     "__name": "Leather Armor",
@@ -162,18 +164,37 @@
                     "__expanded": false,
                     "__visible": true
                 },
-                "+2 Rod of  the Pact Keeper": {
+                "+2 Rod of the Pact Keeper": {
                     "weight": 0.15,
                     "equipped": true,
                     "modifier": {
                         "__type": "modifier",
+                        "__visible": false,
+                        "value": 2,
                         "target": "$Spell Casting.(Spell Save,Spell Attack)",
                         "operation": "add",
-                        "condition": "=data('.equipped')",
-                        "value": 2
+                        "condition": "=data('.equipped')"
                     },
                     "__type": "section",
-                    "__name": "+2 Rod of  the Pact Keeper",
+                    "__name": "+2 Rod of the Pact Keeper",
+                    "__direction": "row",
+                    "__expanded": false,
+                    "__visible": true
+                },
+                "Belt of Giant Strength": {
+                    "desc": "He who wears this belt will become unnaturally strong. While equipped, your strength score becomes 25.",
+                    "weight": 0.5,
+                    "equipped": true,
+                    "modifier": {
+                        "__type": "modifier",
+                        "__visible": false,
+                        "value": 25,
+                        "target": "$Stats.Ability Scores.Strength.score#value,max",
+                        "operation": "replace",
+                        "condition": "=data('.equipped')",
+                        "tier": 2
+                    },
+                    "__name": "Belt of Giant Strength",
                     "__direction": "row",
                     "__expanded": false,
                     "__visible": true
@@ -185,7 +206,7 @@
                 "__visible": true
             },
             "__direction": "row",
-            "__expanded": false,
+            "__expanded": true,
             "__name": "Equipment",
             "__visible": true
         },

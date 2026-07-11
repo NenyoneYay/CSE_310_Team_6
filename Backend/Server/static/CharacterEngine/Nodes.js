@@ -249,6 +249,33 @@ export class BaseNode {
         this.renderedElement = null;
     }
 
+    setError(message, isErrorSrc = false) {
+        this.isErrorSrc = isErrorSrc;
+        this.error = message;
+        if(this.renderedElement != null) {
+            this.renderedElement.style.color = "#990000";
+            this.renderedElement.title = message;
+        }
+    }
+
+    setWarning(message) {
+        this.warning = message;
+        if(this.renderedElement != null) {
+            this.renderedElement.style.color = "#94650d";
+            this.renderedElement.title = message;
+        }
+    }
+
+    clearErrors() {
+        this.isErrorSrc = false;
+        this.error = null;
+        this.warning = null;
+        if(this.renderedElement != null) {
+            this.renderedElement.style.color = "";
+            this.renderedElement.title = "";
+        }
+    }
+
     set({value = null}) {
         let success = false;
         if(value != null) {
@@ -266,8 +293,7 @@ export class BaseNode {
         } else {
             this.visited = false;
             //Update path
-            this.error = `Node Source: '${Path.pathTo(this).str}' is part of a dependency loop.`;
-            this.isErrorSrc = true;
+            this.setError(`Node Source: '${Path.pathTo(this).str}' is part of a dependency loop.`,true)
             this.renderedElement.value = this.accessors.value;
             throw EvalError(this.error);
         }
@@ -308,8 +334,7 @@ export class BaseNode {
                 if(this[DATA_CHANGE_HANDLER]) this[DATA_CHANGE_HANDLER]();
             }
         } catch (e){
-            this.isErrorSrc = false;
-            this.error = e.message;
+            this.setError(e.message,false);
             throw(e);
         } finally {
             this.visited = false;
@@ -319,10 +344,8 @@ export class BaseNode {
     evaluate() {
         if (this.dirty) {
             this.dirty = false;
-            this.isErrorSrc = false;
-            this.error = null;
-            this.warning = null;
         }
+        this.clearErrors();
 
         if(document.activeElement !== this.renderedElement || this.renderedElement.type === "checkbox")
             this.updateRenderedElement();
@@ -454,13 +477,18 @@ export class DataNode extends BaseNode {
         if(dataObj[Symbol.for("essential")] ?? false) {
             this[Symbol.for("essential")] = true;
         }
-        this.value = new ExprValue(value,this);
-        this.max = new ExprValue(max,this);
-        this.min = new ExprValue(min,this);
-        /** @type {string} */
-        this.prefix = String(prefix ?? '');
-        /** @type {string} */
-        this.postfix = String(postfix ?? '');
+        try {
+            this.value = new ExprValue(value,this);
+            this.max = new ExprValue(max,this);
+            this.min = new ExprValue(min,this);
+        
+            /** @type {string} */
+            this.prefix = String(prefix ?? '');
+            /** @type {string} */
+            this.postfix = String(postfix ?? '');
+        } catch (e) {
+            this.setError((this.error == null ? "" : this.error + "\n\n") + e.message,true);
+        }
 
         this.valuePath = new Path("#value",this);
         this.maxPath = new Path("#max",this);
@@ -505,7 +533,7 @@ export class DataNode extends BaseNode {
     renderHTML() {
         const focused = (document.activeElement === this.renderedElement);
         let value = this.accessors.value;
-        if(focused || this.editMode) {
+        if(focused) {
             value = this.value.value;
         } else {
             value = this.getDisplayValue(value);
@@ -593,7 +621,10 @@ export class DataNode extends BaseNode {
                     break;
                 default:
                     this.renderedElement.value = value;
-                    this.renderedElement.style.width = this.renderedElement.value.length + "ch";
+                    if(this.editMode)
+                        this.renderedElement.style.width = String(this.value.value).length + "ch";
+                    else
+                        this.renderedElement.style.width = this.renderedElement.value.length + "ch";
             }
         }
 
@@ -658,27 +689,33 @@ export class DataNode extends BaseNode {
             //Update Path
             return this.calculateDepMods(src,oldPaths,accessor.precedentPaths);
         }
+        try {
+            if(!this[Symbol.for("virtual")]) {
+                if(value != undefined && value !== this.value.value) {
+                    try {value = JSON.parse(value)} catch (err) {}
+                    this.listenerChanges.push(...getDepMods("value",this.value,value));
+                }
+                if(min != undefined && min !== this.min.value) {
+                    try {min = JSON.parse(min)} catch (err) {}
+                    this.listenerChanges.push(...getDepMods("min",this.min,min)); 
+                }
+                if(max != undefined && max !== this.max.value) {
+                    try {max = JSON.parse(max)} catch (err) {}
+                    this.listenerChanges.push(...getDepMods("max",this.max,max)); 
+                }
 
-        if(!this[Symbol.for("virtual")]) {
-            if(value != undefined && value !== this.value.value) {
-                try {value = JSON.parse(value)} catch (err) {}
-                this.listenerChanges.push(...getDepMods("value",this.value,value));
+                this.evaluateDependencies();
+                this.update();
             }
-            if(min != undefined && min !== this.min.value) {
-                try {min = JSON.parse(min)} catch (err) {}
-                this.listenerChanges.push(...getDepMods("min",this.min,min)); 
-            }
-            if(max != undefined && max !== this.max.value) {
-                try {max = JSON.parse(max)} catch (err) {}
-                this.listenerChanges.push(...getDepMods("max",this.max,max)); 
-            }
-
-            this.evaluateDependencies();
-            this.update();
+        } catch (e) {
+            this.setError(e.message, true);
+            e.message = `Error modifying node: ${Path.pathTo(this).str} - ${e.message}`;
+            throw e;
         }
     }
 
     evaluate() {
+        
         try {
             const clamp = (val, min, max) => {
                 if (min != null) {
@@ -838,9 +875,8 @@ export class DataNode extends BaseNode {
             );
 
         } catch (e) {
-            this.isErrorSrc = true;
-            this.error = e.message;
             //Update Path
+            this.setError(e.message,true);
             e.message = `Node Source: ${Path.pathTo(this).str} ${e.message}`
             throw e;
         }
@@ -908,11 +944,14 @@ export class ModifierNode extends DataNode {
         } else if (typeof(tier) === "number") {
             this.tier = tier;
         }
-
-        this.condition = new ExprValue(condition ?? true, this);
-        this.condition.precedentPaths.forEach(depPath => {
-            this.listenerChanges.push({type:"add precedent",path:depPath,src:"condition"});
-        })
+        try {
+            this.condition = new ExprValue(condition ?? true, this);
+            this.condition.precedentPaths.forEach(depPath => {
+                this.listenerChanges.push({type:"add precedent",path:depPath,src:"condition"});
+            })
+        } catch (e) {
+            this.setError((this.error == null ? "" : this.error + "\n\n") + e.message, true);
+        }
 
         this.accessors.condition = condition ?? true;
         this.registeredData = null;
@@ -951,12 +990,19 @@ export class ModifierNode extends DataNode {
             return this.calculateDepMods(src,oldPaths,accessor.precedentPaths);
         }
 
-        if(!this[Symbol.for("virtual")]) {
-            if(condition != undefined) {
-                try {condition = JSON.parse(condition)} catch (err) {}
-                this.listenerChanges.push(...getDepMods("condition",this.condition,condition));
+        try {
+            if(!this[Symbol.for("virtual")]) {
+                if(condition != undefined) {
+                    try {condition = JSON.parse(condition)} catch (err) {}
+                    this.listenerChanges.push(...getDepMods("condition",this.condition,condition));
+                }
             }
+        } catch (e) {
+            this.setError(e.message, true);
+            e.message = `Error modifying node: ${Path.pathTo(this).str} - ${e.message}`;
+            throw e;
         }
+
         if(rest != undefined)
             super.modify(rest);
     }
