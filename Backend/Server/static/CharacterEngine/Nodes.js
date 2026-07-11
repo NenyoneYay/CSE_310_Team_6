@@ -430,7 +430,7 @@ export class DataNode extends BaseNode {
      *     min?:(string|number)
      *   }?} dataObj
      */
-    constructor(virtual, parent, dataObj) {
+    constructor(virtual, parent, dataObj = {}) {
         let {value,min,max,prefix,postfix,__visible} = {...DataNode.defaultDataObj,...dataObj};
         super(virtual, parent,{value:value});
         //Update Pathes
@@ -465,17 +465,18 @@ export class DataNode extends BaseNode {
             min: min
         }
 
-        const baseInputFocusHandler = this.inputFocusHandler;
         this.inputFocusHandler = (event) => {
             this.renderHTML();
         }
+        const baseInputChangeHandler = this.inputChangeHandler;
+
         this.inputBlurHandler = (event) => {
-            if (this.renderedElement?.type === "text"){
+            if (this.editMode){
                 this.modify({value:this.renderedElement.value});
             }
             this.renderHTML();
         }
-        const baseInputChangeHandler = this.inputChangeHandler;
+
         this.inputChangeHandler = (event) => {
             if(!(this.value.isExpr || this.editMode))
                 baseInputChangeHandler(event);
@@ -526,7 +527,7 @@ export class DataNode extends BaseNode {
             }
             this.renderedElement = newElement;
             if(focused) this.renderedElement.focus();
-            if(this[Symbol.for("virtual")]) {
+            if(this[Symbol.for("virtual")] || (this.value.isExpr && !this.editMode)) {
                 this.renderedElement.disabled = true;
             } else {
                 this.renderedElement.addEventListener("focus", this.inputFocusHandler);

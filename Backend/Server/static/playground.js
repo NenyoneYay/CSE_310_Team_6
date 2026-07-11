@@ -996,6 +996,7 @@ modeBtn.addEventListener("click", () => {
 if(previewMode) {
     sectionLabelInp.classList.add("hidden");
     sectionAddBtn.classList.add("hidden");
+    modeBtn.innerHTML = `<i class="ti ti-pencil-off"></i> Edit mode`;
 }
 
 function updatePreview() {

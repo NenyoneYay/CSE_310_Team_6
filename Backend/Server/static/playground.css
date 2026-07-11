@@ -174,6 +174,9 @@ body{
     font-family: var(--font-sans);
     height: 230px;
     /* font-size: 2em; */
+    position: sticky;
+    top: 0.5rem;
+    z-index: 9999;
 }
 .toolbar button {
     flex-grow: 1;
@@ -209,6 +212,7 @@ body{
     overflow:hidden;
     flex: 1 1 min-content;
     height: max-content;
+    max-width:100%;
 }
 
 .seperator {
@@ -235,7 +239,9 @@ body{
     padding:10px 14px;
     background:var(--color-background-secondary);
     border-bottom:0.5px solid var(--color-border-tertiary);
-    user-select:none
+    user-select:none;
+    overflow-x:auto;
+    scrollbar-width:none;
 }
 .section-title{
     font-size:14px;
@@ -244,7 +250,8 @@ body{
     background:transparent;
     border:none;
     color:var(--color-text-primary);
-    font-family:var(--font-sans)
+    font-family:var(--font-sans);
+    width:10ch;
 }
 .section-title:focus{
     outline:none;
@@ -271,6 +278,8 @@ body{
     flex-direction: row;
     gap:4px;
     padding:12px;
+    max-width:100%;
+    overflow:auto;
 }
 
 .field{
@@ -282,8 +291,10 @@ body{
     border-radius:var(--border-radius-md);
     padding:8px 10px;
     user-select:none;
-    flex:1 1 0;
+    flex:1 1 auto;
     max-width: 100%;
+    overflow-x:auto;
+    scrollbar-width:none;
 }
 
 
@@ -292,7 +303,6 @@ body{
     display:flex;
     flex-direction:row;
     gap:4px;
-    min-width:0
 }
 .field-label{
     font-size:11px;
@@ -316,7 +326,7 @@ body{
     padding:0;
     cursor:text;
     text-align: right;
-    flex: 1 1 0;
+    flex: 1 0 auto;
 }
 .field-input:focus{
     outline:none;
@@ -327,6 +337,7 @@ body{
 }
 .field-input[type=number]{
     -moz-appearance:textfield;
+    appearance:textfield;
 }
 .field-input[type=number]::-webkit-outer-spin-button,
 .field-input[type=number]::-webkit-inner-spin-button{
@@ -375,7 +386,9 @@ textarea.field-input {
     gap:6px;
     padding:0 12px 10px;
     flex-wrap:wrap;
-    align-items:center
+    align-items:center;
+    overflow-x: auto;
+    scrollbar-width: none;
 }
 .add-field-row input,.add-field-row select{
     font-size:12px;
@@ -449,6 +462,9 @@ textarea.field-input {
     .toolbar {
         flex-direction: column;
         height: 100%;
+        border-radius: unset;
+        top: 0;
+        background-color: var(--background-color);
     }
     .toolbar button {
         /* margin: 0 auto; */
