@@ -23,41 +23,36 @@ export class Character {
     constructor(fileData = undefined) {
         /** @type {BaseNode[]} */
         this.newNodes = [];
-        
         this.root = undefined;
+        this.eventManager = new EventManager(this.root);
         if(fileData == undefined)
             fileData = `{"data":{}}`
         this.parseFile(fileData);
 
-        // // here is some prototype data for rules
-        // this.fileData = {
-        //     "rules":{
-        //         "Stats.*":[
-        //             {
-        //                 "mod":"floor(data('.score')/2) - 5",
-        //                 "save":"data('.mod')"
-        //             }
-        //         ]
-        //     },
-        //     "data": ...
-        // }
-
     }
 
-    buildTree (rootData, parent = undefined, virtual = false) {
+    buildTree (rootData, parent = undefined, virtual = false, name = undefined) {
         const makeNode = (newNode) => {
             this.newNodes.push(newNode); 
             return newNode; 
         }
 
-        const buildData = (dataTree,parent = undefined,virtual = false) => {
+        const buildData = (dataTree,parent = undefined,virtual = false, name = undefined) => {
             const type = dataTree?.["__type"];
             let nextParent = dataTree
             if(dataTree instanceof Object) {
                 if(parent != null && dataTree[Symbol.for("parent")] == undefined) {
                     dataTree[Symbol.for("parent")] = parent;
                 }
+                if(!Array.isArray(dataTree) && dataTree[Symbol.for("okeys")] == undefined)
+                    dataTree[Symbol.for("okeys")] = [];
+                if(dataTree[Symbol.for("parent")]?.[Symbol.for("essential")] ?? false) {
+                    dataTree[Symbol.for("essential")] = true;
+                }
             }
+
+            if(name != undefined && dataTree instanceof Object)
+                dataTree.__name = name;
 
             if (dataTree == null || dataTree instanceof BaseNode) {
                 return dataTree;
@@ -95,8 +90,11 @@ export class Character {
                 } 
 
                 for(const key of Object.keys(dataTree)) {
-                    if(!key.startsWith("__")) 
-                        dataTree[key] = buildData(dataTree[key],nextParent,virtual);
+                    if(!key.startsWith("__")) {
+                        dataTree[key] = buildData(dataTree[key],nextParent,virtual,key);
+                        if(!dataTree[Symbol.for("okeys")].includes(key))
+                            dataTree[Symbol.for("okeys")].push(key);
+                    }
                 }
                 dataTree[Symbol.for("virtual")] = virtual;
                 return dataTree;
@@ -104,65 +102,123 @@ export class Character {
             return null;
         }
 
-        return buildData(rootData, parent, virtual);
+        const rval = buildData(rootData, parent, virtual, name);
+        if(parent != undefined) {
+            if(Array.isArray(parent)) {
+                parent.push(rval);
+            } else if (parent instanceof Object && name != undefined) {
+                let newName = name;
+                let nameCount = 0;
+                while (newName in parent) {
+                    newName = `${name} (${++nameCount})`
+                }
+
+                parent[newName] = rval;
+                if(Array.isArray(parent[Symbol.for("okeys")])) {
+                    parent[Symbol.for("okeys")].push(newName);
+                }
+                rval.__name = newName;
+            }
+        }
+
+        this.applyRules(rval);
+        this.processNewNodes();
+        return rval;
     }
 
     buildRules (ruleData, root = null) {
-        for(const [key,rawData] of Object.entries(ruleData)) {
+        for(const [key,ruleObj] of Object.entries(ruleData)) {
             if(key.startsWith("__")) continue;
 
-            const {__type:ruleType,...ruleObj} = rawData;
-            let virtual = true;
-            switch(ruleType) {
-                case "requirement":
-                    virtual = false;
-                    break;
-            }
-
             const targetPath = new Path(key);
-            const targetObjs = targetPath.resolve({root:root ?? this.root, flat:true});
+            this.eventManager.registerData("rule",targetPath,ruleObj);
 
-            for(const result of targetObjs) {
-                if (result?.__type === "pathResult") {
-                    const targetObj = result.result;
-                    if (targetObj instanceof BaseNode) {
-                        return; // don't replace existing nodes
-                    }
-
-                    const recursor = (_ruleobj, _targetobj) => {
-                        if (_targetobj == undefined) {
-                            // TODO: make buildFrom(Path) to build new structures from rule paths.
-                            // also should merge new structure with existing objects along path if they exist.
-
-                        } else if (Array.isArray(_ruleobj) && Array.isArray(_targetobj) && virtual) {
-                            for (const val of _ruleobj) {
-                                const clone = deepCopy(val);
-                                if(clone instanceof Object) {
-                                    clone[Symbol.for("parent")] = _targetobj;
-                                    _targetobj.push(this.buildTree(clone,_targetobj,virtual));
-                                }
-                            }
-                        } else if (_ruleobj instanceof Object && _targetobj instanceof Object) {
-                            for(const [objKey,objVal] of Object.entries(_ruleobj)) {
-                                if(!Object.hasOwn(_targetobj, objKey)) {
-                                    const clone = deepCopy(objVal);
-                                    if(clone instanceof Object) clone[Symbol.for("parent")] = _targetobj;
-                                    _targetobj[objKey] = this.buildTree(clone,_targetobj,virtual);
-                                    _targetobj[Symbol.for("okeys")].push(objKey);
-                                } else {
-                                    const idx = _targetobj[Symbol.for("okeys")].indexOf(objKey);
-                                    const [moved] = _targetobj[Symbol.for("okeys")].splice(idx,1);
-                                    _targetobj[Symbol.for("okeys")].push(moved);
-                                    recursor(objVal,_targetobj[objKey]);
-                                }
-                            }
-                        }
-                    }
-
-                    recursor(ruleObj,targetObj);
-                } 
+            if(root != null) {
+                this.applyRules(root);
             }
         }
+    }
+
+    applyRule(ruleObj, targetObj) {
+        if (targetObj instanceof BaseNode) {
+            return; // don't replace existing nodes
+        }
+
+        const {__rule_type:ruleType,...ruleProps} = ruleObj;
+        
+        let virtual = true;
+        switch(ruleType) {
+            case "requirement":
+                virtual = false;
+                break;
+        }
+
+        const recursor = (_ruleobj, _targetobj) => {
+            if (_targetobj == undefined) {
+                // TODO: make buildFrom(Path) to build new structures from rule paths.
+                // also should merge new structure with existing objects along path if they exist.
+
+            } else if (Array.isArray(_ruleobj) && Array.isArray(_targetobj) && virtual) {
+                for (const val of _ruleobj) {
+                    const clone = deepCopy(val);
+                    if(clone instanceof Object) {
+                        clone[Symbol.for("parent")] = _targetobj;
+                        clone[Symbol.for("essential")] = true;
+                        this.buildTree(clone,_targetobj,virtual);
+                    }
+                }
+            } else if (_ruleobj instanceof Object && _targetobj instanceof Object) {
+                for(const [ruleKey,ruleVal] of Object.entries(_ruleobj)) {
+                    if(ruleKey.startsWith("__")) continue;
+                    if(!Object.hasOwn(_targetobj, ruleKey)) {
+                        const clone = deepCopy(ruleVal,(key,value) => key !== "__rule_type");
+                        let this_virtual = virtual;
+                        if(ruleVal.__rule_type != undefined) {
+                            switch(ruleVal.__rule_type) {
+                                case "requirement":
+                                    this_virtual = false;
+                                    break;
+                            }
+                        }
+                        if(clone instanceof Object) {
+                            clone[Symbol.for("parent")] = _targetobj;
+                            clone[Symbol.for("essential")] = true;
+                            this.buildTree(clone,_targetobj,this_virtual,ruleKey);
+                        }
+                    } else {
+                        if(_targetobj[Symbol.for("okeys")] != undefined) {
+                            const idx = _targetobj[Symbol.for("okeys")].indexOf(ruleKey);
+                            const [moved] = _targetobj[Symbol.for("okeys")].splice(idx,1);
+                            _targetobj[Symbol.for("okeys")].push(moved);
+                        }
+                        if(_targetobj[ruleKey] instanceof Object)
+                            _targetobj[ruleKey][Symbol.for("essential")] = true;
+                        recursor(ruleVal,_targetobj[ruleKey]);
+                    }
+                }
+            }
+        }
+
+        recursor(ruleProps,targetObj);
+    }
+
+    applyRules(root) {
+        if(root == undefined) return;
+        (new Path("**",root)).resolve({
+            noReturn:true,
+            forwardHandler: (context) => {
+                if( context.token === Path.END_TOKEN
+                    || !(context.obj instanceof Object) 
+                    || (typeof(context.accessor) == "string" && context.accessor.startsWith("__"))
+                ) {
+                    return {action:"skip"};
+                }
+                const rulesList = this.eventManager.getData("rule",context.obj);
+                for(const ruleObj of rulesList) {
+                    this.applyRule(ruleObj,context.obj);
+                }
+            }
+        })
     }
 
     processNewNodes() {
@@ -218,15 +274,13 @@ export class Character {
         if(Object.hasOwn(ruleData,Symbol.for("parent")))
             delete ruleData[Symbol.for("parent")];
 
-        this.root = this.buildTree(contextData);
-        this.root[Symbol.for("EventBus")] = new EventManager(this.root);
-        if(this.root[Symbol.for("okeys")] == undefined)
-            this.root[Symbol.for("okeys")] = [];
-
+        this.root = contextData;
         this.rules = ruleData;
-        this.buildRules(this.rules);
+        this.eventManager.anchor = this.root;
+        this.root[Symbol.for("EventBus")] = this.eventManager;
 
-        this.processNewNodes();
+        this.buildRules(this.rules);
+        this.buildTree(this.root);
         return jsonData;
     }
     
@@ -353,6 +407,7 @@ export class Character {
     }
 
     destroy() {
+        this.eventManager.destroy();
         const recursor = (treeRoot) => {
             if (treeRoot == null) return;
             if (treeRoot instanceof BaseNode) {

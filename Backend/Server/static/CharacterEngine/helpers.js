@@ -26,9 +26,13 @@ export function orderedObjectSerializer (obj, spaces = undefined, depth = 0) {
     return JSON.stringify(obj,undefined,spaces);
 }
 
+/**
+ * 
+ * @param {any} obj 
+ * @param {(key,value) => (boolean|"continue"|"skip"|"collect")} filterFunc 
+ * @returns 
+ */
 export function deepCopy (obj, filterFunc = null) {
-    if(filterFunc == null) filterFunc = ((k,v) => "continue");
-
     const recursor = (obj) => {
         let rval = undefined;
         if(Array.isArray(obj)) {
@@ -37,7 +41,7 @@ export function deepCopy (obj, filterFunc = null) {
             rval = [];
             obj[Symbol.for("deepCopy_visited")] = rval;
             for(const [idx,item] of obj.entries()) {
-                switch(filterFunc(idx,item)) {
+                switch(filterFunc?.(idx,item) ?? true) {
                     case "collect":
                         rval.push(item);
                         break;
@@ -57,7 +61,7 @@ export function deepCopy (obj, filterFunc = null) {
             rval = {};
             obj[Symbol.for("deepCopy_visited")] = rval;
             for(const key of Object.keys(obj)) {
-                switch(filterFunc(key,obj[key])) {
+                switch(filterFunc?.(key,obj[key]) ?? true) {
                     case "collect":
                         rval[key] = obj[key];
                         break;
@@ -76,7 +80,7 @@ export function deepCopy (obj, filterFunc = null) {
         }
         for(const sym of Object.getOwnPropertySymbols(obj)) {
             if(sym === Symbol.for("deepCopy_visited")) continue;
-            switch(filterFunc(sym,obj[sym])) {
+            switch(filterFunc?.(sym,obj[sym]) ?? true) {
                 case "collect":
                     rval[sym] = obj[sym];
                     break;
@@ -101,7 +105,8 @@ export function deepCopy (obj, filterFunc = null) {
  * 
  * @param {*} oldObj 
  * @param {*} newObj 
- * @param {string[]} keyBlacklist 
+ * @param {string[]} keyBlacklist Keys to be omitted from comparison entirely
+ * @param {string[]} keyWhitelist Keys to be explicitly included in comparison results
  * @returns {boolean}
  */
 export function compareObj(oldObj, newObj, {keyBlacklist = [], keyWhitelist = []} = {}) {

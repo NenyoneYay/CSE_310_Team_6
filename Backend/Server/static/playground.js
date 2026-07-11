@@ -2,6 +2,7 @@ import { BaseNode, DataNode } from './CharacterEngine/Nodes.js';
 import { Character } from './CharacterEngine/CharacterEngine.js';
 import { testChar } from './CharacterEngine/test.js';
 import { Path } from './CharacterEngine/Path.js';
+import { EventManager } from './CharacterEngine/EventManager.js';
 
 let loadedChar = new Character();
 window.getLoadedChar = () => loadedChar;
@@ -399,41 +400,42 @@ function makeNode(nodeData, inputType, parent, container) {
     nodeElem.appendChild(inner);
 
     if(!previewMode) {
-        const delBtn = document.createElement("button");
-        delBtn.className = "delete-btn";
-        delBtn.title = "Remove field";
-        delBtn.innerHTML = `<i class="ti ti-x"></i>`;
-        delBtn.addEventListener("click", e => {
+        if(!(nodeData[Symbol.for("essential")] ?? false)){
+            const delBtn = document.createElement("button");
+            delBtn.className = "delete-btn";
+            delBtn.title = "Remove field";
+            delBtn.innerHTML = `<i class="ti ti-x"></i>`;
+            delBtn.addEventListener("click", e => {
 
-            e.stopPropagation();
-            
-            if(Array.isArray(parent)) {
-                const fIdx = parent.indexOf(nodeData);
-                parent.splice(fIdx, 1);
-            } else {
-                const fIdx = parent[Symbol.for("okeys")].indexOf(nodeData.__name);
-                parent[Symbol.for("okeys")].splice(fIdx, 1);
-                delete (parent[nodeData.__name]);
-            }
-            
-            // nodeData.destroy(); // not implemented here, but will be used later
-            if(nodeData instanceof BaseNode) {
-                nodeData.destroy();
-            }
+                e.stopPropagation();
+                // nodeData.destroy(); // not implemented here, but will be used later
+                if(nodeData instanceof BaseNode) {
+                    nodeData.destroy();
+                } else {
+                    if(Array.isArray(parent)) {
+                        const fIdx = parent.indexOf(nodeData);
+                        parent.splice(fIdx, 1);
+                    } else {
+                        const fIdx = parent[Symbol.for("okeys")].indexOf(nodeData.__name);
+                        parent[Symbol.for("okeys")].splice(fIdx, 1);
+                        delete (parent[nodeData.__name]);
+                    }
+                }
 
-            // Update HTML
-            nodeElem.remove();
-            sepElem.remove();
-            updatePreview();
+                // Update HTML
+                nodeElem.remove();
+                sepElem.remove();
+                updatePreview();
 
-            if( (Array.isArray(parent) && parent.length <= 0)
-                || (!Array.isArray(parent) && parent[Symbol.for("okeys")].length <= 0)
-            ) {
-                makeEmptyMessage(container);
-            }
-            
-        });
-        nodeElem.appendChild(delBtn);
+                if( (Array.isArray(parent) && parent.length <= 0)
+                    || (!Array.isArray(parent) && parent[Symbol.for("okeys")].length <= 0)
+                ) {
+                    makeEmptyMessage(container);
+                }
+                
+            });
+            nodeElem.appendChild(delBtn);
+        }
 
         nodeElem.addEventListener("dragstart", e => {
 
@@ -511,7 +513,7 @@ function makeContainer(containerData, parent, container) {
     if(containerData.__direction == undefined)
         containerData.__direction = "row";
     if(containerData.__expanded == undefined)
-        containerData.__expanded = false;
+        containerData.__expanded = true;
     if(containerData.__visible == undefined)
         containerData.__visible = true;
     if(containerData[Symbol.for("okeys")] == undefined)
@@ -642,48 +644,50 @@ function makeContainer(containerData, parent, container) {
     }
 
     if(!previewMode) {
-        const delBtn = document.createElement("button");
-        delBtn.className = "delete-btn";
-        delBtn.title = "Remove section";
-        delBtn.innerHTML = `<i class="ti ti-x"></i>`;
-        // delBtn.style.display = editMode ? "none" : "";
-        delBtn.addEventListener("click", () => {
+        if(!(containerData[Symbol.for("essential")] ?? false)){
+            const delBtn = document.createElement("button");
+            delBtn.className = "delete-btn";
+            delBtn.title = "Remove section";
+            delBtn.innerHTML = `<i class="ti ti-x"></i>`;
+            delBtn.addEventListener("click", () => {
 
-            if(Array.isArray(parent)) {
-                const secIdx = parent.indexOf(containerData);
-                parent.splice(secIdx, 1);
-            } else {
-                const okeyIdx = parent[Symbol.for("okeys")].indexOf(containerData.__name);
-                parent[Symbol.for("okeys")].splice(okeyIdx, 1);
-                delete parent[containerData.__name]
-            }
+                // containerData.destroy()
+                (new Path("**",containerData)).resolve({
+                    noReturn:true,
+                    reverseHandler: (context) => {
+                        if(context.obj instanceof BaseNode) {
+                            context.obj.destroy();
+                        }
+                        if(context.obj instanceof Object) {
+                            context.obj[Symbol.for("parent")] = null;
+                            context.obj[EventManager.TrieDataSym]?.destroy();
+                        }
+                    }
+                });
 
-            // containerData.destroy()
-            (new Path("**",containerData)).resolve({
-                noReturn:true,
-                reverseHandler: (context) => {
-                    if(context.obj instanceof BaseNode) {
-                        context.obj.destroy();
-                    }
-                    if(context.obj instanceof Object) {
-                        context.obj[Symbol.for("parent")] = null;
-                    }
+                if(Array.isArray(parent)) {
+                    const secIdx = parent.indexOf(containerData);
+                    parent.splice(secIdx, 1);
+                } else {
+                    const okeyIdx = parent[Symbol.for("okeys")].indexOf(containerData.__name);
+                    parent[Symbol.for("okeys")].splice(okeyIdx, 1);
+                    delete parent[containerData.__name]
+                }
+
+                // Update HTML
+                secElem.remove();
+                sepElem.remove();
+                updatePreview();
+
+
+                if( (Array.isArray(parent) && parent.length <= 0)
+                    || (!Array.isArray(parent) && parent[Symbol.for("okeys")].length <= 0)
+                ) {
+                    makeEmptyMessage(container);
                 }
             });
-
-            // Update HTML
-            secElem.remove();
-            sepElem.remove();
-            updatePreview();
-
-
-            if( (Array.isArray(parent) && parent.length <= 0)
-                || (!Array.isArray(parent) && parent[Symbol.for("okeys")].length <= 0)
-            ) {
-                makeEmptyMessage(container);
-            }
-        });
-        hdr.appendChild(delBtn);
+            hdr.appendChild(delBtn);
+        }
 
         hdr.addEventListener("dragstart", e => {
 
@@ -801,39 +805,13 @@ function makeContainer(containerData, parent, container) {
             }
 
             if(typeSelect.value !== "section") {
-                // Update HTML
-                const newNodeData = new DataNode(false,containerData,{value:"data"});
-                if(Array.isArray(containerData)) {
-                    containerData.push(newNodeData);
-                    makeNode(newNodeData,typeSelect.value,containerData,fieldList);
-                } else {
-                    let newLabel = label;
-                    let labelCount = 0;
-                    while (newLabel in containerData) {
-                        newLabel = `${label} (${++labelCount})`
-                    }
-                    containerData[newLabel] = newNodeData;
-                    containerData[Symbol.for("okeys")].push(newLabel);
-                    newNodeData.__name = newLabel;
+                const newNodeData = loadedChar.buildTree({__type:"data",value:"blank"},containerData,false,label);
+                if(newNodeData != undefined) {
                     makeNode(newNodeData,typeSelect.value,containerData,fieldList);
                 }
-                
             } else {
-
-                const newSecData = {__type:"section"};
-                if(Array.isArray(containerData)) {
-                    containerData.push(newSecData);
-                    makeContainer(newSecData,containerData,fieldList);
-                } else {
-                    let newLabel = label;
-                    let labelCount = 0;
-                    while (newLabel in containerData) {
-                        newLabel = `${label} (${++labelCount})`
-                    }
-                    
-                    containerData[newLabel] = newSecData;
-                    containerData[Symbol.for("okeys")].push(newLabel);
-                    newSecData.__name = newLabel;
+                const newSecData = loadedChar.buildTree({},containerData,false,label);
+                if(newSecData != undefined) {
                     makeContainer(newSecData,containerData,fieldList);
                 }
             }

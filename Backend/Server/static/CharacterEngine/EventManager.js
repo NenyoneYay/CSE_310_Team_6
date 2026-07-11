@@ -602,14 +602,14 @@ export class EventManager {
         return {action:"continue"}
     }
 
-    constructor (anchor) {
+    constructor (anchor = undefined) {
         this.anchor = anchor;
         this.signals = new Map();
     }
     /**
      * @param {TrieRegistrationType} type
      * @param {string} channel 
-     * @param {Path} target 
+     * @param {Path|Object} target 
      * @param {any} payload
      */
     register(type,channel,target,payload) {
@@ -633,11 +633,18 @@ export class EventManager {
         return registration;
     }
 
+    /**
+     * @param {TrieRegistrationType} type 
+     * @param {string} channel 
+     * @param {Path|Object} target 
+     * @param {(context) => ({action:"keep"|"discard"}|{action:"override",override:any}|{action:"override_many",overrides:Iterable})} resultHandler 
+     * @returns 
+     */
     getRegistrations(type,channel,target,resultHandler = undefined) {
         // Data retrieval always starts from root in order to get all data
-        if(target.origin == null) target.origin = this.anchor;
         target = Path.pathTo(target);
         if(!(target instanceof Path)) return undefined;
+        if(target.origin == null) target.origin = this.anchor;
 
         if(resultHandler == undefined || typeof(resultHandler) !== "function") {
             resultHandler = (context) => {
@@ -679,7 +686,7 @@ export class EventManager {
     /**
      * 
      * @param {string} channel 
-     * @param {Path} target 
+     * @param {Path|Object} target 
      * @param {Listener} listener
      */
     registerListener(channel,target,listener) {
@@ -690,13 +697,18 @@ export class EventManager {
 
     /**
      * @param {string} channel 
-     * @param {Path} target 
+     * @param {Path|Object} target 
      * @param {any} payload
      */
     registerData(channel,target,payload) {
         return this.register("data",channel,target,payload);
     }
 
+    /**
+     * @param {string} channel 
+     * @param {Path|Object} target 
+     * @returns {any[]}
+     */
     getData(channel,target) {
         
         return this.getRegistrations("data",channel,target,(context) => {
@@ -750,5 +762,17 @@ export class EventManager {
         for(const listener of listenerTriggers)
             rval[ridx++] = listener.trigger();
         return rval;
+    }
+
+    destroy(root = undefined) {
+        (new Path("**",root ?? this.anchor)).resolve({
+            noReturn:true,
+            reverseHandler: (context) => {
+                const trieNode = context.obj?.[EventManager.TrieDataSym]
+                if(trieNode instanceof TrieNode) {
+                    trieNode.destroy();
+                }
+            }
+        });
     }
 }

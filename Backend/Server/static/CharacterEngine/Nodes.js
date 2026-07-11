@@ -408,7 +408,23 @@ export class BaseNode {
     destroy() {
         this.unregisterDependencies();
         this.detachInput();
-        this[Symbol.for("parent")] = null;
+        const name = Path.getName(this);
+        const parent = this[Symbol.for("parent")];
+        if(parent != null && name != undefined) {
+            const emitPath = Path.pathTo(this);
+            // Delete node from parent
+            if(Array.isArray(parent)) {
+                const nIdx = parent.indexOf(this);
+                parent.splice(nIdx, 1);
+            } else {
+                const nIdx = parent[Symbol.for("okeys")]?.indexOf(name) ?? -1;
+                if(nIdx >= 0) parent[Symbol.for("okeys")].splice(nIdx, 1);
+                delete (parent[name]);
+            }
+            this.evBus.emit("change",emitPath);
+            this[Symbol.for("parent")] = null;
+            this[EventManager.TrieDataSym]?.destroy();
+        }
     }
 }
 
@@ -434,7 +450,10 @@ export class DataNode extends BaseNode {
         let {value,min,max,prefix,postfix,__visible} = {...DataNode.defaultDataObj,...dataObj};
         super(virtual, parent,{value:value});
         //Update Pathes
-        this.__visible = __visible;
+        this.__visible = !!__visible;
+        if(dataObj[Symbol.for("essential")] ?? false) {
+            this[Symbol.for("essential")] = true;
+        }
         this.value = new ExprValue(value,this);
         this.max = new ExprValue(max,this);
         this.min = new ExprValue(min,this);
@@ -834,14 +853,14 @@ export class DataNode extends BaseNode {
         
         rval = {
             __type:"data",
+            __visible: this.__visible,
             prefix: this.prefix,
             value: this.value.getSaveData(),
             min: this.min.getSaveData(),
             max: this.max.getSaveData(),
-            postfix: this.postfix,
-            __visible: this.__visible
+            postfix: this.postfix
         }
-        const compareResult = compareObj(DataNode.defaultDataObj, rval, {keyWhitelist:["__type","value"]})
+        const compareResult = compareObj(DataNode.defaultDataObj, rval, {keyWhitelist:["__type","value"],keyBlacklist:["__essential"]})
 
         if(Object.keys(compareResult).length <= 2)
             rval = rval.value;

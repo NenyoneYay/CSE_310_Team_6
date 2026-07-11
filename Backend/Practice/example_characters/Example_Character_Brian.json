@@ -91,6 +91,13 @@
                     "__name": "Charisma",
                     "__visible": true
                 },
+                "Luck": {
+                    "score": {"__type":"data","value":10,"min":0,"max":20},
+                    "__name": "Luck",
+                    "__direction": "row",
+                    "__expanded": true,
+                    "__visible": true
+                },
                 "__direction": "column",
                 "__expanded": false,
                 "__name": "Ability Scores",
@@ -178,7 +185,7 @@
                 "__visible": true
             },
             "__direction": "row",
-            "__expanded": true,
+            "__expanded": false,
             "__name": "Equipment",
             "__visible": true
         },
@@ -187,7 +194,7 @@
             "Spell Attack": "=data('$Basics.Proficiency') + data('$Stats.Ability Scores.Charisma.mod')",
             "Spells": "Comming soon...",
             "__direction": "row",
-            "__expanded": true,
+            "__expanded": false,
             "__name": "Spell Casting",
             "__visible": true
         },
@@ -279,6 +286,13 @@
     },
     "rules":{
         "Stats.Ability Scores.*": {
+            "score": {
+                "value": 10,
+                "min": 0,
+                "max": 20,
+                "__rule_type": "requirement",
+                "__type": "data"
+            },
             "mod": {
                 "value": "=floor(data('.score')/2)-5",
                 "prefix": "+",
