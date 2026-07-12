@@ -1,6 +1,6 @@
 import {Path} from "./Path.js";
 import {BaseNode} from "./Nodes.js";
-import {Parser} from "https://esm.sh/expr-eval-fork";
+import {Parser} from "https://esm.sh/expr-eval-fork@3.0.3/es2022/expr-eval-fork.mjs";
 
 export class ExprValue {
     static diceRegex = {

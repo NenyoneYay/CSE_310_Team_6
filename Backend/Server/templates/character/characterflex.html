@@ -4,10 +4,11 @@
     {{ super() }}
     <meta http-equiv="Content-Security-Policy" content="
         default-src 'self'; 
-        script-src 'self' https://esm.sh 'sha256-MhtPZXr7+LpJUY5qtMutB+qWfQtMaPccfe7QXtCcEYc=' 'unsafe-hashes';
+        script-src 'self' https://esm.sh/expr-eval-fork@3.0.3/es2022/expr-eval-fork.mjs 'sha256-MhtPZXr7+LpJUY5qtMutB+qWfQtMaPccfe7QXtCcEYc=' 'unsafe-hashes';
         style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;
-        connect-src 'self' https://esm.sh; 
+        connect-src 'self' https://esm.sh/expr-eval-fork@3.0.3/es2022/expr-eval-fork.mjs.map; 
         font-src 'self' https://cdn.jsdelivr.net;
+        form-action 'none';
     ">
     <!-- <script src="{{ url_for('static', filename='character.js')}}" defer></script> -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.42.0/dist/tabler-icons.min.css" media="all" onload="this.media='all'">

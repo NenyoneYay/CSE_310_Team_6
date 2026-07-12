@@ -21,6 +21,12 @@ def show_page(filename:str):
             return render_template(template_name)
     return "<title>Error!</title><p>Page does not exist</p>"
 
+@app.after_request
+def add_coop_header(response):
+    # Possible values: 'same-origin', 'same-origin-allow-popups', 'unsafe-none'
+    response.headers['Cross-Origin-Opener-Policy'] = 'same-origin'
+    return response
+
 if __name__ == "__main__":
     # run server on ::1 IPv6 address (localhost) so that chrome doesn't cry
     app.run("::1",port=5000,threaded=True,debug=True)
