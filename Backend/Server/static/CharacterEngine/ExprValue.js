@@ -31,7 +31,6 @@ export class ExprValue {
      * @returns {string|number|boolean|null} The final value of this expression
      */
     modify(newValue, origin=null) {
-        if(newValue === undefined) newValue = "";
         const oldPaths = new Map(this.precedentPaths);
         this.origin = origin ?? new Path("");
         this.value = newValue;

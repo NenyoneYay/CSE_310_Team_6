@@ -152,7 +152,8 @@ export class Character {
                 break;
         }
 
-        const recursor = (_ruleobj, _targetobj) => {
+        const recursor = (_ruleobj, _targetobj, _virtual = virtual) => {
+            if(_targetobj instanceof BaseNode) return; // don't modify existing nodes
             if (_targetobj == undefined) {
                 // TODO: make buildFrom(Path) to build new structures from rule paths.
                 // also should merge new structure with existing objects along path if they exist.
@@ -163,26 +164,25 @@ export class Character {
                     if(clone instanceof Object) {
                         clone[Symbol.for("parent")] = _targetobj;
                         clone[Symbol.for("essential")] = true;
-                        this.buildTree(clone,_targetobj,virtual);
+                        this.buildTree(clone,_targetobj,_virtual);
                     }
                 }
             } else if (_ruleobj instanceof Object && _targetobj instanceof Object) {
                 for(const [ruleKey,ruleVal] of Object.entries(_ruleobj)) {
                     if(ruleKey.startsWith("__")) continue;
+                    if(ruleVal.__rule_type != undefined) {
+                        switch(ruleVal.__rule_type) {
+                            case "requirement":
+                                _virtual = false;
+                                break;
+                        }
+                    }
                     if(!Object.hasOwn(_targetobj, ruleKey)) {
                         const clone = deepCopy(ruleVal,(key,value) => key !== "__rule_type");
-                        let this_virtual = virtual;
-                        if(ruleVal.__rule_type != undefined) {
-                            switch(ruleVal.__rule_type) {
-                                case "requirement":
-                                    this_virtual = false;
-                                    break;
-                            }
-                        }
                         if(clone instanceof Object) {
                             clone[Symbol.for("parent")] = _targetobj;
                             clone[Symbol.for("essential")] = true;
-                            this.buildTree(clone,_targetobj,this_virtual,ruleKey);
+                            this.buildTree(clone,_targetobj,_virtual,ruleKey);
                         }
                     } else {
                         if(_targetobj[Symbol.for("okeys")] != undefined) {
@@ -192,7 +192,7 @@ export class Character {
                         }
                         if(_targetobj[ruleKey] instanceof Object)
                             _targetobj[ruleKey][Symbol.for("essential")] = true;
-                        recursor(ruleVal,_targetobj[ruleKey]);
+                        recursor(ruleVal,_targetobj[ruleKey],_virtual);
                     }
                 }
             }

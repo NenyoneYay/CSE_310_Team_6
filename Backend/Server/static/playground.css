@@ -318,13 +318,14 @@ body{
     flex-direction:row;
     gap:4px;
 }
-.field-label{
+.field-label, .field-text{
     font-size:11px;
     color:var(--color-text-secondary);
     font-weight:500;
     /* text-transform:uppercase; */
     letter-spacing:0.04em
 }
+
 .field-label::after {
     content:":";
 }

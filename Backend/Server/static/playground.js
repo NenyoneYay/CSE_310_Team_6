@@ -382,18 +382,9 @@ function makeNode(nodeData, inputType, parent, container) {
     inner.className = "field-inner";
     if(inputType === "textarea") inner.style.flexDirection="column";
 
-    if(!Array.isArray(parent)) {
-        const lbl = document.createElement("span");
-        lbl.className = "field-label";
-        lbl.textContent = nodeData.__name;
-        inner.appendChild(lbl);
-    }
-
-
     nodeData.unrenderHTML();
     nodeData.editMode = !previewMode;
     const inputEl = nodeData.renderHTML();
-
     
     inner.appendChild(inputEl);
 
@@ -406,8 +397,11 @@ function makeNode(nodeData, inputType, parent, container) {
             delBtn.title = "Remove field";
             delBtn.innerHTML = `<i class="ti ti-x"></i>`;
             delBtn.addEventListener("click", e => {
-
                 e.stopPropagation();
+
+                const delConfirm = window.confirm(`Are you sure you want to delete ${Path.pathTo(nodeData).str}?`);
+                if(!delConfirm) return;
+
                 // nodeData.destroy(); // not implemented here, but will be used later
                 if(nodeData instanceof BaseNode) {
                     nodeData.destroy();
@@ -653,7 +647,11 @@ function makeContainer(containerData, parent, container) {
             delBtn.className = "delete-btn";
             delBtn.title = "Remove section";
             delBtn.innerHTML = `<i class="ti ti-x"></i>`;
-            delBtn.addEventListener("click", () => {
+            delBtn.addEventListener("click", (e) => {
+                e.preventDefault();
+
+                const delConfirm = window.confirm(`Are you sure you want to delete ${Path.pathTo(containerData).str}?`);
+                if(!delConfirm) return;
 
                 // containerData.destroy()
                 (new Path("**",containerData)).resolve({

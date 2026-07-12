@@ -560,12 +560,35 @@ export class DataNode extends BaseNode {
 
     renderHTML() {
         this.renderInputHTML();
+        if(this.renderedLabel == undefined) {
+            this.renderedLabel = document.createElement("span");
+            this.renderedLabel.classList.add("field-label");
+            this.renderedLabel.textContent = Path.getName(this);
+        }
 
+        if(this.renderedMax == undefined) {
+            this.renderedMax = document.createElement("span");
+            this.renderedMax.textContent = `/ ${this.accessors.max}`;
+            this.renderedMax.classList.add("field-text");
+            if(!this[Symbol.for("virtual")]) {
+                this.renderedMax.style.cursor = "pointer";
+                this.renderedMax.addEventListener("click",() => this.renderSettingsHTML());
+            }
+        }
         if(this.renderContainer == null) {
             this.renderContainer = document.createElement("div");
             this.renderContainer.classList.add("field-input-container");
-            this.renderContainer.append(this.renderedInput);
-            if(this.editMode) {
+            if(this.renderedLabel != undefined)
+                this.renderContainer.append(this.renderedLabel);
+
+            if(this.renderedInput != undefined)
+                this.renderContainer.append(this.renderedInput);
+
+            if(this.renderedMax != undefined)
+                this.renderContainer.append(this.renderedMax);
+            
+
+            if(this.editMode && !this[Symbol.for("virtual")]) {
                 const editbtn = document.createElement("button");
                 editbtn.title = "Edit field settings";
                 editbtn.innerHTML = `<i class="ti ti-dots" style="font-size:10px" aria-hidden="true"></i>`;
@@ -575,6 +598,14 @@ export class DataNode extends BaseNode {
                 this.renderContainer.append(editbtn);
             }
         }
+
+        if(this.renderedMax != undefined) {
+            if(this.max.value != undefined && this.max.value !== "")
+                this.renderedMax.classList.remove("hidden");
+            else
+                this.renderedMax.classList.add("hidden");
+        }
+        
         return this.renderContainer;
     }
 
@@ -662,7 +693,22 @@ export class DataNode extends BaseNode {
             })
         }
         popup.innerHTML = "";
-        
+
+        let nameInputContainer;
+        let nameInputBox;
+        if(this[Symbol.for("parent")] != undefined && !Array.isArray(this[Symbol.for("parent")])){
+            nameInputContainer = document.createElement("div");
+            const nameInputLabel = document.createElement("label");
+            nameInputLabel.textContent = "name:";
+            nameInputContainer.append(nameInputLabel);
+            nameInputBox = document.createElement("input");
+            nameInputBox.type = "text";
+            nameInputBox.value = Path.getName(this);
+            nameInputBox.classList.add("field-input");
+            nameInputBox.placeholder = DataNode.defaultDataObj.prefix;
+            nameInputContainer.append(nameInputBox);
+        }
+
         const prefixInputContainer = document.createElement("div");
         const prefixInputLabel = document.createElement("label");
         prefixInputLabel.textContent = "Prefix:";
@@ -722,6 +768,7 @@ export class DataNode extends BaseNode {
         applyBtn.textContent = "Apply";
         applyBtn.onclick = () => {
             this.modify({
+                name:nameInputBox?.value,
                 prefix:prefixInputBox.value,
                 value:valueInputBox.value,
                 min:minInputBox.value,
@@ -731,10 +778,20 @@ export class DataNode extends BaseNode {
             popup.close();
         }
 
+        if(nameInputBox) {
+            nameInputBox.addEventListener("keypress",(ev) => {
+                if(ev.key === "Enter") {
+                    ev.preventDefault();
+                    if(!ev.shiftKey) prefixInputBox.focus();
+                }
+            });
+        }
+
         prefixInputBox.addEventListener("keypress",(ev) => {
             if(ev.key === "Enter") {
                 ev.preventDefault();
-                if(!ev.shiftKey) valueInputBox.focus();
+                if(ev.shiftKey) {if(nameInputBox) nameInputBox.focus();}
+                else valueInputBox.focus();
             }
         });
 
@@ -749,7 +806,9 @@ export class DataNode extends BaseNode {
         minInputBox.addEventListener("keypress",(ev) => {
             if(ev.key === "Enter") {
                 ev.preventDefault();
-                if(ev.shiftKey) valueInputBox.focus();
+                if(ev.shiftKey) { 
+                    if(this.editMode) valueInputBox.focus();
+                }
                 else maxInputBox.focus();
             }
         });
@@ -758,7 +817,8 @@ export class DataNode extends BaseNode {
             if(ev.key === "Enter") {
                 ev.preventDefault();
                 if(ev.shiftKey) minInputBox.focus();
-                else postfixInputBox.focus();
+                else if (this.editMode) postfixInputBox.focus();
+                else applyBtn.focus();
             }
         });
 
@@ -773,17 +833,27 @@ export class DataNode extends BaseNode {
         applyBtn.addEventListener("keydown",(ev) => {
             if(ev.key === "Enter") {
                 ev.preventDefault();
-                if(ev.shiftKey) postfixInputBox.focus();
+                if(ev.shiftKey) {
+                    if(this.editMode)
+                        postfixInputBox.focus();
+                    else
+                        maxInputBox.focus();
+                }
                 else applyBtn.click();
             }
         })
 
 
-        popup.appendChild(prefixInputContainer);
-        popup.appendChild(valueInputContainer);
+        if(this.editMode) {
+            if(nameInputContainer) popup.appendChild(nameInputContainer);
+            popup.appendChild(prefixInputContainer);
+            popup.appendChild(valueInputContainer);
+        }
         popup.appendChild(minInputContainer);
         popup.appendChild(maxInputContainer);
-        popup.appendChild(postfixInputContainer);
+        if(this.editMode) {
+            popup.appendChild(postfixInputContainer);
+        }
         popup.appendChild(applyBtn);
         popup.showModal();
         return popup;
@@ -791,6 +861,11 @@ export class DataNode extends BaseNode {
     
     unrenderHTML() {
         super.unrenderHTML();
+        if(this.renderedMax != undefined) {
+            this.renderedMax.remove();
+            this.renderedMax = undefined;
+        }
+
         const popup = document.getElementById("node-settings-popup");
         if(popup != undefined)
             popup.innerHTML = "";
@@ -829,6 +904,20 @@ export class DataNode extends BaseNode {
                     else
                         this.renderedInput.style.width = this.renderedInput.value.length + "ch";
             }
+        }
+
+        if(this.renderedMax != undefined) {
+            if(this.max.value != undefined && this.max.value !== "") {
+                this.renderedMax.textContent = `/ ${this.accessors.max}`;
+                this.renderedMax.classList.remove("hidden");
+            } else {
+                this.renderedMax.classList.add("hidden");
+            }
+        }
+
+        if(this.renderedLabel != undefined) {
+            const name = Path.getName(this);
+            this.renderedLabel.textContent = name;
         }
 
         return value;
@@ -880,7 +969,7 @@ export class DataNode extends BaseNode {
      *  max:(string|number|boolean|undefined)
      * }}  
      */
-    modify({value=undefined,min=undefined,max=undefined,prefix=undefined,postfix=undefined}) {
+    modify({name=undefined,value=undefined,min=undefined,max=undefined,prefix=undefined,postfix=undefined}) {
         /**
          * @param {ExprValue} accessor 
          * @param {string|boolean|number} newVal 
@@ -893,25 +982,57 @@ export class DataNode extends BaseNode {
             return this.calculateDepMods(src,oldPaths,accessor.precedentPaths);
         }
 
+        if(name    === "") name    = undefined;
         if(value   === "") value   = DataNode.defaultDataObj.value;
-        if(min     === "") min     = DataNode.defaultDataObj.min;
-        if(max     === "") max     = DataNode.defaultDataObj.max;
         if(prefix  === "") prefix  = DataNode.defaultDataObj.prefix;
         if(postfix === "") postfix = DataNode.defaultDataObj.postfix;
 
         try {
             if(!this[Symbol.for("virtual")]) {
+                if(
+                    name != undefined && typeof(name) === "string"
+                    && this[Symbol.for("parent")] != undefined 
+                    && !Array.isArray(this[Symbol.for("parent")])
+                ) {
+                    const oldName = Path.getName(this);
+                    if(name != oldName) {
+                        let newName = name;
+                        let nameCount = 0;
+                        while(newName in this[Symbol.for("parent")])
+                            newName = `${name} (${++nameCount})`;
+                        // parent "okeys" array
+                        const pokeys = this[Symbol.for("parent")][Symbol.for("okeys")];
+                        
+                        if(Array.isArray(pokeys)) {
+                            const okeyIdx = pokeys.indexOf(oldName);
+                            if(okeyIdx >= 0) pokeys.splice(okeyIdx,1,newName);
+                            else pokeys.push(newName);
+                        }
+                        const oldPath = Path.pathTo(this);
+                        this[Symbol.for("parent")][newName] = this;
+                        delete this[Symbol.for("parent")][oldName];
+                        this.__name = newName;
+                        this.evBus?.emit("change",oldPath);
+                        this.evBus?.emit("change",this);
+                    }
+                }
                 if(value != undefined && value !== this.value.value) {
                     try {value = JSON.parse(value)} catch (err) {}
                     this.listenerChanges.push(...getDepMods("value",this.value,value));
                 }
-                if(min != undefined && min !== this.min.value) {
-                    try {min = JSON.parse(min)} catch (err) {}
-                    this.listenerChanges.push(...getDepMods("min",this.min,min)); 
+                if(min != undefined) {
+                    if(min === "") min = DataNode.defaultDataObj.min;
+                    if(min !== this.min.value) {
+                        try {min = JSON.parse(min)} catch (err) {}
+                        this.listenerChanges.push(...getDepMods("min",this.min,min)); 
+                    }
                 }
-                if(max != undefined && max !== this.max.value) {
-                    try {max = JSON.parse(max)} catch (err) {}
-                    this.listenerChanges.push(...getDepMods("max",this.max,max)); 
+                if(max != undefined) {
+                    if(max === "") max = DataNode.defaultDataObj.max;
+                    if(max !== this.max.value) {
+                        try {max = JSON.parse(max)} catch (err) {}
+                        this.listenerChanges.push(...getDepMods("max",this.max,max)); 
+                    }
                 }
                 if(prefix != undefined && prefix !== this.prefix && typeof(prefix) === "string") {
                     this.prefix = prefix;
@@ -922,6 +1043,7 @@ export class DataNode extends BaseNode {
 
                 this.evaluateDependencies();
                 this.update();
+                this.renderHTML();
             }
         } catch (e) {
             this.setError(e.message, true);
@@ -1303,6 +1425,22 @@ export class ModifierNode extends DataNode {
         }
         popup.innerHTML = "";
 
+
+        let nameInputContainer;
+        let nameInputBox;
+        if(this[Symbol.for("parent")] != undefined && !Array.isArray(this[Symbol.for("parent")])){
+            nameInputContainer = document.createElement("div");
+            const nameInputLabel = document.createElement("label");
+            nameInputLabel.textContent = "name:";
+            nameInputContainer.append(nameInputLabel);
+            nameInputBox = document.createElement("input");
+            nameInputBox.type = "text";
+            nameInputBox.value = Path.getName(this);
+            nameInputBox.classList.add("field-input");
+            nameInputBox.placeholder = DataNode.defaultDataObj.prefix;
+            nameInputContainer.append(nameInputBox);
+        }
+
         // ================== Modifier Node input boxes ========================
 
         const targetInputContainer = document.createElement("div");
@@ -1418,6 +1556,7 @@ export class ModifierNode extends DataNode {
                 operation:operationInputBox.value,
                 tier:tierInputBox.value,
                 condition:conditionInputBox.value,
+                name:nameInputBox?.value,
                 prefix:prefixInputBox.value,
                 value:valueInputBox.value,
                 min:minInputBox.value,
@@ -1427,10 +1566,20 @@ export class ModifierNode extends DataNode {
             popup.close();
         }
 
+        if(nameInputBox) {
+            nameInputBox.addEventListener("keypress",(ev) => {
+                if(ev.key === "Enter") {
+                    ev.preventDefault();
+                    if(!ev.shiftKey) targetInputBox.focus();
+                }
+            });
+        }
+
         targetInputBox.addEventListener("keypress",(ev) => {
             if(ev.key === "Enter") {
                 ev.preventDefault();
-                if(!ev.shiftKey) operationInputBox.focus();
+                if(ev.shiftKey) {if(nameInputBox) nameInputBox.focus();}
+                else operationInputBox.focus();
             }
         });
 
@@ -1477,7 +1626,9 @@ export class ModifierNode extends DataNode {
         minInputBox.addEventListener("keypress",(ev) => {
             if(ev.key === "Enter") {
                 ev.preventDefault();
-                if(ev.shiftKey) valueInputBox.focus();
+                if(ev.shiftKey) {
+                    if(this.editMode) valueInputBox.focus();
+                }
                 else maxInputBox.focus();
             }
         });
@@ -1486,7 +1637,8 @@ export class ModifierNode extends DataNode {
             if(ev.key === "Enter") {
                 ev.preventDefault();
                 if(ev.shiftKey) minInputBox.focus();
-                else postfixInputBox.focus();
+                else if(this.editMode) postfixInputBox.focus();
+                else applyBtn.focus();
             }
         });
 
@@ -1501,19 +1653,26 @@ export class ModifierNode extends DataNode {
         applyBtn.addEventListener("keydown",(ev) => {
             if(ev.key === "Enter") {
                 ev.preventDefault();
-                if(ev.shiftKey) postfixInputBox.focus();
+                if(ev.shiftKey) {
+                    if(this.editMode) postfixInputBox.focus();
+                    else maxInputBox.focus();
+                }
                 else applyBtn.click();
             }
         })
 
-        popup.appendChild(targetInputContainer);
-        popup.appendChild(operationTierInputContainer);
-        popup.appendChild(conditionInputContainer);
-        popup.appendChild(prefixInputContainer);
-        popup.appendChild(valueInputContainer);
+        if(this.editMode) {
+            popup.appendChild(targetInputContainer);
+            popup.appendChild(operationTierInputContainer);
+            popup.appendChild(conditionInputContainer);
+            popup.appendChild(prefixInputContainer);
+            popup.appendChild(valueInputContainer);
+        }
         popup.appendChild(minInputContainer);
         popup.appendChild(maxInputContainer);
-        popup.appendChild(postfixInputContainer);
+        if(this.editMode) {
+            popup.appendChild(postfixInputContainer);
+        }
         popup.appendChild(applyBtn);
         popup.showModal();
     }

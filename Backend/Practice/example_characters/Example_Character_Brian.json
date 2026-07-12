@@ -5,7 +5,7 @@
             "Character Name": "Lucian Defane",
             "Race": "Geppetin",
             "Alignment": "Chaotic Good",
-            "Background": "Vampire Devotee",
+            "Background": "=data('$Modifiers.Background Bonuses.*.__name')",
             "__direction": "row",
             "__expanded": true,
             "__name": "Player Info",
@@ -17,7 +17,7 @@
             "Proficiency": "=1+ceil(data('.Level')/4)",
             "Speed": {"__type":"data","value":30,"postfix":"ft"},
             "__direction": "row",
-            "__expanded": true,
+            "__expanded": false,
             "__name": "Basics",
             "__visible": true
         },
@@ -51,6 +51,8 @@
             "Ability Scores": {
                 "Strength": {
                     "score": {"__type":"data","value":13,"min":0,"max":20},
+                    "mod": {"__type":"data","prefix":"+","value":"=floor(data('.score')/2)-5"},
+                    "save": {"__type":"data","prefix":"+","value":"=data('.mod')"},
                     "__direction": "row",
                     "__expanded": true,
                     "__name": "Strength",
@@ -58,6 +60,8 @@
                 },
                 "Dexterity": {
                     "score": {"__type":"data","value":15,"min":0,"max":20},
+                    "mod": {"__type":"data","prefix":"+","value":"=floor(data('.score')/2)-5"},
+                    "save": {"__type":"data","prefix":"+","value":"=data('.mod')"},
                     "__direction": "row",
                     "__expanded": true,
                     "__name": "Dexterity",
@@ -65,6 +69,8 @@
                 },
                 "Constitution": {
                     "score": {"__type":"data","value":14,"min":0,"max":20},
+                    "mod": {"__type":"data","prefix":"+","value":"=floor(data('.score')/2)-5"},
+                    "save": {"__type":"data","prefix":"+","value":"=data('.mod')"},
                     "__direction": "row",
                     "__expanded": true,
                     "__name": "Constitution",
@@ -72,6 +78,8 @@
                 },
                 "Intelligence": {
                     "score": {"__type":"data","value":10,"min":0,"max":20},
+                    "mod": {"__type":"data","prefix":"+","value":"=floor(data('.score')/2)-5"},
+                    "save": {"__type":"data","prefix":"+","value":"=data('.mod')"},
                     "__direction": "row",
                     "__expanded": true,
                     "__name": "Intelligence",
@@ -79,6 +87,8 @@
                 },
                 "Wisdom": {
                     "score": {"__type":"data","value":12,"min":0,"max":20},
+                    "mod": {"__type":"data","prefix":"+","value":"=floor(data('.score')/2)-5"},
+                    "save": {"__type":"data","prefix":"+","value":"=data('.mod')"},
                     "__direction": "row",
                     "__expanded": true,
                     "__name": "Wisdom",
@@ -86,6 +96,8 @@
                 },
                 "Charisma": {
                     "score": {"__type":"data","value":22,"min":0,"max":22},
+                    "mod": {"__type":"data","prefix":"+","value":"=floor(data('.score')/2)-5"},
+                    "save": {"__type":"data","prefix":"+","value":"=data('.mod')"},
                     "__direction": "row",
                     "__expanded": true,
                     "__name": "Charisma",
@@ -93,6 +105,8 @@
                 },
                 "Luck": {
                     "score": {"__type":"data","value":10,"min":0,"max":20},
+                    "mod": {"__type":"data","prefix":"+","value":"=floor(data('.score')/2)-5"},
+                    "save": {"__type":"data","prefix":"+","value":"=data('.mod')"},
                     "__name": "Luck",
                     "__direction": "row",
                     "__expanded": true,
@@ -128,7 +142,7 @@
                 "__visible": true
             },
             "__direction": "row",
-            "__expanded": true,
+            "__expanded": false,
             "__name": "Stats",
             "__visible": true
         },
@@ -206,7 +220,7 @@
                 "__visible": true
             },
             "__direction": "row",
-            "__expanded": true,
+            "__expanded": false,
             "__name": "Equipment",
             "__visible": true
         },
