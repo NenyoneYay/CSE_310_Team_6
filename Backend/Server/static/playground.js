@@ -216,6 +216,7 @@ function rename(obj,parent,newName) {
         if(oldKey == undefined) return undefined;
         if(newName === oldKey || newName.startsWith("__")) return oldKey;
 
+        const emitPath = new Path("**",Path.pathTo(obj));
         let newKey = newName;
         let keyCount = 0;
         while (newKey in parent) {
@@ -235,7 +236,9 @@ function rename(obj,parent,newName) {
             else 
                 parent[Symbol.for("okeys")].push(newKey);
         }
-        
+        loadedChar.eventManager.emit("change",emitPath);
+        loadedChar.eventManager.emit("change",new Path("**",obj));
+
         return newKey;
     }
 }
@@ -632,10 +635,9 @@ function makeContainer(containerData, parent, container) {
         if(!previewMode) {
             titleInp.addEventListener("change", e => {
                 const newName = e.target.value;
-                const emitPath = new Path("**",Path.pathTo(containerData));
+                
                 e.target.value = rename(containerData,parent,newName) ?? containerData.__name;
-                loadedChar.eventManager.emit("change",emitPath);
-                loadedChar.eventManager.emit("change",new Path("**",containerData));
+                
                 updatePreview();
             });
         }
