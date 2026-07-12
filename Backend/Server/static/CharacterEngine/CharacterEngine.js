@@ -131,11 +131,10 @@ export class Character {
             if(key.startsWith("__")) continue;
 
             const targetPath = new Path(key);
-            this.eventManager.registerData("rule",targetPath,ruleObj);
-
-            if(root != null) {
-                this.applyRules(root);
-            }
+            this.eventManager.registerData("rule",targetPath,ruleObj); 
+        }
+        if(root != null) {
+            this.applyRules(root);
         }
     }
 
@@ -418,6 +417,7 @@ export class Character {
                 treeRoot.forEach((item) => {
                     recursor(item);
                 })
+                if(treeRoot[Symbol.for("parent")]) treeRoot[Symbol.for("parent")] = null;
                 return;
             } else if (treeRoot instanceof Object) {
                 Object.keys(treeRoot).forEach((key) => {
@@ -425,6 +425,7 @@ export class Character {
                         recursor(treeRoot[key]);
                     }
                 });
+                if(treeRoot[Symbol.for("parent")]) treeRoot[Symbol.for("parent")] = null;
                 return;
             }
             return;

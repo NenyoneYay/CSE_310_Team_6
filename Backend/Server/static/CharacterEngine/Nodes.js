@@ -131,26 +131,29 @@ export class BaseNode {
         this.warning = null;
         this.isErrorSrc = false;
 
-        this.renderedElement = null;
+        /** @type {HTMLInputElement} */
+        this.renderedInput = null;
+        /** @type {HTMLElement} */
+        this.renderContainer = null;
 
         this.inputChangeHandler = (event) => {
-            if (this.renderedElement != null) {
+            if (this.renderedInput != null) {
                 let newVal = this.accessors.value;
-                switch (this.renderedElement.type) {
+                switch (this.renderedInput.type) {
                     case "number":
-                        newVal = Number(this.renderedElement.value);
+                        newVal = Number(this.renderedInput.value);
                         break;
                     case "checkbox":
-                        newVal = Boolean(this.renderedElement.checked);
+                        newVal = Boolean(this.renderedInput.checked);
                         break; 
                     case "text":
                     default:
-                        newVal = this.renderedElement.value;
+                        newVal = this.renderedInput.value;
                 }
-                if(document.activeElement === this.renderedElement)
+                if(document.activeElement === this.renderedInput)
                     this.set({value:newVal});
                 else
-                    this.updateRenderedElement();
+                    this.updateRenderedInput();
             }
         }
 
@@ -159,7 +162,7 @@ export class BaseNode {
         }
 
         this.inputBlurHandler = (event) => {
-            this.updateRenderedElement();
+            this.updateRenderedInput();
         }
     }
 
@@ -169,71 +172,76 @@ export class BaseNode {
     }
 
     renderHTML() {
+        this.renderInputHTML();
+        if(this.renderContainer == null) {
+            this.renderContainer = document.createElement("div");
+            this.renderContainer.append(this.renderedInput);
+        }
+        return this.renderContainer;
+    }
+
+    renderInputHTML(){
         let value = this.accessors.value;
         if(Number.isNaN(value)) {
             value = "NaN";
         }
 
         let inputType = "text";
-        if(!this.editMode) {
-            switch (typeof(value)) {
-                case "string":
-                    inputType = "text";
-                    break;
-                case "number":
-                    inputType = "number";
-                    break;
-                case "boolean":
-                    inputType = "checkbox";
-                    break;
-                default:
-                    inputType = "text";
-            }
-        }
 
-        if(this.renderedElement == null || this.renderedElement.type != inputType) {
+        if(this.renderedInput == null || this.renderedInput.type != inputType) {
             const newElement = document.createElement("input");
-            newElement.type = inputType ?? "text";
+            newElement.type = "text";
             newElement.classList.add("field-input");
-            if(this.renderedElement != null) {
-                const oldElement = this.renderedElement;
+            if(this.renderedInput != null) {
+                const oldElement = this.renderedInput;
                 // remove event listeners to avoid triggering extra events.
-                this.unrenderHTML();
+                this.renderedInput.removeEventListener("focus",this.inputFocusHandler);
+                this.renderedInput.removeEventListener("input",this.inputChangeHandler);
+                this.renderedInput.removeEventListener("blur",this.inputBlurHandler);
                 oldElement.replaceWith(newElement);
             }
-            this.renderedElement = newElement;
+            this.renderedInput = newElement;
+            if(this.error != null) this.setError(this.error,this.isErrorSrc);
+            else if(this.warning != null) this.setWarning(this.warning);
+
             if(this[Symbol.for("virtual")]) {
-                this.renderedElement.disabled = true;
+                this.renderedInput.disabled = true;
             } else {
-                this.renderedElement.addEventListener("focus", this.inputFocusHandler);
-                this.renderedElement.addEventListener("input",this.inputChangeHandler);
-                this.renderedElement.addEventListener("blur", this.inputBlurHandler);
+                this.renderedInput.addEventListener("focus", this.inputFocusHandler);
+                this.renderedInput.addEventListener("input",this.inputChangeHandler);
+                this.renderedInput.addEventListener("blur", this.inputBlurHandler);
             }
         }
-        this.updateRenderedElement(value);
-        return this.renderedElement;
+        this.updateRenderedInput(value);
+        return this.renderedInput;
     }
 
     unrenderHTML() {
-        if(this.renderedElement == null) return;
-        this.renderedElement.removeEventListener("focus",this.inputFocusHandler);
-        this.renderedElement.removeEventListener("input",this.inputChangeHandler);
-        this.renderedElement.removeEventListener("blur",this.inputBlurHandler);
-        this.renderedElement = null;
+        if(this.renderedInput != null) {;
+            this.renderedInput.removeEventListener("focus",this.inputFocusHandler);
+            this.renderedInput.removeEventListener("input",this.inputChangeHandler);
+            this.renderedInput.removeEventListener("blur",this.inputBlurHandler);
+            this.renderedInput.remove();
+            this.renderedInput = null;
+        }
+        if(this.renderContainer != null) {
+            this.renderContainer.remove();
+            this.renderContainer = null;
+        }
     }
 
-    updateRenderedElement(value) {
+    updateRenderedInput(value) {
         if(value == undefined) value = this.accessors.value;
-        if (this.renderedElement != null) {
-            switch (this.renderedElement.type) {
+        if (this.renderedInput != null) {
+            switch (this.renderedInput.type) {
                 case "checkbox":
-                    this.renderedElement.checked = !!value;
+                    this.renderedInput.checked = !!value;
                     break; 
                 case "text":
                 case "number":
                 default:
-                    this.renderedElement.value = value;
-                    this.renderedElement.style.width = Math.min(String(value).length,25) + "ch"
+                    this.renderedInput.value = value;
+                    this.renderedInput.style.width = Math.min(String(value).length,25) + "ch"
             }
         }
     }
@@ -243,26 +251,27 @@ export class BaseNode {
      * @param {HTMLInputElement} element 
      */
     detachInput () {
-        this.renderedElement?.removeEventListener("focus", this.inputFocusHandler);
-        this.renderedElement?.removeEventListener("input",this.inputChangeHandler);
-        this.renderedElement?.removeEventListener("blur", this.inputBlurHandler);
-        this.renderedElement = null;
+        this.renderedInput?.removeEventListener("focus", this.inputFocusHandler);
+        this.renderedInput?.removeEventListener("input",this.inputChangeHandler);
+        this.renderedInput?.removeEventListener("blur", this.inputBlurHandler);
+        this.renderedInput = null;
     }
 
     setError(message, isErrorSrc = false) {
         this.isErrorSrc = isErrorSrc;
         this.error = message;
-        if(this.renderedElement != null) {
-            this.renderedElement.style.color = "#990000";
-            this.renderedElement.title = message;
+        this.accessors.value = NaN;
+        if(this.renderedInput != null) {
+            this.renderedInput.style.color = "#990000";
+            this.renderedInput.title = message;
         }
     }
 
     setWarning(message) {
         this.warning = message;
-        if(this.renderedElement != null) {
-            this.renderedElement.style.color = "#94650d";
-            this.renderedElement.title = message;
+        if(this.renderedInput != null) {
+            this.renderedInput.style.color = "#94650d";
+            this.renderedInput.title = message;
         }
     }
 
@@ -270,9 +279,9 @@ export class BaseNode {
         this.isErrorSrc = false;
         this.error = null;
         this.warning = null;
-        if(this.renderedElement != null) {
-            this.renderedElement.style.color = "";
-            this.renderedElement.title = "";
+        if(this.renderedInput != null) {
+            this.renderedInput.style.color = "";
+            this.renderedInput.title = "";
         }
     }
 
@@ -293,45 +302,24 @@ export class BaseNode {
         } else {
             this.visited = false;
             //Update path
-            this.setError(`Node Source: '${Path.pathTo(this).str}' is part of a dependency loop.`,true)
-            this.renderedElement.value = this.accessors.value;
+            this.setError(`Node Source: '${Path.pathTo(this).str}' is part of a dependency loop.`,true);
             throw EvalError(this.error);
         }
 
         try {
-            if(!this.dirty){
-                this.dirty = true;
-            }
-            
             // // if made async, please await the emit call so that cycles can be
             // // detected.
             const stale_accessors = {...this.accessors}
             this.evaluate();
             if(compareObj(this.accessors,stale_accessors,{keyBlacklist:["base"]}) != undefined) {
-                this.evBus?.emit("change",this);
+                this.dirty = true;
+            }
 
-                for(const pathMap of this.dependants.values()) {
-                    for(const path of pathMap.values()) {
-                        /** @type {BaseNode[]} */
-                        const nodes = path.resolve({
-                            flat:true,
-                            wrapResults:false,
-                            forwardHandler: (context) => {
-                                if(context.obj instanceof BaseNode && context.obj !== this) {
-                                    return {action:"return"};
-                                }
-                            },
-                            resultHandler:(context) => {
-                                if(!(context.result instanceof BaseNode))
-                                    return {action:"discard"};
-                            }
-                        });
-                        for(const node of nodes) {
-                            node.update();
-                        }
-                    }
-                }
+            if(this.dirty) {
+                this.evBus?.emit("change",this);
+                this.updateDependants();
                 if(this[DATA_CHANGE_HANDLER]) this[DATA_CHANGE_HANDLER]();
+                this.dirty = false;
             }
         } catch (e){
             this.setError(e.message,false);
@@ -341,14 +329,52 @@ export class BaseNode {
         }
     }
 
-    evaluate() {
-        if (this.dirty) {
-            this.dirty = false;
+    /**
+     * 
+     * @param {Path[]} specificDependants 
+     */
+    updateDependants(specificDependants = undefined) {
+        /** @type {Set<BaseNode>} */
+        const updateNodes = new Set();
+
+        const resolvePath = (path) => {
+            path.resolve({
+                noReturn:true,
+                forwardHandler: (context) => {
+                    if(context.obj instanceof BaseNode && context.obj !== this) {
+                        updateNodes.add(context.obj);
+                        return {action:"skip"};
+                    }
+                },
+            });
         }
+
+        if(Array.isArray(specificDependants)) {
+            for(const path of specificDependants) {
+                // skip any random non-path entries
+                if(!(path instanceof Path)) continue;
+                resolvePath(path);
+            }
+        } else {
+            // collect all unique node endpoints across all dependent paths
+            for(const pathMap of this.dependants.values()) {
+                for(const path of pathMap.values()) {
+                    resolvePath(path);
+                }
+            }
+        }
+        
+        // iterate set to only send one update per node in dependent paths.
+        for(const node of updateNodes) {
+            if(node instanceof BaseNode) node.update();
+        }
+    }
+
+    evaluate() {
         this.clearErrors();
 
-        if(document.activeElement !== this.renderedElement || this.renderedElement.type === "checkbox")
-            this.updateRenderedElement();
+        if(document.activeElement !== this.renderedInput || this.renderedInput.type === "checkbox")
+            this.updateRenderedInput();
         return this.accessors.value;
     }
 
@@ -395,6 +421,8 @@ export class BaseNode {
                         /** @type {Map<string,TrieRegistration>} */
                         const pathMap = this.dependants.get(change.src);
                         if(pathMap != undefined) {
+                            const path = pathMap.get(change.path.str);
+                            if(path != undefined) this.updateDependants([path]);
                             pathMap.delete(change.path.str);
                         }
                     }
@@ -519,7 +547,7 @@ export class DataNode extends BaseNode {
 
         this.inputBlurHandler = (event) => {
             if (this.editMode){
-                this.modify({value:this.renderedElement.value});
+                this.modify({value:this.renderedInput.value});
             }
             this.renderHTML();
         }
@@ -531,7 +559,27 @@ export class DataNode extends BaseNode {
     }
 
     renderHTML() {
-        const focused = (document.activeElement === this.renderedElement);
+        this.renderInputHTML();
+
+        if(this.renderContainer == null) {
+            this.renderContainer = document.createElement("div");
+            this.renderContainer.classList.add("field-input-container");
+            this.renderContainer.append(this.renderedInput);
+            if(this.editMode) {
+                const editbtn = document.createElement("button");
+                editbtn.title = "Edit field settings";
+                editbtn.innerHTML = `<i class="ti ti-dots" style="font-size:10px" aria-hidden="true"></i>`;
+                editbtn.classList.add("field-settings-btn");
+
+                editbtn.addEventListener("click",() => this.renderSettingsHTML())
+                this.renderContainer.append(editbtn);
+            }
+        }
+        return this.renderContainer;
+    }
+
+    renderInputHTML() {
+        const focused = (document.activeElement === this.renderedInput);
         let value = this.accessors.value;
         if(focused) {
             value = this.value.value;
@@ -560,37 +608,192 @@ export class DataNode extends BaseNode {
         } else {
             value = String(value);
         }
-
-        if(this.renderedElement == null || this.renderedElement.type != inputType) {
+        if(this.renderedInput == null || this.renderedInput.type != inputType) {
             const newElement = document.createElement("input");
             newElement.type = inputType;
             newElement.classList.add("field-input");
-            if(this.renderedElement != null) {
+            if(this.renderedInput != null) {
                 // remove event listeners to avoid triggering extra events.
-                this.renderedElement.removeEventListener("focus",this.inputFocusHandler);
-                this.renderedElement.removeEventListener("input",this.inputChangeHandler);
-                this.renderedElement.removeEventListener("blur",this.inputBlurHandler);
-                this.renderedElement.replaceWith(newElement);
+                this.renderedInput.removeEventListener("focus",this.inputFocusHandler);
+                this.renderedInput.removeEventListener("input",this.inputChangeHandler);
+                this.renderedInput.removeEventListener("blur",this.inputBlurHandler);
+                this.renderedInput.replaceWith(newElement);
             }
-            this.renderedElement = newElement;
-            if(focused) this.renderedElement.focus();
+            this.renderedInput = newElement;
+            if(focused) this.renderedInput.focus();
+
+            if(this.error != null) this.setError(this.error,this.isErrorSrc);
+            else if(this.warning != null) this.setWarning(this.warning);
+
             if(this[Symbol.for("virtual")] || (this.value.isExpr && !this.editMode)) {
-                this.renderedElement.disabled = true;
+                this.renderedInput.disabled = true;
             } else {
-                this.renderedElement.addEventListener("focus", this.inputFocusHandler);
-                this.renderedElement.addEventListener("input",this.inputChangeHandler);
-                this.renderedElement.addEventListener("blur", this.inputBlurHandler);
-                if(this.renderedElement.tagName !== "TEXTAREA") {
-                    this.renderedElement.addEventListener("keydown",(ev) => {
-                        if(ev.key === "Enter") this.renderedElement.blur();
+                this.renderedInput.addEventListener("focus", this.inputFocusHandler);
+                this.renderedInput.addEventListener("input",this.inputChangeHandler);
+                this.renderedInput.addEventListener("blur", this.inputBlurHandler);
+                if(this.renderedInput.tagName !== "TEXTAREA") {
+                    this.renderedInput.addEventListener("keydown",(ev) => {
+                        if(ev.key === "Enter") this.renderedInput.blur();
                     });
                 }
             }
         }
+        if(focused) this.renderedInput.scrollIntoView({behavior:"smooth",block:"nearest"});
+        this.updateRenderedInput(value);
+        return this.renderedInput;
+    }
+
+    renderSettingsHTML() {
+        let popup = document.getElementById("node-settings-popup");
+        if(popup == undefined) {
+            popup = document.createElement("dialog");
+            popup.id = "node-settings-popup";
+            document.body.append(popup);
+            popup.addEventListener("mousedown", (ev) => {
+                const rect = popup.getBoundingClientRect();
+                if( // if mouse is clicked outside of modal dialog, close it without setting values.
+                    ev.clientX < rect.left 
+                    || ev.clientX > rect.right
+                    || ev.clientY < rect.top
+                    || ev.clientY > rect.bottom
+                ) {
+                    popup.close();
+                }
+            })
+        }
+        popup.innerHTML = "";
         
-        this.updateRenderedElement(value);
-        if(focused) this.renderedElement.scrollIntoView({behavior:"smooth",block:"nearest"});
-        return this.renderedElement;
+        const prefixInputContainer = document.createElement("div");
+        const prefixInputLabel = document.createElement("label");
+        prefixInputLabel.textContent = "Prefix:";
+        prefixInputContainer.append(prefixInputLabel);
+        const prefixInputBox = document.createElement("input");
+        prefixInputBox.type = "text";
+        prefixInputBox.value = this.prefix;
+        prefixInputBox.classList.add("field-input");
+        prefixInputBox.placeholder = DataNode.defaultDataObj.prefix;
+        prefixInputContainer.append(prefixInputBox);
+
+        const valueInputContainer = document.createElement("div");
+        const valueInputLabel = document.createElement("label");
+        valueInputLabel.textContent = "Value:";
+        valueInputContainer.append(valueInputLabel);
+        const valueInputBox = document.createElement("input");
+        valueInputBox.type = "text";
+        valueInputBox.value = this.value.value ?? "";
+        valueInputBox.classList.add("field-input");
+        valueInputBox.placeholder = DataNode.defaultDataObj.value;
+        valueInputContainer.append(valueInputBox);
+        
+        const minInputContainer = document.createElement("div");
+        const minInputLabel = document.createElement("label");
+        minInputLabel.textContent = "Min:";
+        minInputContainer.append(minInputLabel);
+        const minInputBox = document.createElement("input");
+        minInputBox.type = "text";
+        minInputBox.value = this.min.value ?? "";
+        minInputBox.classList.add("field-input");
+        minInputBox.placeholder = DataNode.defaultDataObj.min;
+        minInputContainer.append(minInputBox);
+
+        const maxInputContainer = document.createElement("div");
+        const maxInputLabel = document.createElement("label");
+        maxInputLabel.textContent = "Max:";
+        maxInputContainer.append(maxInputLabel);
+        const maxInputBox = document.createElement("input");
+        maxInputBox.type = "text";
+        maxInputBox.value = this.max.value ?? "";
+        maxInputBox.classList.add("field-input");
+        maxInputBox.placeholder = DataNode.defaultDataObj.max;
+        maxInputContainer.append(maxInputBox);
+
+        const postfixInputContainer = document.createElement("div");
+        const postfixInputLabel = document.createElement("label");
+        postfixInputLabel.textContent = "Postfix:";
+        postfixInputContainer.append(postfixInputLabel);
+        const postfixInputBox = document.createElement("input");
+        postfixInputBox.type = "text";
+        postfixInputBox.value = this.postfix;
+        postfixInputBox.classList.add("field-input");
+        postfixInputBox.placeholder = DataNode.defaultDataObj.postfix;
+        postfixInputContainer.append(postfixInputBox);
+
+        const applyBtn = document.createElement("button");
+        applyBtn.textContent = "Apply";
+        applyBtn.onclick = () => {
+            this.modify({
+                prefix:prefixInputBox.value,
+                value:valueInputBox.value,
+                min:minInputBox.value,
+                max:maxInputBox.value,
+                postfix:postfixInputBox.value
+            });
+            popup.close();
+        }
+
+        prefixInputBox.addEventListener("keypress",(ev) => {
+            if(ev.key === "Enter") {
+                ev.preventDefault();
+                if(!ev.shiftKey) valueInputBox.focus();
+            }
+        });
+
+        valueInputBox.addEventListener("keypress",(ev) => {
+            if(ev.key === "Enter") {
+                ev.preventDefault();
+                if(ev.shiftKey) prefixInputBox.focus();
+                else minInputBox.focus();
+            }
+        });
+
+        minInputBox.addEventListener("keypress",(ev) => {
+            if(ev.key === "Enter") {
+                ev.preventDefault();
+                if(ev.shiftKey) valueInputBox.focus();
+                else maxInputBox.focus();
+            }
+        });
+
+        maxInputBox.addEventListener("keypress",(ev) => {
+            if(ev.key === "Enter") {
+                ev.preventDefault();
+                if(ev.shiftKey) minInputBox.focus();
+                else postfixInputBox.focus();
+            }
+        });
+
+        postfixInputBox.addEventListener("keypress",(ev) => {
+            if(ev.key === "Enter") {
+                ev.preventDefault();
+                if(ev.shiftKey) maxInputBox.focus();
+                else applyBtn.focus();
+            }
+        });
+
+        applyBtn.addEventListener("keydown",(ev) => {
+            if(ev.key === "Enter") {
+                ev.preventDefault();
+                if(ev.shiftKey) postfixInputBox.focus();
+                else applyBtn.click();
+            }
+        })
+
+
+        popup.appendChild(prefixInputContainer);
+        popup.appendChild(valueInputContainer);
+        popup.appendChild(minInputContainer);
+        popup.appendChild(maxInputContainer);
+        popup.appendChild(postfixInputContainer);
+        popup.appendChild(applyBtn);
+        popup.showModal();
+        return popup;
+    }
+    
+    unrenderHTML() {
+        super.unrenderHTML();
+        const popup = document.getElementById("node-settings-popup");
+        if(popup != undefined)
+            popup.innerHTML = "";
     }
 
     getDisplayValue(value = undefined) {
@@ -609,22 +812,22 @@ export class DataNode extends BaseNode {
         return value;
     }
 
-    updateRenderedElement(value = undefined) {
+    updateRenderedInput(value = undefined) {
         if(value == undefined) {
             value = this.getDisplayValue();
         }
         
-        if(this.renderedElement != null) {
-            switch(this.renderedElement.type) {
+        if(this.renderedInput != null) {
+            switch(this.renderedInput.type) {
                 case "checkbox":
-                    this.renderedElement.checked = !!value;
+                    this.renderedInput.checked = !!value;
                     break;
                 default:
-                    this.renderedElement.value = value;
+                    this.renderedInput.value = value;
                     if(this.editMode)
-                        this.renderedElement.style.width = String(this.value.value).length + "ch";
+                        this.renderedInput.style.width = String(this.value.value).length + "ch";
                     else
-                        this.renderedElement.style.width = this.renderedElement.value.length + "ch";
+                        this.renderedInput.style.width = this.renderedInput.value.length + "ch";
             }
         }
 
@@ -677,7 +880,7 @@ export class DataNode extends BaseNode {
      *  max:(string|number|boolean|undefined)
      * }}  
      */
-    modify({value=undefined,min=undefined,max=undefined}) {
+    modify({value=undefined,min=undefined,max=undefined,prefix=undefined,postfix=undefined}) {
         /**
          * @param {ExprValue} accessor 
          * @param {string|boolean|number} newVal 
@@ -689,6 +892,13 @@ export class DataNode extends BaseNode {
             //Update Path
             return this.calculateDepMods(src,oldPaths,accessor.precedentPaths);
         }
+
+        if(value   === "") value   = DataNode.defaultDataObj.value;
+        if(min     === "") min     = DataNode.defaultDataObj.min;
+        if(max     === "") max     = DataNode.defaultDataObj.max;
+        if(prefix  === "") prefix  = DataNode.defaultDataObj.prefix;
+        if(postfix === "") postfix = DataNode.defaultDataObj.postfix;
+
         try {
             if(!this[Symbol.for("virtual")]) {
                 if(value != undefined && value !== this.value.value) {
@@ -702,6 +912,12 @@ export class DataNode extends BaseNode {
                 if(max != undefined && max !== this.max.value) {
                     try {max = JSON.parse(max)} catch (err) {}
                     this.listenerChanges.push(...getDepMods("max",this.max,max)); 
+                }
+                if(prefix != undefined && prefix !== this.prefix && typeof(prefix) === "string") {
+                    this.prefix = prefix;
+                }
+                if(postfix != undefined && postfix !== this.postfix && typeof(postfix) === "string") {
+                    this.postfix = postfix;
                 }
 
                 this.evaluateDependencies();
@@ -732,14 +948,14 @@ export class DataNode extends BaseNode {
             // max
             let result = this.max.evaluate();
             this.accessors.max = 
-                (Number.isNaN(result) || result == null)
+                (Number.isNaN(result) || result == null || result === "")
                 ? null 
                 : result;
 
             // min
             result = this.min.evaluate();
             this.accessors.min = 
-                (Number.isNaN(result) || result == null)
+                (Number.isNaN(result) || result == null || result === "")
                 ? null 
                 : result;
 
@@ -878,6 +1094,7 @@ export class DataNode extends BaseNode {
             //Update Path
             this.setError(e.message,true);
             e.message = `Node Source: ${Path.pathTo(this).str} ${e.message}`
+            this.accessors.value = NaN;
             throw e;
         }
         return super.evaluate();
@@ -966,6 +1183,10 @@ export class ModifierNode extends DataNode {
 
     evaluate() {
         this.accessors.condition = this.condition.evaluate();
+        if(typeof(this.accessors.condition) !== "boolean") {
+            this.accessors.condition = ModifierNode.defaultDataObj.condition;
+        }
+
         super.evaluate();
     }
 
@@ -977,7 +1198,7 @@ export class ModifierNode extends DataNode {
      *  max:(string|number|boolean|undefined)
      * }}  
      */
-    modify({condition = undefined,...rest}) {
+    modify({target = undefined, condition = undefined,tier = undefined, operation = undefined,...rest}) {
         /**
          * @param {ExprValue} accessor 
          * @param {string|boolean|number} newVal 
@@ -990,11 +1211,43 @@ export class ModifierNode extends DataNode {
             return this.calculateDepMods(src,oldPaths,accessor.precedentPaths);
         }
 
+        if(target    === "") target    = ModifierNode.defaultDataObj.target;
+        if(condition === "") condition = ModifierNode.defaultDataObj.condition;
+        if(tier      === "") tier      = ModifierNode.defaultDataObj.tier;
+        if(operation === "") operation = ModifierNode.defaultDataObj.operation;
+
         try {
             if(!this[Symbol.for("virtual")]) {
-                if(condition != undefined) {
+                if(condition != undefined && condition != this.condition.value) {
                     try {condition = JSON.parse(condition)} catch (err) {}
                     this.listenerChanges.push(...getDepMods("condition",this.condition,condition));
+                    // evaluation will determine if this value changes and becomes dirty.
+                }
+                if(target != undefined) {
+                    const newTarget = new Path(target,this);
+                    if(newTarget.str != this.target.str) {
+                        // data registration needs to change locations now
+                        this.registeredData?.unregister();
+                        // the evaluateDependencies step will find this null 
+                        // value and re-register the data at the new path
+                        this.registeredData = null;
+                        this.listenerChanges.push({type:"remove dependant",src:"target",path:this.target});
+                        this.listenerChanges.push({type:"add dependant",src:"target",path:newTarget});
+                        this.target = newTarget;
+                        this.dirty = true;
+                    }
+                }
+                if(tier != undefined && ["number","string"].includes(typeof(tier)) && tier != this.tier) {
+                    this.tier = tier;
+                    this.dirty = true;
+                }
+                if(operation != undefined 
+                    && typeof(operation) === "string"
+                    && ["add","multiply","replace"].includes(operation) 
+                    && operation != this.operation
+                ) {
+                    this.operation = operation;
+                    this.dirty = true;
                 }
             }
         } catch (e) {
@@ -1003,8 +1256,7 @@ export class ModifierNode extends DataNode {
             throw e;
         }
 
-        if(rest != undefined)
-            super.modify(rest);
+        super.modify(rest ?? {});
     }
 
     getSaveData() {
@@ -1031,8 +1283,242 @@ export class ModifierNode extends DataNode {
         return rval;
     }
 
+    renderSettingsHTML() {
+        let popup = document.getElementById("node-settings-popup");
+        if(popup == undefined) {
+            popup = document.createElement("dialog");
+            popup.id = "node-settings-popup";
+            document.body.append(popup);
+            popup.addEventListener("mousedown", (ev) => {
+                const rect = popup.getBoundingClientRect();
+                if( // if mouse is clicked outside of modal dialog, close it without setting values.
+                    ev.clientX < rect.left 
+                    || ev.clientX > rect.right
+                    || ev.clientY < rect.top
+                    || ev.clientY > rect.bottom
+                ) {
+                    popup.close();
+                }
+            })
+        }
+        popup.innerHTML = "";
+
+        // ================== Modifier Node input boxes ========================
+
+        const targetInputContainer = document.createElement("div");
+        const targetInputLabel = document.createElement("label");
+        targetInputLabel.textContent = "Target:";
+        targetInputContainer.append(targetInputLabel);
+        const targetInputBox = document.createElement("input");
+        targetInputBox.type = "text";
+        targetInputBox.value = this.target.str;
+        targetInputBox.classList.add("field-input");
+        targetInputBox.placeholder = ModifierNode.defaultDataObj.target;
+        targetInputContainer.append(targetInputBox);
+
+        const conditionInputContainer = document.createElement("div");
+        const conditionInputLabel = document.createElement("label");
+        conditionInputLabel.textContent = "Condition:";
+        conditionInputContainer.append(conditionInputLabel);
+        const conditionInputBox = document.createElement("input");
+        conditionInputBox.type = "text";
+        conditionInputBox.value = this.condition.value;
+        conditionInputBox.classList.add("field-input");
+        conditionInputBox.placeholder = ModifierNode.defaultDataObj.condition;
+        conditionInputContainer.append(conditionInputBox);
+
+        const operationTierInputContainer = document.createElement("div");
+        const operationInputLabel = document.createElement("label");
+        operationInputLabel.textContent = "Operation:";
+        operationTierInputContainer.append(operationInputLabel);
+        const operationInputBox = document.createElement("select");
+        operationInputBox.innerHTML = `
+            <option value="add">add</option>
+            <option value="multiply">multiply</option>
+            <option value="replace">replace</option>
+        `
+        operationInputBox.style.cursor = "pointer"
+        operationInputBox.value = this.operation;
+        operationInputBox.classList.add("field-input");
+        operationTierInputContainer.append(operationInputBox);
+
+        const tierInputLabel = document.createElement("label");
+        tierInputLabel.textContent = "Tier:";
+        operationTierInputContainer.append(tierInputLabel);
+        const tierInputBox = document.createElement("input");
+        tierInputBox.type = "text";
+        tierInputBox.value = this.tier;
+        tierInputBox.classList.add("field-input");
+        tierInputBox.placeholder = ModifierNode.defaultDataObj.tier;
+        operationTierInputContainer.append(tierInputBox);
+
+        // ==================== Data Node input boxes ==========================
+        const prefixInputContainer = document.createElement("div");
+        const prefixInputLabel = document.createElement("label");
+        prefixInputLabel.textContent = "Prefix:";
+        prefixInputContainer.append(prefixInputLabel);
+        const prefixInputBox = document.createElement("input");
+        prefixInputBox.type = "text";
+        prefixInputBox.value = this.prefix;
+        prefixInputBox.classList.add("field-input");
+        prefixInputBox.placeholder = DataNode.defaultDataObj.prefix;
+        prefixInputContainer.append(prefixInputBox);
+
+        const valueInputContainer = document.createElement("div");
+        const valueInputLabel = document.createElement("label");
+        valueInputLabel.textContent = "Value:";
+        valueInputContainer.append(valueInputLabel);
+        const valueInputBox = document.createElement("input");
+        valueInputBox.type = "text";
+        valueInputBox.value = this.value.value ?? "";
+        valueInputBox.classList.add("field-input");
+        valueInputBox.placeholder = DataNode.defaultDataObj.value;
+        valueInputContainer.append(valueInputBox);
+        
+        const minInputContainer = document.createElement("div");
+        const minInputLabel = document.createElement("label");
+        minInputLabel.textContent = "Min:";
+        minInputContainer.append(minInputLabel);
+        const minInputBox = document.createElement("input");
+        minInputBox.type = "text";
+        minInputBox.value = this.min.value ?? "";
+        minInputBox.classList.add("field-input");
+        minInputBox.placeholder = DataNode.defaultDataObj.min;
+        minInputContainer.append(minInputBox);
+
+        const maxInputContainer = document.createElement("div");
+        const maxInputLabel = document.createElement("label");
+        maxInputLabel.textContent = "Max:";
+        maxInputContainer.append(maxInputLabel);
+        const maxInputBox = document.createElement("input");
+        maxInputBox.type = "text";
+        maxInputBox.value = this.max.value ?? "";
+        maxInputBox.classList.add("field-input");
+        maxInputBox.placeholder = DataNode.defaultDataObj.max;
+        maxInputContainer.append(maxInputBox);
+
+        const postfixInputContainer = document.createElement("div");
+        const postfixInputLabel = document.createElement("label");
+        postfixInputLabel.textContent = "Postfix:";
+        postfixInputContainer.append(postfixInputLabel);
+        const postfixInputBox = document.createElement("input");
+        postfixInputBox.type = "text";
+        postfixInputBox.value = this.postfix;
+        postfixInputBox.classList.add("field-input");
+        postfixInputBox.placeholder = DataNode.defaultDataObj.postfix;
+        postfixInputContainer.append(postfixInputBox);
+
+        // =====================================================================
+
+        const applyBtn = document.createElement("button");
+        applyBtn.textContent = "Apply";
+        applyBtn.onclick = () => {
+            this.modify({
+                target:targetInputBox.value,
+                operation:operationInputBox.value,
+                tier:tierInputBox.value,
+                condition:conditionInputBox.value,
+                prefix:prefixInputBox.value,
+                value:valueInputBox.value,
+                min:minInputBox.value,
+                max:maxInputBox.value,
+                postfix:postfixInputBox.value
+            });
+            popup.close();
+        }
+
+        targetInputBox.addEventListener("keypress",(ev) => {
+            if(ev.key === "Enter") {
+                ev.preventDefault();
+                if(!ev.shiftKey) operationInputBox.focus();
+            }
+        });
+
+        operationInputBox.addEventListener("keypress",(ev) => {
+            if(ev.key === "Enter") {
+                ev.preventDefault();
+                if(ev.shiftKey) targetInputBox.focus();
+                else tierInputBox.focus();
+            }
+        });
+
+        tierInputBox.addEventListener("keypress",(ev) => {
+            if(ev.key === "Enter") {
+                ev.preventDefault();
+                if(ev.shiftKey) operationInputBox.focus();
+                else conditionInputBox.focus();
+            }
+        });
+
+        conditionInputBox.addEventListener("keypress",(ev) => {
+            if(ev.key === "Enter") {
+                ev.preventDefault();
+                if(ev.shiftKey) tierInputBox.focus();
+                else prefixInputBox.focus();
+            }
+        });
+
+        prefixInputBox.addEventListener("keypress",(ev) => {
+            if(ev.key === "Enter") {
+                ev.preventDefault();
+                if(ev.shiftKey) conditionInputBox.focus();
+                else valueInputBox.focus();
+            }
+        });
+
+        valueInputBox.addEventListener("keypress",(ev) => {
+            if(ev.key === "Enter") {
+                ev.preventDefault();
+                if(ev.shiftKey) prefixInputBox.focus();
+                else minInputBox.focus();
+            }
+        });
+
+        minInputBox.addEventListener("keypress",(ev) => {
+            if(ev.key === "Enter") {
+                ev.preventDefault();
+                if(ev.shiftKey) valueInputBox.focus();
+                else maxInputBox.focus();
+            }
+        });
+
+        maxInputBox.addEventListener("keypress",(ev) => {
+            if(ev.key === "Enter") {
+                ev.preventDefault();
+                if(ev.shiftKey) minInputBox.focus();
+                else postfixInputBox.focus();
+            }
+        });
+
+        postfixInputBox.addEventListener("keypress",(ev) => {
+            if(ev.key === "Enter") {
+                ev.preventDefault();
+                if(ev.shiftKey) maxInputBox.focus();
+                else applyBtn.focus();
+            }
+        });
+
+        applyBtn.addEventListener("keydown",(ev) => {
+            if(ev.key === "Enter") {
+                ev.preventDefault();
+                if(ev.shiftKey) postfixInputBox.focus();
+                else applyBtn.click();
+            }
+        })
+
+        popup.appendChild(targetInputContainer);
+        popup.appendChild(operationTierInputContainer);
+        popup.appendChild(conditionInputContainer);
+        popup.appendChild(prefixInputContainer);
+        popup.appendChild(valueInputContainer);
+        popup.appendChild(minInputContainer);
+        popup.appendChild(maxInputContainer);
+        popup.appendChild(postfixInputContainer);
+        popup.appendChild(applyBtn);
+        popup.showModal();
+    }
+
     destroy() {
-        super.destroy();
         if(this.registeredData != null) {
             if(Array.isArray(this.registeredData)) {
                 for(const dataReg of this.registeredData)
@@ -1041,6 +1527,8 @@ export class ModifierNode extends DataNode {
                 this.registeredData.destroy();
             }
             this.registeredData = null;
+            this.updateDependants();
         }
+        super.destroy();
     }
 }

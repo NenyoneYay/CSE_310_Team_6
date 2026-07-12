@@ -127,8 +127,8 @@ cursor: pointer;
 }
 
 /* Button defaults — model writes bare <button>, interaction states automatic */
-button:not(#action-btns button):not(form.elicit button) {
-padding: 8px 16px;
+button:not(.delete-btn, .field-settings-btn) {
+padding: 4px 8px;
 font-size: 14px;
 background: var(--color-background-inactive);;
 color: var(--color-text-primary);
@@ -139,10 +139,10 @@ transition:
     background 0.15s,
     transform 0.1s;
 }
-button:not(#action-btns button):not(form.elicit button):hover {
+button:not(.delete-btn, .field-settings-btn):hover {
 background: var(--color-background-active);
 }
-button:not(#action-btns button):not(form.elicit button):active {
+button:not(.delete-btn, .field-settings-btn):active {
 background: var(--color-border-tertiary);
 transform: scale(0.98);
 }
@@ -182,6 +182,7 @@ body{
 .toolbar button {
     flex-grow: 1;
     margin: 0 auto;
+    padding: 8px 16px;
     /* margin-bottom: 5px; */
     /* max-width: 40% */
 }
@@ -298,7 +299,19 @@ body{
     scrollbar-width:none;
 }
 
-
+.field-settings-btn {
+    width:16px;
+    height:16px;
+    border:0.5px solid var(--color-border-secondary);
+    border-radius:4px;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:10px;
+    color:var(--color-text-tertiary);
+    background:transparent;
+}
 .field-inner{
     flex:1;
     display:flex;
@@ -316,6 +329,12 @@ body{
     content:":";
 }
 
+.field-input-container {
+    flex:1;
+    display:flex;
+    flex-direction:row;
+    gap:4px;
+}
 .field-input{
     font-size:13px;
     font-weight:500;
@@ -453,6 +472,27 @@ textarea.field-input {
 }
 .hidden {
     display:none !important;
+}
+
+#node-settings-popup[open] {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10000;
+
+    background: var(--color-background-secondary);
+    color: var(--color-text-primary);
+    border-radius: var(--border-radius-lg);
+    display: flex;
+    flex-direction: column;
+    border: 0.5px solid var(--color-border-tertiary);
+    padding: 8px 10px;
+}
+
+#node-settings-popup div {
+    display:flex;
+    flex:1;
 }
 
 @media screen and (max-width: 750px) {

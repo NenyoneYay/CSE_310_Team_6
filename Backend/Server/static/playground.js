@@ -389,10 +389,10 @@ function makeNode(nodeData, inputType, parent, container) {
         inner.appendChild(lbl);
     }
 
+
     nodeData.unrenderHTML();
     nodeData.editMode = !previewMode;
     const inputEl = nodeData.renderHTML();
-    inputEl.className = "field-input";
 
     
     inner.appendChild(inputEl);
@@ -635,11 +635,15 @@ function makeContainer(containerData, parent, container) {
         titleInp.className = "section-title";
         titleInp.value = containerName;
         titleInp.disabled = previewMode;
-        titleInp.addEventListener("change", e => {
-            const newName = e.target.value;
-            e.target.value = rename(containerData,parent,newName) ?? containerData.__name;
-            updatePreview();
-        });
+        if(!previewMode) {
+            titleInp.addEventListener("change", e => {
+                const newName = e.target.value;
+                e.target.value = rename(containerData,parent,newName) ?? containerData.__name;
+                const emitPath = new Path("__name",containerData);
+                loadedChar.eventManager.emit("change",emitPath);
+                updatePreview();
+            });
+        }
         hdr.appendChild(titleInp);
     }
 
@@ -657,8 +661,18 @@ function makeContainer(containerData, parent, container) {
                     reverseHandler: (context) => {
                         if(context.obj instanceof BaseNode) {
                             context.obj.destroy();
-                        }
-                        if(context.obj instanceof Object) {
+                        } else if(context.obj instanceof Object) {
+                            if(Array.isArray(context.obj)) {
+                                for(const [idx,val] of context.obj.entries()) {
+                                    context.obj[idx] = undefined;
+                                    loadedChar.eventManager.emit("change", new Path(`[${idx}]`,context.obj));
+                                }
+                            }else {
+                                for(const key of Object.keys(context.obj)) {
+                                    context.obj[key] = undefined;
+                                    loadedChar.eventManager.emit("change", new Path(key,context.obj));
+                                }
+                            }
                             context.obj[Symbol.for("parent")] = null;
                             context.obj[EventManager.TrieDataSym]?.destroy();
                         }

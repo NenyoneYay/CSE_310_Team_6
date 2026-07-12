@@ -2,8 +2,14 @@
 
 {% block head %}
     {{ super() }}
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'self'; 
+        script-src 'self' https://esm.sh 'sha256-MhtPZXr7+LpJUY5qtMutB+qWfQtMaPccfe7QXtCcEYc=' 'unsafe-hashes';
+        style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;
+        connect-src 'self' https://esm.sh; 
+        font-src 'self' https://cdn.jsdelivr.net;
+    ">
     <!-- <script src="{{ url_for('static', filename='character.js')}}" defer></script> -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/expr-eval/2.0.2/bundle.min.js" integrity="sha512-TNliDPFdpL1W1sP7v9WzHUxTAY+PN7wRiHqJzntb4HpaJ0HlreSm0tzbA8MU7EBEoPTYgEtB+ZpbBB2yQQu49g==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.42.0/dist/tabler-icons.min.css" media="all" onload="this.media='all'">
     <link rel="stylesheet" href="{{ url_for('static', filename='playground.css') }}">
     <script type="module" src="{{ url_for('static', filename='playground.js')}}" defer></script>
@@ -40,6 +46,8 @@
 
         <div class="json-area hidden" id="json-preview"></div>
         </div>
+
+        
     
 <div style="display:none"> <!-- Hiding unfinished Save/Load Module -->
         <!-- Begin Save/Load Module -->

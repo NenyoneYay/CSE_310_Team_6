@@ -1,5 +1,6 @@
 import {Path} from "./Path.js";
 import {BaseNode} from "./Nodes.js";
+import {Parser} from "https://esm.sh/expr-eval-fork";
 
 export class ExprValue {
     static diceRegex = {
@@ -8,7 +9,9 @@ export class ExprValue {
         rule_reroll: /(?:rr|ro)(?:\d+|\[\s*(?:\d+(?:\s*,\s*\d+)*|\d+:\d*|\d*:\d+)\s*\])/
     }
 
-    static parser = new exprEval.Parser();
+    static parser = new Parser({
+        //allowMemberAccess:false
+    });
 
     /**
      * 
@@ -28,6 +31,7 @@ export class ExprValue {
      * @returns {string|number|boolean|null} The final value of this expression
      */
     modify(newValue, origin=null) {
+        if(newValue === undefined) newValue = "";
         const oldPaths = new Map(this.precedentPaths);
         this.origin = origin ?? new Path("");
         this.value = newValue;
@@ -156,7 +160,8 @@ export class ExprValue {
 
         if (this.isExpr)
             try {
-                return this.expr.evaluate();
+                const exprContext = Object.create(null);
+                return this.expr.evaluate(exprContext);
             } catch (err) {
                 console.error(`Error evaluating expression at origin ${Path.pathTo(this.origin).str}: '${this.value}'\n${err.message}`);
             }
@@ -250,4 +255,7 @@ ExprValue.parser.functions.flatten = function (arr) {
         return pv;
     }
     return arr.reduce(reducer,[]);
+}
+ExprValue.parser.functions.data = function(path,fallback=NaN) {
+    return fallback;
 }
