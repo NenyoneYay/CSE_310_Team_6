@@ -594,18 +594,12 @@ export class EventManager {
 
         if(token.type === "T_DEEP_WILDCARD") {
             context.trieMatches.push(...trieCtx);
-            if(context.prevContext.token.type !== "T_DEEP_WILDCARD") {
-                for(const {key,node} of trieCtx) {
-                    context.trieMatches.push(...node.matchToken(token,obj));
-                }
-            }
-
-            if(obj == undefined) return {action:"skip_token"};
-            return {action:"continue"};
         }
 
-        for(const {key,node} of trieCtx) {
-            context.trieMatches.push(...node.matchToken(token,obj));
+        if(context.prevContext.token.type !== "T_DEEP_WILDCARD") {
+            for(const {key,node} of trieCtx) {
+                context.trieMatches.push(...node.matchToken(token,obj));
+            }
         }
 
         if(obj == undefined) return {action:"skip_token"};
