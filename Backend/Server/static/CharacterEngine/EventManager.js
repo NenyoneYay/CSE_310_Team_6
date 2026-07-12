@@ -409,7 +409,7 @@ class TrieNode {
             matches.push(...wildcardNode.matchDeepWildcard());
         }
         const deepWildcardNode = this[TrieNode.DeepWildcardSym]
-        if(deepWildcardNode instanceof trieNode && deepWildcardNode != this) {
+        if(deepWildcardNode instanceof TrieNode && deepWildcardNode != this) {
             if(deepWildcardNode.hasRegistrations) 
                 matches.push({key:TrieNode.DeepWildcardSym, node:deepWildcardNode});
             matches.push(...wildcardNode.matchDeepWildcard());
@@ -580,25 +580,35 @@ export class EventManager {
             case "T_ROOT":
             case "T_GROUP":
             case "T_BACK":
-            case "END":
+                case "END":
+                if(obj == undefined) return {action:"skip_token"};
                 return {action:"continue"}
                 break;
         }
-
-        const thisTrie = obj[EventManager.TrieDataSym]
-        if(thisTrie instanceof TrieNode) {
-            context.trieMatches.push(...thisTrie.matchToken(token,obj));
+        if(obj != undefined) {
+            let thisTrie = obj[EventManager.TrieDataSym];
+            if(thisTrie instanceof TrieNode) {
+                context.trieMatches.push(...thisTrie.matchToken(token,obj));
+            }
         }
 
         if(token.type === "T_DEEP_WILDCARD") {
             context.trieMatches.push(...trieCtx);
+            if(context.prevContext.token.type !== "T_DEEP_WILDCARD") {
+                for(const {key,node} of trieCtx) {
+                    context.trieMatches.push(...node.matchToken(token,obj));
+                }
+            }
+
+            if(obj == undefined) return {action:"skip_token"};
             return {action:"continue"};
         }
 
         for(const {key,node} of trieCtx) {
             context.trieMatches.push(...node.matchToken(token,obj));
         }
-        
+
+        if(obj == undefined) return {action:"skip_token"};
         return {action:"continue"}
     }
 
@@ -744,7 +754,7 @@ export class EventManager {
                 if(token === Path.END_TOKEN) {
                     for(const {key,node} of /** @type {TrieMatch[]} */(prevContext.trieMatches)) {
                         const registrations = node.getRegistrationSet("listener",channel)
-                        if(registrations == undefined) return {action:"skip"};
+                        if(registrations == undefined) continue;
                         for(const reg of registrations) {
                             if(reg.payload instanceof Listener)
                                 listenerTriggers.add(reg.payload)

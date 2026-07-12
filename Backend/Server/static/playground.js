@@ -632,9 +632,10 @@ function makeContainer(containerData, parent, container) {
         if(!previewMode) {
             titleInp.addEventListener("change", e => {
                 const newName = e.target.value;
+                const emitPath = new Path("**",Path.pathTo(containerData));
                 e.target.value = rename(containerData,parent,newName) ?? containerData.__name;
-                const emitPath = new Path("__name",containerData);
                 loadedChar.eventManager.emit("change",emitPath);
+                loadedChar.eventManager.emit("change",new Path("**",containerData));
                 updatePreview();
             });
         }
