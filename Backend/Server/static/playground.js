@@ -796,7 +796,7 @@ function makeContainer(containerData, parent, container) {
         labelInp.placeholder = "Field label…";
 
         const typeSelect = document.createElement("select");
-        ["data","section"].forEach(t => {
+        ["data","modifier","section"].forEach(t => {
 
             const opt = document.createElement("option");
             opt.value = t; opt.textContent = t;
@@ -819,16 +819,26 @@ function makeContainer(containerData, parent, container) {
                 em.remove();
             }
 
-            if(typeSelect.value !== "section") {
-                const newNodeData = loadedChar.buildTree({__type:"data",value:"blank"},containerData,false,label);
-                if(newNodeData != undefined) {
-                    makeNode(newNodeData,typeSelect.value,containerData,fieldList);
-                }
-            } else {
-                const newSecData = loadedChar.buildTree({},containerData,false,label);
-                if(newSecData != undefined) {
-                    makeContainer(newSecData,containerData,fieldList);
-                }
+            let newData;
+            switch(typeSelect.value) {
+                case "data":
+                    newData = loadedChar.buildTree({__type:"data"},containerData,false,label);
+                    if(newData != undefined) {
+                        makeNode(newData,typeSelect.value,containerData,fieldList);
+                    }
+                    break;
+                case "modifier":
+                    newData = loadedChar.buildTree({__type:"modifier"},containerData,false,label);
+                    if(newData != undefined) {
+                        makeNode(newData,typeSelect.value,containerData,fieldList);
+                    }
+                    break;
+                case "section":
+                    newData = loadedChar.buildTree({},containerData,false,label);
+                    if(newData != undefined) {
+                        makeContainer(newData,containerData,fieldList);
+                    }
+                    break;
             }
 
             labelInp.value = "";

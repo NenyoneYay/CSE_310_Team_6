@@ -311,7 +311,7 @@ export class BaseNode {
             // // detected.
             const stale_accessors = {...this.accessors}
             this.evaluate();
-            if(compareObj(this.accessors,stale_accessors,{keyBlacklist:["base"]}) != undefined) {
+            if(compareObj(this.accessors,stale_accessors) != undefined) {
                 this.dirty = true;
             }
 
@@ -736,8 +736,9 @@ export class DataNode extends BaseNode {
         minInputLabel.textContent = "Min:";
         minInputContainer.append(minInputLabel);
         const minInputBox = document.createElement("input");
-        minInputBox.type = "text";
-        minInputBox.value = this.min.value ?? "";
+        minInputBox.type = this.editMode ? "text" : "number";
+        minInputBox.value = this.editMode || !this.min.isExpr ? this.min.value ?? "" : this.accessors.min;
+        minInputBox.disabled = !this.editMode && this.min.isExpr;
         minInputBox.classList.add("field-input");
         minInputBox.placeholder = DataNode.defaultDataObj.min;
         minInputContainer.append(minInputBox);
@@ -747,8 +748,9 @@ export class DataNode extends BaseNode {
         maxInputLabel.textContent = "Max:";
         maxInputContainer.append(maxInputLabel);
         const maxInputBox = document.createElement("input");
-        maxInputBox.type = "text";
-        maxInputBox.value = this.max.value ?? "";
+        maxInputBox.type = this.editMode ? "text" : "number";
+        maxInputBox.value = this.editMode || !this.max.isExpr ? this.max.value ?? "" : this.accessors.max;
+        maxInputBox.disabled = !this.editMode && this.max.isExpr;
         maxInputBox.classList.add("field-input");
         maxInputBox.placeholder = DataNode.defaultDataObj.max;
         maxInputContainer.append(maxInputBox);
@@ -907,7 +909,7 @@ export class DataNode extends BaseNode {
         }
 
         if(this.renderedMax != undefined) {
-            if(this.max.value != undefined && this.max.value !== "") {
+            if(this.accessors.max != undefined) {
                 this.renderedMax.textContent = `/ ${this.accessors.max}`;
                 this.renderedMax.classList.remove("hidden");
             } else {
@@ -986,6 +988,9 @@ export class DataNode extends BaseNode {
         if(value   === "") value   = DataNode.defaultDataObj.value;
         if(prefix  === "") prefix  = DataNode.defaultDataObj.prefix;
         if(postfix === "") postfix = DataNode.defaultDataObj.postfix;
+
+        if(!this.editMode && (this.min.isExpr || typeof(min) != "number")) min = undefined;
+        if(!this.editMode && (this.max.isExpr || typeof(max) != "number")) max = undefined;
 
         try {
             if(!this[Symbol.for("virtual")]) {
@@ -1068,39 +1073,43 @@ export class DataNode extends BaseNode {
 
             // Evaluate this node
             // max
-            let result = this.max.evaluate();
+            let result = Number(this.max.evaluate());
             this.accessors.max = 
-                (Number.isNaN(result) || result == null || result === "")
+                (isNaN(result))
                 ? null 
                 : result;
 
             // min
-            result = this.min.evaluate();
+            result = Number(this.min.evaluate());
             this.accessors.min = 
-                (Number.isNaN(result) || result == null || result === "")
+                (isNaN(result))
                 ? null 
                 : result;
 
             this.accessors.base = this.value.evaluate();
+            this.accessors.base = clamp(
+                this.accessors.base,
+                this.accessors.min,
+                this.accessors.max
+            );
 
             // calculate modifiers
-            const modOperations = {}
 
             if(this.evBus != null){
+                const modProcessOrder = [];
+
                 const setupMods = (accessorMods, node) => {
                     if(!node.accessors.condition) return;
                     switch(node.operation) {
                         case "replace":
                             if(accessorMods?.replace == undefined) {
-                                accessorMods.replace = {__highest: node.tier}
-                            } else if(node.tier > accessorMods.replace.__highest || accessorMods.replace.__highest === "default") {
-                                accessorMods.replace.__highest = node.tier; // highest tier takes priority. "default" is lowest tier
+                                accessorMods.replace = {__strongest: node.tier}
+                            } else if(Math.abs(node.tier) > Math.abs(accessorMods.replace.__strongest) || accessorMods.replace.__highest === "default") {
+                                accessorMods.replace.__strongest = node.tier;   // strongest tier (+/-) takes priority. "default" is lowest tier
                             }
                             accessorMods.replace[node.tier] = node.accessors.value;
                             break;
                         case "multiply":
-                            if(accessorMods.replace != undefined)
-                                break;
                             if(accessorMods?.multiply == undefined)
                                 accessorMods.multiply = {}
                             if(accessorMods.multiply?.[node.tier] == undefined) {
@@ -1110,8 +1119,6 @@ export class DataNode extends BaseNode {
                             }
                             break;
                         case "add":
-                            if(accessorMods.replace != undefined)
-                                break;
                             if(accessorMods?.add == undefined)
                                 accessorMods.add = {}
                             if(accessorMods.add?.[node.tier] == undefined) {
@@ -1132,58 +1139,13 @@ export class DataNode extends BaseNode {
                     }
                 }
 
-                const valueMods = [...this.evBus.getData("modifiers",this),...this.evBus.getData("modifiers",this.valuePath)];
-                if(valueMods.length > 0) {
-                    modOperations["value"] = {}
-                    for(const dataobj of valueMods) {
-                        setupMods(modOperations["value"],dataobj);
-                    }
-                }
-                const maxMods = this.evBus.getData("modifiers",this.maxPath);
-                if(maxMods.length > 0) {
-                    modOperations["max"] = {}
-                    for(const dataobj of maxMods) {
-                        setupMods(modOperations["max"],dataobj);
-                    }
-                }
-                const minMods = this.evBus.getData("modifiers",this.minPath);
-                if(minMods.length > 0) {
-                    modOperations["min"] = {}
-                    for(const dataobj of minMods) {
-                        setupMods(modOperations["min"],dataobj);
-                    }
-                }
-                const baseMods = this.evBus.getData("modifiers",this.basePath);
-                if(baseMods.length > 0) {
-                    modOperations["base"] = {}
-                    for(const dataobj of baseMods) {
-                        setupMods(modOperations["base"],dataobj);
-                    }
-                } 
-            }
-            
-            // apply modifiers
-            this.accessors.base = clamp(
-                this.accessors.base,
-                this.accessors.min,
-                this.accessors.max
-            );
-
-            const modProcessOrder = [];
-            const {base:modOperationsBase,...modOperationsRest} = modOperations;
-            if(modOperationsBase != undefined)
-                modProcessOrder.push(['base',modOperationsBase]);
-            else
-                this.accessors.value = this.accessors.base;
-            modProcessOrder.push(...Object.entries(modOperationsRest))
-
-            for (const [accessor,operations] of modProcessOrder) {
-                if(this.accessors[accessor] != undefined) {
-                    if(operations.replace != undefined) {                   // replace operations overrule other operations
-                        this.accessors[accessor] = operations.replace[operations.replace.__highest]; // highest tier wins
-                    } else {
-
-                        if(operations.multiply != undefined) {              // TODO: Come back to this and decide if multiply or add comes first
+                const evaluateMods = (accessor,operations) => {
+                    if(this.accessors[accessor] != undefined) {
+                        if(operations.replace != undefined) {                   
+                            this.accessors[accessor] = operations.replace[operations.replace.__strongest]; // strongest tier wins
+                            if(operations.replace.__strongest >= 0) return;     // positive replace operations overrule other operations
+                        }
+                        if(operations.multiply != undefined) {                  // TODO: Come back to this and decide if multiply or add comes first
                             for(const value of Object.values(operations.multiply)) {
                                 this.accessors[accessor] *= value;
                             }
@@ -1196,21 +1158,69 @@ export class DataNode extends BaseNode {
                         }
                     }
                 }
-                if(accessor === "base") {
-                    this.accessors.base = clamp(
-                        this.accessors.base,
+
+                const maxMods = this.evBus.getData("modifiers",this.maxPath);
+                if(maxMods.length > 0) {
+                    const modOperations = {}
+                    for(const dataobj of maxMods) {
+                        setupMods(modOperations,dataobj);
+                    }
+                    evaluateMods("max",modOperations);
+                    result = Number(this.accessors.max);
+                    this.accessors.max = 
+                        (isNaN(result))
+                        ? null 
+                        : result;
+                }
+
+                const minMods = this.evBus.getData("modifiers",this.minPath);
+                if(minMods.length > 0) {
+                    const modOperations = {}
+                    for(const dataobj of minMods) {
+                        setupMods(modOperations,dataobj);
+                    }
+                    evaluateMods("min", modOperations);
+                    result = Number(this.accessors.min);
+                    this.accessors.min = 
+                        (isNaN(result))
+                        ? null 
+                        : result;
+                }
+
+                const baseMods = this.evBus.getData("modifiers",this.basePath);
+                if(baseMods.length > 0) {
+                    const modOperations= {}
+                    for(const dataobj of baseMods) {
+                        setupMods(modOperations,dataobj);
+                    }
+                    evaluateMods("base", modOperations);
+                }
+
+                this.accessors.base = clamp(
+                    this.accessors.base,
+                    this.accessors.min,
+                    this.accessors.max
+                );
+                this.accessors.value = this.accessors.base;
+
+                const valueMods = [...this.evBus.getData("modifiers",this),...this.evBus.getData("modifiers",this.valuePath)];
+                if(valueMods.length > 0) {
+                    const modOperations = {}
+                    for(const dataobj of valueMods) {
+                        setupMods(modOperations,dataobj);
+                    }
+                    evaluateMods("value", modOperations);
+
+                    this.accessors.value = clamp(
+                        this.accessors.value,
                         this.accessors.min,
                         this.accessors.max
                     );
-                    this.accessors.value = this.accessors.base;
                 }
-            }
 
-            this.accessors.value = clamp(
-                this.accessors.value,
-                this.accessors.min,
-                this.accessors.max
-            );
+            } else {
+                this.accessors.value = this.accessors.base;
+            }
 
         } catch (e) {
             //Update Path
@@ -1347,7 +1357,7 @@ export class ModifierNode extends DataNode {
                 }
                 if(target != undefined) {
                     const newTarget = new Path(target,this);
-                    if(newTarget.str != this.target.str) {
+                    if(this.target == undefined || newTarget.str != this.target?.str) {
                         // data registration needs to change locations now
                         this.registeredData?.unregister();
                         // the evaluateDependencies step will find this null 
@@ -1449,7 +1459,7 @@ export class ModifierNode extends DataNode {
         targetInputContainer.append(targetInputLabel);
         const targetInputBox = document.createElement("input");
         targetInputBox.type = "text";
-        targetInputBox.value = this.target.str;
+        targetInputBox.value = this.target?.str ?? "";
         targetInputBox.classList.add("field-input");
         targetInputBox.placeholder = ModifierNode.defaultDataObj.target;
         targetInputContainer.append(targetInputBox);
@@ -1460,7 +1470,7 @@ export class ModifierNode extends DataNode {
         conditionInputContainer.append(conditionInputLabel);
         const conditionInputBox = document.createElement("input");
         conditionInputBox.type = "text";
-        conditionInputBox.value = this.condition.value;
+        conditionInputBox.value = this.condition?.value ?? "";
         conditionInputBox.classList.add("field-input");
         conditionInputBox.placeholder = ModifierNode.defaultDataObj.condition;
         conditionInputContainer.append(conditionInputBox);
@@ -1518,8 +1528,9 @@ export class ModifierNode extends DataNode {
         minInputLabel.textContent = "Min:";
         minInputContainer.append(minInputLabel);
         const minInputBox = document.createElement("input");
-        minInputBox.type = "text";
-        minInputBox.value = this.min.value ?? "";
+        minInputBox.type = this.editMode ? "text" : "number";
+        minInputBox.value = this.editMode || !this.min.isExpr ? this.min.value ?? "" : this.accessors.min;
+        minInputBox.disabled = !this.editMode && this.min.isExpr;
         minInputBox.classList.add("field-input");
         minInputBox.placeholder = DataNode.defaultDataObj.min;
         minInputContainer.append(minInputBox);
@@ -1529,8 +1540,9 @@ export class ModifierNode extends DataNode {
         maxInputLabel.textContent = "Max:";
         maxInputContainer.append(maxInputLabel);
         const maxInputBox = document.createElement("input");
-        maxInputBox.type = "text";
-        maxInputBox.value = this.max.value ?? "";
+        maxInputBox.type = this.editMode ? "text" : "number";
+        maxInputBox.value = this.editMode || !this.max.isExpr ? this.max.value ?? "" : this.accessors.max;
+        maxInputBox.disabled = !this.editMode && this.max.isExpr;
         maxInputBox.classList.add("field-input");
         maxInputBox.placeholder = DataNode.defaultDataObj.max;
         maxInputContainer.append(maxInputBox);
@@ -1662,6 +1674,7 @@ export class ModifierNode extends DataNode {
         })
 
         if(this.editMode) {
+            if(nameInputContainer) popup.appendChild(nameInputContainer);
             popup.appendChild(targetInputContainer);
             popup.appendChild(operationTierInputContainer);
             popup.appendChild(conditionInputContainer);

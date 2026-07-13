@@ -170,10 +170,11 @@ export class Character {
             } else if (_ruleobj instanceof Object && _targetobj instanceof Object) {
                 for(const [ruleKey,ruleVal] of Object.entries(_ruleobj)) {
                     if(ruleKey.startsWith("__")) continue;
+                    let this_virtual = _virtual;
                     if(ruleVal.__rule_type != undefined) {
                         switch(ruleVal.__rule_type) {
                             case "requirement":
-                                _virtual = false;
+                                this_virtual = false;
                                 break;
                         }
                     }
@@ -182,7 +183,7 @@ export class Character {
                         if(clone instanceof Object) {
                             clone[Symbol.for("parent")] = _targetobj;
                             clone[Symbol.for("essential")] = true;
-                            this.buildTree(clone,_targetobj,_virtual,ruleKey);
+                            this.buildTree(clone,_targetobj,this_virtual,ruleKey);
                         }
                     } else {
                         if(_targetobj[Symbol.for("okeys")] != undefined) {
@@ -192,7 +193,7 @@ export class Character {
                         }
                         if(_targetobj[ruleKey] instanceof Object)
                             _targetobj[ruleKey][Symbol.for("essential")] = true;
-                        recursor(ruleVal,_targetobj[ruleKey],_virtual);
+                        recursor(ruleVal,_targetobj[ruleKey],this_virtual);
                     }
                 }
             }

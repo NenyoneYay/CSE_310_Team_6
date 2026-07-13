@@ -24,7 +24,7 @@
         "Stats": {
             "Combat": {
                 "HP": {"__type":"data","value":110,"min":0,"max":110},
-                "Temp HP": 0,
+                "Temp HP": {"__type":"data","value":0,"min":0},
                 "Hit Die": {
                     "count": {"__type":"data","value":10,"min":0,"max":10},
                     "die": {"__type":"data","prefix":"d","value":8},
@@ -50,63 +50,49 @@
             },
             "Ability Scores": {
                 "Strength": {
-                    "score": {"__type":"data","value":13,"min":0,"max":20},
-                    "mod": {"__type":"data","prefix":"+","value":"=floor(data('.score')/2)-5"},
-                    "save": {"__type":"data","prefix":"+","value":"=data('.mod')"},
+                    "score": {"__type":"data","value":"=13","min":"=0","max":"=20"},
                     "__direction": "row",
                     "__expanded": true,
                     "__name": "Strength",
                     "__visible": true
                 },
                 "Dexterity": {
-                    "score": {"__type":"data","value":15,"min":0,"max":20},
-                    "mod": {"__type":"data","prefix":"+","value":"=floor(data('.score')/2)-5"},
-                    "save": {"__type":"data","prefix":"+","value":"=data('.mod')"},
+                    "score": {"__type":"data","value":"=15","min":"=0","max":"=20"},
                     "__direction": "row",
                     "__expanded": true,
                     "__name": "Dexterity",
                     "__visible": true
                 },
                 "Constitution": {
-                    "score": {"__type":"data","value":14,"min":0,"max":20},
-                    "mod": {"__type":"data","prefix":"+","value":"=floor(data('.score')/2)-5"},
-                    "save": {"__type":"data","prefix":"+","value":"=data('.mod')"},
+                    "score": {"__type":"data","value":"=14","min":"=0","max":"=20"},
                     "__direction": "row",
                     "__expanded": true,
                     "__name": "Constitution",
                     "__visible": true
                 },
                 "Intelligence": {
-                    "score": {"__type":"data","value":10,"min":0,"max":20},
-                    "mod": {"__type":"data","prefix":"+","value":"=floor(data('.score')/2)-5"},
-                    "save": {"__type":"data","prefix":"+","value":"=data('.mod')"},
+                    "score": {"__type":"data","value":"=10","min":"=0","max":"=20"},
                     "__direction": "row",
                     "__expanded": true,
                     "__name": "Intelligence",
                     "__visible": true
                 },
                 "Wisdom": {
-                    "score": {"__type":"data","value":12,"min":0,"max":20},
-                    "mod": {"__type":"data","prefix":"+","value":"=floor(data('.score')/2)-5"},
-                    "save": {"__type":"data","prefix":"+","value":"=data('.mod')"},
+                    "score": {"__type":"data","value":"=12","min":"=0","max":"=20"},
                     "__direction": "row",
                     "__expanded": true,
                     "__name": "Wisdom",
                     "__visible": true
                 },
                 "Charisma": {
-                    "score": {"__type":"data","value":22,"min":0,"max":22},
-                    "mod": {"__type":"data","prefix":"+","value":"=floor(data('.score')/2)-5"},
-                    "save": {"__type":"data","prefix":"+","value":"=data('.mod')"},
+                    "score": {"__type":"data","value":"=22","min":"=0","max":"=22"},
                     "__direction": "row",
                     "__expanded": true,
                     "__name": "Charisma",
                     "__visible": true
                 },
                 "Luck": {
-                    "score": {"__type":"data","value":10,"min":0,"max":20},
-                    "mod": {"__type":"data","prefix":"+","value":"=floor(data('.score')/2)-5"},
-                    "save": {"__type":"data","prefix":"+","value":"=data('.mod')"},
+                    "score": {"__type":"data","value":"=10","min":"=0","max":"=20"},
                     "__name": "Luck",
                     "__direction": "row",
                     "__expanded": true,
@@ -146,6 +132,15 @@
             "__name": "Stats",
             "__visible": true
         },
+        "Attunements": {
+            "Attunement Slots": 3,
+            "Attuned Items": "=sum(data(\"$Equipment.Backpack.*.attuned\",0))",
+            "__type": "section",
+            "__name": "Attunements",
+            "__direction": "row",
+            "__expanded": false,
+            "__visible": true
+        },
         "Equipment": {
             "capacity": "=data('$Stats.Ability Scores.Strength.score') * 15",
             "carrying": "=sum(aprod(data('.Backpack.*.weight',0),data('.Backpack.*.quantity',1)))",
@@ -170,7 +165,7 @@
                         "target": "$Stats.Combat.AC",
                         "operation": "replace",
                         "condition": "=data('.equipped')",
-                        "tier": 1
+                        "tier": "-1"
                     },
                     "__type": "section",
                     "__name": "Leather Armor",
@@ -213,10 +208,47 @@
                     "__expanded": false,
                     "__visible": true
                 },
+                "Shield": {
+                    "desc": "While equipped, increase your AC by +2",
+                    "equipped": true,
+                    "weight": 2,
+                    "modifier": {
+                        "__type": "modifier",
+                        "__visible": false,
+                        "prefix": "+",
+                        "value": "=2",
+                        "target": "$Stats.Combat.AC",
+                        "operation": "add",
+                        "condition": "=data(\".equipped\")"
+                    },
+                    "__name": "Shield",
+                    "__direction": "row",
+                    "__expanded": false,
+                    "__visible": true
+                },
+                "Ring of Protection": {
+                    "desc": "While wearing this ring, it will grant you +1 to each of your saves and AC",
+                    "weight": 0.021,
+                    "quantity": 5,
+                    "equipped": {"__type":"data","value":1,"min":"=0","max":"=data(\".quantity\")"},
+                    "attuned": {"__type":"data","value":1,"min":"=0","max":"=min(data('.quantity'),data('$Attunements.Attunement Slots'))"},
+                    "modifier": {
+                        "__type": "modifier",
+                        "__visible": false,
+                        "prefix": "+",
+                        "value": "=min(data(\".equipped\"),data(\".attuned\"))",
+                        "target": "$Stats.(Combat.AC,Ability Scores.*.save)",
+                        "operation": "add"
+                    },
+                    "__name": "Ring of Protection",
+                    "__direction": "row",
+                    "__expanded": true,
+                    "__visible": true
+                },
                 "__type": "section",
                 "__name": "Backpack",
                 "__direction": "column",
-                "__expanded": true,
+                "__expanded": false,
                 "__visible": true
             },
             "__direction": "row",
@@ -275,18 +307,20 @@
                 "Vampire Devotee": {
                     "Constitution": {
                         "__type": "modifier",
+                        "prefix": "+",
+                        "value": 2,
                         "target": "$Stats.Ability Scores.Constitution.score",
-                        "operation": "add",
-                        "value": 2
+                        "operation": "add"
                     },
                     "Strength": {
                         "__type": "modifier",
+                        "prefix": "+",
+                        "value": 1,
                         "target": "$Stats.Ability Scores.Strength.score",
-                        "operation": "add",
-                        "value": 1
+                        "operation": "add"
                     },
                     "__direction": "row",
-                    "__expanded": false,
+                    "__expanded": true,
                     "__name": "Vampire Devotee",
                     "__visible": true
                 },
@@ -322,9 +356,9 @@
     "rules":{
         "Stats.Ability Scores.*": {
             "score": {
-                "value": 10,
-                "min": 0,
-                "max": 20,
+                "value": "=10",
+                "min": "=0",
+                "max": "=20",
                 "__rule_type": "requirement",
                 "__type": "data"
             },
