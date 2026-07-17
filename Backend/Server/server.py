@@ -25,6 +25,7 @@ def show_page(filename:str):
 def add_coop_header(response):
     # Possible values: 'same-origin', 'same-origin-allow-popups', 'unsafe-none'
     response.headers['Cross-Origin-Opener-Policy'] = 'same-origin'
+    response.headers['Cross-Origin-Embedder-Policy'] = 'require-corp'
     return response
 
 if __name__ == "__main__":
