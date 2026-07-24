@@ -44,7 +44,7 @@
                 "AC": "=10 + data('..Ability Scores.Dexterity.mod')",
                 "Initiative": "=data('..Ability Scores.Dexterity.mod')",
                 "__direction": "column",
-                "__expanded": false,
+                "__expanded": true,
                 "__name": "Combat",
                 "__visible": true
             },
@@ -99,7 +99,7 @@
                     "__visible": true
                 },
                 "__direction": "column",
-                "__expanded": false,
+                "__expanded": true,
                 "__name": "Ability Scores",
                 "__visible": true
             },
@@ -123,7 +123,7 @@
                 "Stealth": {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Dexterity.mod')"},
                 "Survival": {"__type":"data","prefix":"+","value":"=data('..Ability Scores.Wisdom.mod')"},
                 "__direction": "column",
-                "__expanded": false,
+                "__expanded": true,
                 "__name": "Skills",
                 "__visible": true
             },
